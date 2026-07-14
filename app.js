@@ -1701,7 +1701,7 @@ function reservationTable(reservations, options = {}) {
       <table class="reservation-table">
         <thead>
           <tr>
-            <th>상영관</th><th>영화 / 시간</th><th>상태·참석</th><th>신청자</th><th>예약번호</th><th>티켓/좌석</th><th>인원</th><th>신청일</th><th>메모</th><th class="screen-only">관리</th>
+            <th>상영관</th><th>영화 / 시간</th><th>신청자</th><th>예약번호</th><th>티켓/좌석</th><th>인원</th><th>신청일</th><th>메모</th><th class="screen-only">관리</th>
           </tr>
         </thead>
         <tbody>
@@ -1712,14 +1712,12 @@ function reservationTable(reservations, options = {}) {
               <tr class="${attended ? "attended-row" : ""}">
                 <td><strong>${esc(screening?.venue || "삭제된 상영관")}</strong></td>
                 <td>${screening ? `<strong>${esc(screening.title)}</strong><br><span class="help">${esc(formatDateTime(screening.startTime))}</span>` : "삭제된 회차"}</td>
-                <td class="status-attendance-cell">
-                  <div class="status-attendance-stack screen-only">
-                    <span class="badge ${reservationStatusClass(reservation)}">${esc(reservation.status)}</span>
-                    <button class="attendance-toggle ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="${attended ? "false" : "true"}" ${reservation.status === "취소" ? "disabled" : ""}>${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : "미참석"}</button>
-                  </div>
-                  <div class="print-only print-check"><span class="check-box">${attended ? "✓" : ""}</span></div>
+                <td class="applicant-cell">
+                  <div class="applicant-name-line"><strong>${esc(reservation.name)}</strong><span class="badge status-index ${reservationStatusClass(reservation)}">${esc(reservation.status)}</span></div>
+                  <span class="help">${esc(reservation.phone || "-")} ${reservation.email ? `· ${esc(reservation.email)}` : ""}</span>
+                  <button class="attendance-toggle compact-attendance screen-only ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="${attended ? "false" : "true"}" ${reservation.status === "취소" ? "disabled" : ""}>${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : "미참석"}</button>
+                  <span class="print-only print-attendance-text">${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : "미참석"}</span>
                 </td>
-                <td><strong>${esc(reservation.name)}</strong><br><span class="help">${esc(reservation.phone || "-")} ${reservation.email ? `· ${esc(reservation.email)}` : ""}</span></td>
                 <td><strong>${esc(reservation.id)}</strong><br><span class="help">${esc(reservation.ticketType || "일반")}</span></td>
                 <td class="ticket-seat-cell"><strong>${esc(reservationTicketLabel(reservation, screening))}</strong><br><span class="help">${esc(reservationSeatLabel(reservation, screening))}</span>${reservation.donorName ? `<br><span class="help">후원자 ${esc(reservation.donorName)}</span>` : ""}</td>
                 <td>${Number(reservation.seats || 0)}명</td>
