@@ -1644,3 +1644,23 @@ tr:last-child td { border-bottom: 0; }
   .check-box { width: 15px; height: 15px; border-width: 1px; }
   .table-note { max-width: none; }
 }
+
+/* v15: venue-first roster and statistics */
+.venue-stats-table .total-row td { font-weight: 800; background: #f4efe7; }
+.venue-stats-table th:first-child,
+.venue-stats-table td:first-child { min-width: 130px; }
+@media print {
+  .reservation-table th, .reservation-table td { white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
+  .reservation-table th:nth-child(1), .reservation-table td:nth-child(1) { width: 12% !important; }
+  .reservation-table th:nth-child(2), .reservation-table td:nth-child(2) { width: 18% !important; }
+  .reservation-table th:nth-child(3), .reservation-table td:nth-child(3) { width: 6% !important; }
+  .reservation-table th:nth-child(4), .reservation-table td:nth-child(4) { width: 7% !important; }
+  .reservation-table th:nth-child(5), .reservation-table td:nth-child(5) { width: 16% !important; min-width: 0 !important; }
+  .reservation-table th:nth-child(6), .reservation-table td:nth-child(6) { width: 11% !important; }
+  .reservation-table th:nth-child(7), .reservation-table td:nth-child(7) { width: 11% !important; }
+  .reservation-table th:nth-child(8), .reservation-table td:nth-child(8) { width: 5% !important; text-align: center; }
+  .reservation-table th:nth-child(9), .reservation-table td:nth-child(9) { width: 8% !important; }
+  .reservation-table th:nth-child(10), .reservation-table td:nth-child(10) { width: 6% !important; }
+  .venue-stats-table { width: 100%; table-layout: fixed; }
+  .venue-stats-table th, .venue-stats-table td { font-size: 8px !important; padding: 3px !important; white-space: nowrap; }
+}

@@ -17,8 +17,8 @@ const OPENING_POSTER_SRC = "assets/face-poster.jpeg";
 const OPENING_VIDEO_URL = "https://youtu.be/dM0quIEmrYA";
 const OPENING_VIDEO_EMBED = "https://www.youtube.com/embed/dM0quIEmrYA?autoplay=1&mute=1&loop=1&playlist=dM0quIEmrYA&playsinline=1&controls=1&rel=0&modestbranding=1";
 const OPENING_VIDEO_TITLE = "영화 얼굴 메인 예고편";
-const OPENING_HEADLINE = "박정민 배우, 머내마을 개막식에 오다";
-const OPENING_HEADLINE_LINES = ["박정민 배우,", "머내마을", "개막식에 오다"];
+const OPENING_HEADLINE = "박정민 배우, 머내마을영화제 개막식에 오다";
+const OPENING_HEADLINE_LINES = ["박정민 배우,", "머내마을영화제", "개막식에 오다"];
 const EARLYBIRD_MESSAGE = "박정민배우를 가장 가까이서 만날 수 있는 후원자님들을 위한 선예약";
 
 const seedOpeningScreening = {
@@ -34,7 +34,7 @@ const seedOpeningScreening = {
   staffPhone: "010-0000-0909",
   staffPin: "0909",
   status: "신청 가능",
-  notes: "박정민 배우, 머내마을 개막식에 오다. 9월 9일 저녁 7시 동천농협강당에서 열리는 개막식 상영입니다. 후원자 선예약은 지정좌석, 일반석은 자유석으로 운영합니다.",
+  notes: "박정민 배우, 머내마을영화제 개막식에 오다. 9월 9일 저녁 7시 동천농협강당에서 열리는 개막식 상영입니다. 후원자 선예약은 지정좌석, 일반석은 자유석으로 운영합니다.",
   isOpening: true,
   guest: "박정민 배우",
   festivalStartDate: FESTIVAL_START_DATE,
@@ -934,7 +934,7 @@ function openingInlineCard() {
           <span class="badge warn">박정민 배우 참석</span>
           <span class="badge ${phase.className}">${esc(phase.label)}</span>
         </div>
-        <h2>박정민 배우, 머내마을 개막식에 오다</h2>
+        <h2>박정민 배우, 머내마을영화제 개막식에 오다</h2>
         <p>개막식 영화 &lt;얼굴&gt; · 9월 9일 저녁 7시 동천농협강당 · 박정민 배우 참석. 후원자 선예약은 지정좌석으로, 일반석 오픈 후 신청자는 자유석으로 운영됩니다. 지정좌석 잔여 ${stats.designatedRemaining}석 · 전체 잔여 ${stats.remainingTotal}석</p>
       </div>
       <div class="cta-row">
@@ -1166,50 +1166,48 @@ function renderStaff(preselectedId = "") {
   }
   const reservations = state.reservations
     .filter((reservation) => session.screeningIds.includes(reservation.screeningId))
-    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
   const totalSeats = reservations.filter((r) => r.status !== "취소").reduce((sum, r) => sum + Number(r.seats || 0), 0);
   const attendedSeats = reservations.filter((r) => r.attended).reduce((sum, r) => sum + Number(r.attendedSeats || 0), 0);
+  const canceledSeats = reservations.filter((r) => r.status === "취소").reduce((sum, r) => sum + Number(r.seats || 0), 0);
+  const venueStats = groupByVenue();
   return `
     <section class="section-title staff-portal-title">
       <div>
         <div class="eyebrow">상영관 담당자 전용</div>
-        <h1>${esc(session.staffName)} 스태프 신청자 관리</h1>
-        <p>담당 상영관의 신청자 확인, 확정·대기·취소 처리와 현장 참석 확인을 할 수 있습니다.</p>
+        <h1>${esc(session.venue || screenings[0].venue)} 신청자 관리</h1>
+        <p>${esc(session.staffName)} 담당자가 자신의 상영관 신청자를 추가·수정·삭제하고 참석 현황을 관리합니다.</p>
       </div>
       <div class="cta-row">
+        <button class="btn btn-primary" type="button" data-action="staff-add-reservation">신청자 추가</button>
         <button class="btn btn-outline" type="button" data-action="print">명단 인쇄</button>
         <button class="btn btn-danger" type="button" data-action="staff-logout">로그아웃</button>
       </div>
     </section>
     <section class="card staff-password-card screen-only">
-      <div>
-        <h2>스태프 비밀번호 변경</h2>
-        <p>현재 로그인한 담당 상영관의 비밀번호만 변경됩니다. 변경한 비밀번호는 담당자 본인이 안전하게 보관하세요.</p>
-      </div>
+      <div><h2>스태프 비밀번호 변경</h2><p>현재 담당 상영관의 모든 회차에 같은 새 비밀번호가 적용됩니다.</p></div>
       <form id="staffPinChangeForm" class="staff-pin-form">
-        <label class="label" for="currentStaffPin">현재 비밀번호</label>
-        <input class="input" id="currentStaffPin" name="currentPin" type="password" inputmode="numeric" required />
-        <label class="label" for="newStaffPin">새 비밀번호</label>
-        <input class="input" id="newStaffPin" name="newPin" type="password" inputmode="numeric" minlength="4" required />
-        <label class="label" for="confirmStaffPin">새 비밀번호 확인</label>
-        <input class="input" id="confirmStaffPin" name="confirmPin" type="password" inputmode="numeric" minlength="4" required />
+        <label class="label" for="currentStaffPin">현재 비밀번호</label><input class="input" id="currentStaffPin" name="currentPin" type="password" inputmode="numeric" required />
+        <label class="label" for="newStaffPin">새 비밀번호</label><input class="input" id="newStaffPin" name="newPin" type="password" inputmode="numeric" minlength="4" required />
+        <label class="label" for="confirmStaffPin">새 비밀번호 확인</label><input class="input" id="confirmStaffPin" name="confirmPin" type="password" inputmode="numeric" minlength="4" required />
         <button class="btn btn-dark" type="submit">비밀번호 변경</button>
       </form>
     </section>
     <section class="stats-grid staff-stats">
-      <div class="stat-card"><span>담당 회차</span><strong>${screenings.length}</strong><small>${screenings.map((s) => esc(s.venue)).join(" · ")}</small></div>
-      <div class="stat-card"><span>신청 건수</span><strong>${reservations.length}</strong><small>취소 포함</small></div>
+      <div class="stat-card"><span>담당 상영관</span><strong>${esc(session.venue || screenings[0].venue)}</strong><small>${screenings.length}회차</small></div>
       <div class="stat-card"><span>신청 인원</span><strong>${totalSeats}</strong><small>취소 제외</small></div>
-      <div class="stat-card"><span>참석 확인</span><strong>${attendedSeats}</strong><small>실제 참석 인원</small></div>
+      <div class="stat-card"><span>참석자</span><strong>${attendedSeats}</strong><small>실제 참석</small></div>
+      <div class="stat-card"><span>취소 인원</span><strong>${canceledSeats}</strong><small>취소 처리</small></div>
+      <div class="stat-card"><span>후원하기 클릭</span><strong>${Number(state.sponsorClicks || 0)}</strong><small>전체 누적</small></div>
+    </section>
+    <section class="card">
+      <div class="section-title"><div><h2>전체 상영관 통계</h2><p>모든 담당 스태프가 함께 확인할 수 있는 전체 현황입니다.</p></div></div>
+      ${venueStatsTable(venueStats)}
     </section>
     ${screenings.map((screening) => `
       <section class="card staff-screening-card">
         <div class="section-title">
-          <div>
-            <div class="badges"><span class="badge blue">${esc(screening.venue)}</span><span class="badge ${statusInfo(screening).className}">${esc(statusInfo(screening).text)}</span></div>
-            <h2>${esc(screening.title)}</h2>
-            <p>${esc(formatDateTime(screening.startTime))} · 담당 ${esc(screening.staff || session.staffName)}</p>
-          </div>
+          <div><div class="badges"><span class="badge blue">${esc(screening.venue)}</span><span class="badge ${statusInfo(screening).className}">${esc(statusInfo(screening).text)}</span></div><h2>${esc(screening.title)}</h2><p>${esc(formatDateTime(screening.startTime))} · 담당 ${esc(screening.staff || session.staffName)}</p></div>
           <div class="staff-capacity"><strong>${confirmedSeats(screening.id)} / ${Number(screening.capacity || 0)}명</strong><span>확정 신청</span></div>
         </div>
         ${reservationTable(reservations.filter((reservation) => reservation.screeningId === screening.id), { staffMode: true })}
@@ -1218,8 +1216,17 @@ function renderStaff(preselectedId = "") {
   `;
 }
 
+function venueStatsTable(rows) {
+  if (!rows.length) return `<div class="empty">통계 데이터가 없습니다.</div>`;
+  const totals = rows.reduce((a, r) => ({ capacity:a.capacity+r.capacity, applications:a.applications+r.applications, applicants:a.applicants+r.applicants, confirmed:a.confirmed+r.confirmed, attended:a.attended+r.attended, canceledApplications:a.canceledApplications+r.canceledApplications, canceledSeats:a.canceledSeats+r.canceledSeats, waitlist:a.waitlist+r.waitlist }), {capacity:0,applications:0,applicants:0,confirmed:0,attended:0,canceledApplications:0,canceledSeats:0,waitlist:0});
+  return `<div class="table-wrap"><table class="venue-stats-table"><thead><tr><th>상영관</th><th>회차</th><th>정원</th><th>신청 건/인원</th><th>확정</th><th>참석</th><th>취소 건/인원</th><th>대기</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td><strong>${esc(r.name)}</strong></td><td>${r.screenings}</td><td>${r.capacity}</td><td>${r.applications}건 / ${r.applicants}명</td><td>${r.confirmed}명</td><td>${r.attended}명</td><td>${r.canceledApplications}건 / ${r.canceledSeats}명</td><td>${r.waitlist}명</td></tr>`).join("")}
+    <tr class="total-row"><td><strong>전체 합계</strong></td><td>${rows.reduce((n,r)=>n+r.screenings,0)}</td><td>${totals.capacity}</td><td>${totals.applications}건 / ${totals.applicants}명</td><td>${totals.confirmed}명</td><td>${totals.attended}명</td><td>${totals.canceledApplications}건 / ${totals.canceledSeats}명</td><td>${totals.waitlist}명</td></tr>
+  </tbody></table></div>`;
+}
+
 function renderStaffLogin(preselectedId = "") {
-  const options = sortedScreenings().map((screening) => `<option value="${esc(screening.id)}" ${screening.id === preselectedId ? "selected" : ""}>${esc(screening.title)} · ${esc(screening.venue)} · ${esc(screening.staff || "담당 미정")}</option>`).join("");
+  const options = sortedScreenings().map((screening) => `<option value="${esc(screening.id)}" ${screening.id === preselectedId ? "selected" : ""}>${esc(screening.venue)} · ${esc(screening.title)} · ${esc(screening.staff || "담당 미정")}</option>`).join("");
   return `
     <section class="admin-login staff-login">
       <div class="login-card">
@@ -1248,9 +1255,11 @@ function submitStaffLogin(form) {
   const screening = state.screenings.find((item) => item.id === data.screeningId);
   if (!screening || !screening.staffPin) return toast("이 회차에는 아직 스태프 비밀번호가 설정되지 않았습니다.");
   if (String(data.pin || "") !== String(screening.staffPin)) return toast("스태프 비밀번호가 맞지 않습니다.");
+  const venueScreenings = state.screenings.filter((item) => item.venue === screening.venue && String(item.staffPin || "") === String(screening.staffPin || ""));
   sessionStorage.setItem(STAFF_SESSION_KEY, JSON.stringify({
     staffName: screening.staff || "담당 스태프",
-    screeningIds: [screening.id],
+    venue: screening.venue,
+    screeningIds: venueScreenings.map((item) => item.id),
     loggedInAt: new Date().toISOString()
   }));
   window.location.hash = "#/staff";
@@ -1263,12 +1272,14 @@ function submitStaffPinChange(form) {
   if (!session || !session.screeningIds?.length) return toast("스태프 로그인이 필요합니다.");
   const data = formDataObject(form);
   const screening = state.screenings.find((item) => item.id === session.screeningIds[0]);
-  if (!screening) return toast("담당 상영 회차를 찾을 수 없습니다.");
+  if (!screening) return toast("담당 상영관을 찾을 수 없습니다.");
   if (String(data.currentPin || "") !== String(screening.staffPin || "")) return toast("현재 비밀번호가 맞지 않습니다.");
   const newPin = String(data.newPin || "").trim();
   if (newPin.length < 4) return toast("새 비밀번호는 4자리 이상으로 입력하세요.");
   if (newPin !== String(data.confirmPin || "").trim()) return toast("새 비밀번호 확인이 일치하지 않습니다.");
-  screening.staffPin = newPin;
+  state.screenings.forEach((item) => {
+    if (session.screeningIds.includes(item.id)) item.staffPin = newPin;
+  });
   persist();
   form.reset();
   toast("스태프 비밀번호를 변경했습니다.");
@@ -1360,6 +1371,11 @@ function adminOverview() {
     </section>
 
     <section class="card">
+      <div class="section-title"><div><h2>상영관별 통계</h2><p>상영관을 기준으로 신청, 확정, 참석, 취소, 대기를 집계합니다. 후원하기 클릭 ${Number(state.sponsorClicks || 0)}회.</p></div></div>
+      ${venueStatsTable(groupByVenue())}
+    </section>
+
+    <section class="card">
       <div class="section-title">
         <div>
           <h2>상영 회차별 신청·참석 현황</h2>
@@ -1390,8 +1406,9 @@ function screeningTable(screenings, options = {}) {
       <table>
         <thead>
           <tr>
+            <th>상영관</th>
+            <th>영화</th>
             <th>상태</th>
-            <th>영화 / 상영관</th>
             <th>시간</th>
             <th>정원</th>
             <th>신청 건/인원</th>
@@ -1410,8 +1427,9 @@ function screeningTable(screenings, options = {}) {
             const phase = isOpening ? openingPhaseInfo(screening) : null;
             return `
               <tr>
+                <td><strong>${esc(screening.venue)}</strong></td>
+                <td><strong>${esc(screening.title)}</strong>${isOpening ? `<br><span class="help">얼리버드 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
                 <td><span class="badge ${info.className}">${esc(info.text)}</span>${isOpening ? `<br><span class="badge ${phase.className}">${esc(phase.label)}</span>` : ""}</td>
-                <td><strong>${esc(screening.title)}</strong><br><span class="help">${esc(screening.venue)}</span>${isOpening ? `<br><span class="help">얼리버드 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
                 <td>${esc(formatDateTime(screening.startTime))}</td>
                 <td>${Number(screening.capacity || 0)}명</td>
                 <td>${applicationCount(screening.id)}건 / ${appliedSeats(screening.id)}명<br><span class="help">확정 ${applicationCount(screening.id, "확정")}건 · ${confirmedSeats(screening.id)}명</span></td>
@@ -1670,13 +1688,13 @@ function adminScreenings() {
 }
 
 function adminReservations() {
-  const options = sortedScreenings().map((s) => `<option value="${esc(s.id)}">${esc(s.title)} · ${esc(s.venue)}</option>`).join("");
+  const options = sortedScreenings().map((s) => `<option value="${esc(s.id)}">${esc(s.venue)} · ${esc(s.title)}</option>`).join("");
   return `
     <section class="card">
       <div class="section-title">
         <div>
           <h2>신청자 명단</h2>
-          <p>누가 어느 영화와 상영관에 신청했는지 검색하고, 현장에서 참석 확인 버튼으로 실제 참석 인원을 기록할 수 있습니다. ‘확인문구’ 버튼으로 안내 문구를 복사할 수 있습니다.</p>
+          <p>상영관을 기준으로 신청자 명단을 확인하고, 현장 참석과 신청 정보를 관리할 수 있습니다.</p>
         </div>
         <div class="cta-row">
           <button class="btn btn-dark" type="button" data-action="print">인쇄용 명단</button>
@@ -1715,7 +1733,7 @@ function reservationTable(reservations, options = {}) {
       <table class="reservation-table">
         <thead>
           <tr>
-            <th>상태</th><th>예약번호</th><th>참석</th><th>신청자</th><th>영화 / 상영관</th><th>티켓/좌석</th><th>인원</th><th>신청일</th><th>메모</th><th class="screen-only">관리</th>
+            <th>상영관</th><th>영화 / 시간</th><th>상태</th><th>참석</th><th>신청자</th><th>예약번호</th><th>티켓/좌석</th><th>인원</th><th>신청일</th><th>메모</th><th class="screen-only">관리</th>
           </tr>
         </thead>
         <tbody>
@@ -1724,15 +1742,16 @@ function reservationTable(reservations, options = {}) {
             const attended = reservation.attended === true;
             return `
               <tr class="${attended ? "attended-row" : ""}">
+                <td><strong>${esc(screening?.venue || "삭제된 상영관")}</strong></td>
+                <td>${screening ? `<strong>${esc(screening.title)}</strong><br><span class="help">${esc(formatDateTime(screening.startTime))}</span>` : "삭제된 회차"}</td>
                 <td><span class="badge ${reservationStatusClass(reservation)}">${esc(reservation.status)}</span></td>
-                <td><strong>${esc(reservation.id)}</strong><br><span class="help">${esc(reservation.ticketType || "일반")}</span></td>
                 <td class="attendance-cell">
                   <span class="badge ${attended ? "ok" : "warn"} screen-only">${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : "미참석"}</span>
                   <button class="btn ${attended ? "btn-outline" : "btn-dark"} btn-small screen-only" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="${attended ? "false" : "true"}" ${reservation.status === "취소" ? "disabled" : ""}>${attended ? "참석 취소" : "참석 확인"}</button>
                   <div class="print-only print-check"><span class="check-box">${attended ? "✓" : ""}</span></div>
                 </td>
                 <td><strong>${esc(reservation.name)}</strong><br><span class="help">${esc(reservation.phone || "-")} ${reservation.email ? `· ${esc(reservation.email)}` : ""}</span></td>
-                <td>${screening ? `<strong>${esc(screening.title)}</strong><br><span class="help">${esc(screening.venue)} · ${esc(formatDateTime(screening.startTime))}</span>` : "삭제된 회차"}</td>
+                <td><strong>${esc(reservation.id)}</strong><br><span class="help">${esc(reservation.ticketType || "일반")}</span></td>
                 <td class="ticket-seat-cell"><strong>${esc(reservationTicketLabel(reservation, screening))}</strong><br><span class="help">${esc(reservationSeatLabel(reservation, screening))}</span>${reservation.donorName ? `<br><span class="help">후원자 ${esc(reservation.donorName)}</span>` : ""}</td>
                 <td>${Number(reservation.seats || 0)}명</td>
                 <td>${esc(formatDateTime(reservation.createdAt))}</td>
@@ -1742,8 +1761,8 @@ function reservationTable(reservations, options = {}) {
                     <button class="btn btn-outline btn-small" type="button" data-action="set-reservation-status" data-id="${esc(reservation.id)}" data-status="확정">확정</button>
                     <button class="btn btn-outline btn-small" type="button" data-action="set-reservation-status" data-id="${esc(reservation.id)}" data-status="대기">대기</button>
                     <button class="btn btn-outline btn-small" type="button" data-action="set-reservation-status" data-id="${esc(reservation.id)}" data-status="취소">취소</button>
-                    <button class="btn btn-outline btn-small" type="button" data-action="copy-confirmation" data-id="${esc(reservation.id)}">확인문구</button>
-                    ${options.staffMode ? "" : `<button class="btn btn-danger btn-small" type="button" data-action="delete-reservation" data-id="${esc(reservation.id)}">삭제</button>`}
+                    <button class="btn btn-outline btn-small" type="button" data-action="staff-edit-reservation" data-id="${esc(reservation.id)}">수정</button>
+                    <button class="btn btn-danger btn-small" type="button" data-action="delete-reservation" data-id="${esc(reservation.id)}">삭제</button>
                   </div>
                 </td>
               </tr>
@@ -1811,11 +1830,16 @@ function groupByVenue() {
   const map = new Map();
   state.screenings.forEach((screening) => {
     const key = screening.venue || "미정";
-    const current = map.get(key) || { name: key, screenings: 0, capacity: 0, confirmed: 0, attended: 0, waitlist: 0 };
+    const venueReservations = state.reservations.filter((r) => r.screeningId === screening.id);
+    const current = map.get(key) || { name: key, screenings: 0, capacity: 0, applications: 0, applicants: 0, confirmed: 0, attended: 0, canceledApplications: 0, canceledSeats: 0, waitlist: 0 };
     current.screenings += 1;
     current.capacity += Number(screening.capacity || 0);
+    current.applications += venueReservations.filter((r) => r.status !== "취소").length;
+    current.applicants += venueReservations.filter((r) => r.status !== "취소").reduce((sum, r) => sum + Number(r.seats || 0), 0);
     current.confirmed += confirmedSeats(screening.id);
     current.attended += actualAttendees(screening.id);
+    current.canceledApplications += venueReservations.filter((r) => r.status === "취소").length;
+    current.canceledSeats += venueReservations.filter((r) => r.status === "취소").reduce((sum, r) => sum + Number(r.seats || 0), 0);
     current.waitlist += waitlistSeats(screening.id);
     map.set(key, current);
   });
@@ -1823,7 +1847,7 @@ function groupByVenue() {
     ...item,
     rate: item.capacity ? Math.round((item.confirmed / item.capacity) * 100) : 0,
     attendanceRate: item.confirmed ? Math.round((item.attended / item.confirmed) * 100) : 0
-  }));
+  })).sort((a, b) => String(a.name).localeCompare(String(b.name), "ko"));
 }
 
 function groupByDate() {
@@ -2795,9 +2819,39 @@ function setAttendance(id, attended) {
   toast(reservation.attended ? `실제 참석 ${reservation.attendedSeats}명으로 기록했습니다.` : "미참석으로 되돌렸습니다.");
 }
 
+function staffAddReservation() {
+  const screenings = staffScreenings();
+  if (!screenings.length) return toast("스태프 로그인이 필요합니다.");
+  const choices = screenings.map((s, i) => `${i + 1}. ${s.venue} · ${s.title} · ${formatDateTime(s.startTime)}`).join("\n");
+  const selected = prompt(`신청자를 추가할 회차 번호를 입력하세요.\n${choices}`, "1");
+  if (selected === null) return;
+  const screening = screenings[Number(selected) - 1];
+  if (!screening) return toast("올바른 회차 번호를 입력하세요.");
+  const name = prompt("신청자 이름을 입력하세요.", ""); if (!name?.trim()) return;
+  const phone = prompt("연락처를 입력하세요.", "") || "";
+  const seats = Math.max(1, Number(prompt("신청 인원을 입력하세요.", "1") || 1));
+  const status = prompt("상태를 입력하세요: 확정 / 대기 / 취소", "확정") || "확정";
+  const note = prompt("메모를 입력하세요.", "") || "";
+  state.reservations.push(normalizeReservation({ id: uid("rsv"), screeningId: screening.id, name:name.trim(), phone:phone.trim(), email:"", seats, status:["확정","대기","취소"].includes(status)?status:"확정", attended:false, attendedSeats:0, note:note.trim(), createdAt:new Date().toISOString() }));
+  persist(); render(); toast("신청자를 추가했습니다.");
+}
+
+function staffEditReservation(id) {
+  const r = state.reservations.find(x => x.id === id);
+  if (!r || !canManageReservation(r)) return toast("이 신청자를 관리할 권한이 없습니다.");
+  const name = prompt("신청자 이름", r.name); if (name === null || !name.trim()) return;
+  const phone = prompt("연락처", r.phone || ""); if (phone === null) return;
+  const seats = Number(prompt("신청 인원", String(r.seats || 1))); if (!Number.isFinite(seats) || seats < 1) return toast("신청 인원을 확인하세요.");
+  const note = prompt("메모", r.note || ""); if (note === null) return;
+  r.name=name.trim(); r.phone=phone.trim(); r.seats=Math.floor(seats); r.note=note.trim();
+  if (r.attendedSeats > r.seats) r.attendedSeats = r.seats;
+  persist(); render(); toast("신청자 정보를 수정했습니다.");
+}
+
 function deleteReservation(id) {
   const reservation = state.reservations.find((r) => r.id === id);
   if (!reservation) return;
+  if (!canManageReservation(reservation)) return toast("이 신청자를 삭제할 권한이 없습니다.");
   if (!confirm(`${reservation.name}님의 신청을 삭제할까요?`)) return;
   state.reservations = state.reservations.filter((r) => r.id !== id);
   persist();
@@ -2942,6 +2996,8 @@ document.addEventListener("click", (event) => {
   if (action === "close-modal") closeModals();
   if (action === "view-roster") openRoster(id);
   if (action === "admin-logout") { sessionStorage.removeItem(ADMIN_SESSION_KEY); selectedScreeningId = null; render(); toast("로그아웃했습니다."); }
+  if (action === "staff-add-reservation") staffAddReservation();
+  if (action === "staff-edit-reservation") staffEditReservation(id);
   if (action === "staff-logout") { sessionStorage.removeItem(STAFF_SESSION_KEY); window.location.hash = "#/staff"; render(); toast("스태프 관리 화면에서 로그아웃했습니다."); }
   if (action === "print") window.print();
   if (action === "edit-screening") { selectedScreeningId = id; window.location.hash = "#/admin/screenings"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
