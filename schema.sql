@@ -12,6 +12,7 @@ create table screenings (
   moderator text,
   staff text,
   staff_phone text,
+  staff_pin_hash text, -- 실제 운영에서는 평문 비밀번호가 아니라 서버에서 해시 검증
   status text not null default '신청 가능',
   notes text,
 
@@ -118,3 +119,10 @@ group by s.id;
 -- 2. 관리자만 screenings/reservations/notification_logs 전체 조회·수정·삭제 허용
 -- 3. 전화번호, 이메일 등 개인정보는 관리자 화면에서만 노출
 -- 4. 알림톡·문자·이메일 API 키는 브라우저에 넣지 말고 서버 함수 환경변수에 저장
+
+
+-- v13 담당 스태프 권한 설계 권장안
+-- 1. staff_accounts 테이블을 별도로 만들고 비밀번호는 Supabase Auth 또는 해시로 관리
+-- 2. staff_screenings 연결 테이블로 담당자가 볼 수 있는 screening_id만 부여
+-- 3. RLS에서 해당 담당 회차의 reservations select/update만 허용
+-- 4. 브라우저 localStorage 데이터는 기기 간 공유되지 않으므로 실제 운영에는 중앙 DB 연결이 필수

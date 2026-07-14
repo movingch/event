@@ -1582,3 +1582,21 @@ tr:last-child td { border-bottom: 0; }
     width: 100%;
   }
 }
+
+/* v13 담당 스태프 신청자 관리 */
+.screening-card-actions { display:grid; gap:.65rem; }
+.screening-card-actions .btn { width:100%; text-align:center; }
+.staff-link { color:var(--brand-dark); font-weight:800; }
+.staff-login .login-card { border-top:5px solid var(--brand); }
+.staff-portal-title .eyebrow { margin-bottom:.55rem; }
+.staff-stats { margin-bottom:1.25rem; }
+.staff-screening-card { margin-bottom:1.25rem; }
+.staff-screening-card .section-title { align-items:flex-start; }
+.staff-capacity { min-width:120px; padding:.8rem 1rem; border-radius:14px; background:var(--surface-soft); text-align:center; }
+.staff-capacity strong { display:block; font-size:1.15rem; }
+.staff-capacity span { display:block; margin-top:.25rem; color:var(--muted); font-size:.8rem; }
+@media (max-width:720px) {
+  .staff-screening-card .section-title { display:block; }
+  .staff-capacity { margin-top:.8rem; }
+  .staff-screening-card .reservation-table-wrap { margin-left:-.5rem; margin-right:-.5rem; }
+}
