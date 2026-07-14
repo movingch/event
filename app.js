@@ -19,7 +19,7 @@ const OPENING_VIDEO_EMBED = "https://www.youtube.com/embed/dM0quIEmrYA?autoplay=
 const OPENING_VIDEO_TITLE = "영화 얼굴 메인 예고편";
 const OPENING_HEADLINE = "박정민 배우, 머내마을영화제 개막식에 오다";
 const OPENING_HEADLINE_LINES = ["박정민 배우,", "머내마을영화제", "개막식에 오다"];
-const EARLYBIRD_MESSAGE = "박정민배우를 가장 가까이서 만날 수 있는 후원자님들을 위한 선예약";
+const EARLYBIRD_MESSAGE = "박정민배우를 가장 가까이서 만날 수 있는 후원자님들을 위한 사전예약";
 
 const seedOpeningScreening = {
   id: OPENING_FILM_ID,
@@ -34,7 +34,7 @@ const seedOpeningScreening = {
   staffPhone: "010-0000-0909",
   staffPin: "0909",
   status: "신청 가능",
-  notes: "박정민 배우, 머내마을영화제 개막식에 오다. 9월 9일 저녁 7시 동천농협강당에서 열리는 개막식 상영입니다. 후원자 선예약은 지정좌석, 일반석은 자유석으로 운영합니다.",
+  notes: "박정민 배우, 머내마을영화제 개막식에 오다. 9월 9일 저녁 7시 동천농협강당에서 열리는 개막식 상영입니다. 후원자 사전예약은 지정좌석, 일반석은 자유석으로 운영합니다.",
   isOpening: true,
   guest: "박정민 배우",
   festivalStartDate: FESTIVAL_START_DATE,
@@ -176,7 +176,7 @@ const seedReservations = [
     smsStatus: "발송완료",
     smsSentAt: "2026-07-14T09:31:00",
     smsRequestId: "demo-sms-1001",
-    note: "개막작 얼리버드 후원자 선예약",
+    note: "개막작 얼리버드 후원자 사전예약",
     createdAt: "2026-07-14T09:30:00"
   },
   {
@@ -225,7 +225,7 @@ function normalizeScreening(screening) {
     if (!screening?.earlyBirdEnd || screening.earlyBirdEnd === "2026-08-20T23:59") merged.earlyBirdEnd = seedOpeningScreening.earlyBirdEnd;
     if (!screening?.generalOpenAt || screening.generalOpenAt === "2026-08-21T10:00") merged.generalOpenAt = seedOpeningScreening.generalOpenAt;
     if (!screening?.generalEndAt) merged.generalEndAt = seedOpeningScreening.generalEndAt;
-    if (!screening?.notes || screening.notes === "박정민 배우 참석 예정. 후원자 선예약은 지정좌석, 일반 관객은 자유석으로 운영합니다.") merged.notes = seedOpeningScreening.notes;
+    if (!screening?.notes || screening.notes === "박정민 배우 참석 예정. 후원자 사전예약은 지정좌석, 일반 관객은 자유석으로 운영합니다.") merged.notes = seedOpeningScreening.notes;
 
     merged.id = merged.id || OPENING_FILM_ID;
     merged.guest = merged.guest || seedOpeningScreening.guest;
@@ -638,10 +638,10 @@ function openingPhaseInfo(screening = getOpeningScreening()) {
   const generalOpen = toDate(screening.generalOpenAt || screening.earlyBirdEnd);
   const generalEnd = toDate(screening.generalEndAt || screening.startTime);
   if (screening.status === "준비중" || (earlyStart && now < earlyStart)) {
-    return { phase: "before", label: "후원자 선예약 준비중", className: "warn", allowBooking: false, ticketType: "", message: `${formatDateTime(screening.earlyBirdStart)}부터 ${EARLYBIRD_MESSAGE}이 열립니다.` };
+    return { phase: "before", label: "후원자 사전예약 준비중", className: "warn", allowBooking: false, ticketType: "", message: `${formatDateTime(screening.earlyBirdStart)}부터 ${EARLYBIRD_MESSAGE}이 열립니다.` };
   }
   if (!earlyEnd || now <= earlyEnd) {
-    return { phase: "earlybird", label: "후원자 선예약 진행중", className: "ok", allowBooking: true, ticketType: "얼리버드", seatType: "지정좌석", message: `${EARLYBIRD_MESSAGE}입니다. 확정 시 지정좌석이 자동 배정됩니다.` };
+    return { phase: "earlybird", label: "후원자 사전예약 진행중", className: "ok", allowBooking: true, ticketType: "얼리버드", seatType: "지정좌석", message: `${EARLYBIRD_MESSAGE}입니다. 확정 시 지정좌석이 자동 배정됩니다.` };
   }
   if (generalOpen && now < generalOpen) {
     return { phase: "between", label: "일반석 오픈 전", className: "warn", allowBooking: false, ticketType: "", message: `${formatDateTime(screening.generalOpenAt)}부터 일반석 자유석 신청이 열립니다.` };
@@ -649,7 +649,7 @@ function openingPhaseInfo(screening = getOpeningScreening()) {
   if (generalEnd && now > generalEnd) {
     return { phase: "closed", label: "신청 마감", className: "danger", allowBooking: false, ticketType: "", message: `${formatDateTime(screening.generalEndAt || screening.startTime)}에 개막식 티켓팅이 마감되었습니다.` };
   }
-  return { phase: "general", label: "일반석 오픈", className: "blue", allowBooking: true, ticketType: "일반", seatType: "자유석", message: "후원자 선예약 기간이 끝나 일반석 자유석 신청이 가능합니다." };
+  return { phase: "general", label: "일반석 오픈", className: "blue", allowBooking: true, ticketType: "일반", seatType: "자유석", message: "후원자 사전예약 기간이 끝나 일반석 자유석 신청이 가능합니다." };
 }
 
 function openingReservations(screeningId = getOpeningScreening()?.id, type = "") {
@@ -860,7 +860,7 @@ function renderOpeningHome(opening) {
         </div>
         <h1 class="opening-title-stack">${openingHeadlineMarkup()}</h1>
         <p class="opening-home-lead">개막식 영화 &lt;얼굴&gt;<br>${esc(openingDateLine)} · ${esc(opening.guest || "박정민 배우")} 참석</p>
-        <p>${esc(EARLYBIRD_MESSAGE)}입니다. 개막식 당일까지 메인 화면에서 개막식 예매를 가장 먼저 안내합니다. 후원자 선예약은 지정좌석으로, 일반석 오픈 이후 신청자는 자유석으로 운영됩니다.</p>
+        <p>${esc(EARLYBIRD_MESSAGE)}입니다. 개막식 당일까지 메인 화면에서 개막식 예매를 가장 먼저 안내합니다. 후원자 사전예약은 지정좌석으로, 일반석 오픈 이후 신청자는 자유석으로 운영됩니다.</p>
         <div class="opening-home-facts" aria-label="개막식 핵심 정보">
           <div><span>개막식</span><strong>9월 9일 저녁 7시</strong></div>
           <div><span>장소</span><strong>동천농협강당</strong></div>
@@ -869,7 +869,6 @@ function renderOpeningHome(opening) {
         </div>
         <div class="cta-row">
           <button class="btn btn-light" type="button" data-action="book" data-id="${esc(opening.id)}" ${phase.allowBooking ? "" : "disabled"}>${phase.allowBooking ? "얼리버드·개막식 예매" : phase.label}</button>
-          <a class="btn btn-ghost" href="#opening-video">소개영상 보기</a>
           <button class="btn btn-primary" type="button" data-action="donate">후원하기</button>
         </div>
         <p class="opening-home-note">${esc(EARLYBIRD_MESSAGE)} · 지정좌석 잔여 ${stats.designatedRemaining}석 · 전체 잔여 ${stats.remainingTotal}석</p>
@@ -893,7 +892,7 @@ function renderOpeningHome(opening) {
       </article>
       <article class="card opening-ticket-card">
         <div class="icon-badge">🎟️</div>
-        <h2>후원자 선예약</h2>
+        <h2>후원자 사전예약</h2>
         <p>${esc(phase.message || EARLYBIRD_MESSAGE + "입니다.")}</p>
         <p class="opening-card-copy">후원자명과 연락처를 기록해 운영진이 후원 내역과 대조합니다.</p>
         <div class="opening-mini-grid">
@@ -935,7 +934,7 @@ function openingInlineCard() {
           <span class="badge ${phase.className}">${esc(phase.label)}</span>
         </div>
         <h2>박정민 배우, 머내마을영화제 개막식에 오다</h2>
-        <p>개막식 영화 &lt;얼굴&gt; · 9월 9일 저녁 7시 동천농협강당 · 박정민 배우 참석. 후원자 선예약은 지정좌석으로, 일반석 오픈 후 신청자는 자유석으로 운영됩니다. 지정좌석 잔여 ${stats.designatedRemaining}석 · 전체 잔여 ${stats.remainingTotal}석</p>
+        <p>개막식 영화 &lt;얼굴&gt; · 9월 9일 저녁 7시 동천농협강당 · 박정민 배우 참석. 후원자 사전예약은 지정좌석으로, 일반석 오픈 후 신청자는 자유석으로 운영됩니다. 지정좌석 잔여 ${stats.designatedRemaining}석 · 전체 잔여 ${stats.remainingTotal}석</p>
       </div>
       <div class="cta-row">
         <a class="btn btn-dark" href="#/opening">개막작 티켓팅 보기</a>
@@ -963,7 +962,7 @@ function renderOpeningTicketing() {
           <span class="badge ${phase.className}">${esc(phase.label)}</span>
           <span class="badge warn">${esc(opening.guest || "박정민 배우")} 참석</span>
         </div>
-        <h1 class="opening-title-stack opening-title-detail">${openingHeadlineMarkup()}<span class="opening-title-sub">개막식 영화 &lt;얼굴&gt; · 후원자 선예약</span></h1>
+        <h1 class="opening-title-stack opening-title-detail">${openingHeadlineMarkup()}<span class="opening-title-sub">개막식 영화 &lt;얼굴&gt; · 후원자 사전예약</span></h1>
         <p><strong>${esc(formatDateTime(opening.startTime))} · ${esc(opening.venue)}</strong><br>박정민 배우가 함께하는 개막식 상영입니다. ${esc(EARLYBIRD_MESSAGE)}을 먼저 열고, 확정된 후원자님께는 지정좌석을 배정합니다.</p>
         <div class="cta-row">
           <button class="btn btn-light" type="button" data-action="book" data-id="${esc(opening.id)}" ${phase.allowBooking ? "" : "disabled"}>${phase.allowBooking ? "개막작 신청하기" : phase.label}</button>
@@ -1003,7 +1002,7 @@ function renderOpeningTicketing() {
     <section class="opening-flow-grid">
       <article class="card opening-flow-card active">
         <div class="icon-badge">①</div>
-        <h2>후원자 선예약</h2>
+        <h2>후원자 사전예약</h2>
         <p>기간: ${esc(earlybirdPeriod)}</p>
         <p>${esc(EARLYBIRD_MESSAGE)}입니다. 신청이 확정되면 지정좌석이 자동 배정됩니다.</p>
       </article>
@@ -1084,46 +1083,23 @@ function renderApply() {
 }
 
 function screeningCard(screening) {
-  const confirmed = confirmedSeats(screening.id);
-  const wait = waitlistSeats(screening.id);
-  const rate = Math.min(occupancyRate(screening), 120);
   const info = statusInfo(screening);
   const isOpening = isOpeningScreening(screening);
   const phase = isOpening ? openingPhaseInfo(screening) : null;
-  const openStats = isOpening ? openingStats(screening) : null;
-  const barClass = info.className === "danger" ? "danger" : info.className === "warn" ? "warn" : "";
   return `
-    <article class="screening-card ${isOpening ? "opening-card" : ""}" data-screening-card="${esc(screening.id)}">
+    <article class="screening-card compact-screening-card ${isOpening ? "opening-card" : ""}" data-screening-card="${esc(screening.id)}">
       <div class="screening-top">
-        <div class="badges">
+        <div class="badges compact-badges">
           ${isOpening ? `<span class="badge warn">개막작</span><span class="badge ${phase.className}">${esc(phase.label)}</span>` : `<span class="badge blue">${esc(screening.status || "신청 가능")}</span>`}
           <span class="badge ${info.className}">${esc(info.text)}</span>
-          ${wait > 0 ? `<span class="badge danger">대기 ${wait}명</span>` : ""}
         </div>
         <h3 class="screening-title">${esc(screening.title)}</h3>
         <p class="screening-meta">${esc(formatDateTime(screening.startTime))}<br>${esc(screening.venue)}</p>
       </div>
-      <div class="screening-body">
-        <div class="progress-wrap" aria-label="정원 현황">
-          <div class="progress-label"><span>확정 ${confirmed}명</span><span>정원 ${Number(screening.capacity || 0)}명 · ${occupancyRate(screening)}%</span></div>
-          <div class="progress"><span class="${barClass}" style="width:${Math.min(rate, 100)}%"></span></div>
-        </div>
-        ${isOpening ? `
-          <div class="opening-card-mini">
-            <span>박정민 배우 참석</span>
-            <strong>얼리버드 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명</strong>
-            <small>후원자 지정좌석 / 일반석 자유석</small>
-          </div>
-        ` : ""}
-        <div class="info-list">
-          <div class="info-row"><span>GV 담당</span><strong>${esc(screening.gvHost || "없음")}</strong></div>
-          <div class="info-row"><span>모더레이터</span><strong>${esc(screening.moderator || "미정")}</strong></div>
-          <div class="info-row"><span>담당 스태프</span><strong>${esc(screening.staff || "미정")}</strong></div>
-        </div>
-        ${screening.notes ? `<p class="help">${esc(screening.notes)}</p>` : ""}
-        <div class="screening-card-actions">
-          <button class="btn btn-dark" type="button" data-action="book" data-id="${esc(screening.id)}" ${isOpening && !phase.allowBooking ? "disabled" : ""}>${isOpening ? (phase.allowBooking ? "개막작 신청하기" : phase.label) : "이 영화 신청하기"}</button>
-          <a class="btn btn-outline" href="#/staff/${esc(screening.id)}">신청자 확인</a>
+      <div class="screening-body compact-screening-body">
+        <div class="screening-card-actions compact-actions">
+          <button class="btn btn-dark compact-book-btn" type="button" data-action="book" data-id="${esc(screening.id)}" ${isOpening && !phase.allowBooking ? "disabled" : ""}>${isOpening ? (phase.allowBooking ? "관람신청" : phase.label) : "관람신청"}</button>
+          <a class="btn btn-outline compact-staff-btn" href="#/staff/${esc(screening.id)}">담당스태프</a>
         </div>
       </div>
     </article>
@@ -1466,7 +1442,7 @@ function adminOpening() {
       <div class="section-title">
         <div>
           <h2>개막식·개막작 티켓팅 설정</h2>
-          <p>개막식 “얼굴”, 박정민 배우 참석, 메인 화면 노출 종료일, 포스터·소개영상, 후원자 선예약 기간, 일반석 오픈 기간, 지정좌석 수를 관리합니다.</p>
+          <p>개막식 “얼굴”, 박정민 배우 참석, 메인 화면 노출 종료일, 포스터·소개영상, 후원자 사전예약 기간, 일반석 오픈 기간, 지정좌석 수를 관리합니다.</p>
         </div>
         <a class="btn btn-outline" href="#/opening">관객 화면 보기</a>
       </div>
@@ -1518,11 +1494,11 @@ function adminOpening() {
             <input class="input" id="openingEnd" name="endTime" type="datetime-local" value="${esc(toLocalInputValue(opening.endTime))}" />
           </div>
           <div>
-            <label class="label" for="earlyBirdStart">후원자 선예약 시작</label>
+            <label class="label" for="earlyBirdStart">후원자 사전예약 시작</label>
             <input class="input" id="earlyBirdStart" name="earlyBirdStart" type="datetime-local" value="${esc(toLocalInputValue(opening.earlyBirdStart))}" />
           </div>
           <div>
-            <label class="label" for="earlyBirdEnd">후원자 선예약 종료</label>
+            <label class="label" for="earlyBirdEnd">후원자 사전예약 종료</label>
             <input class="input" id="earlyBirdEnd" name="earlyBirdEnd" type="datetime-local" value="${esc(toLocalInputValue(opening.earlyBirdEnd))}" />
           </div>
           <div>
@@ -1597,7 +1573,7 @@ function adminOpening() {
       <div class="section-title">
         <div>
           <h2>개막작 신청자 현황</h2>
-          <p>후원자 선예약은 지정좌석, 일반석은 자유석으로 표시됩니다.</p>
+          <p>후원자 사전예약은 지정좌석, 일반석은 자유석으로 표시됩니다.</p>
         </div>
         <button class="btn btn-dark" type="button" data-action="print">인쇄용 명단</button>
       </div>
@@ -1807,7 +1783,7 @@ function adminStats() {
     <section class="card">
       <div class="section-title"><div><h2>개막작 세부 통계</h2><p>후원자 지정좌석과 일반 자유석, 실제 참석 현황입니다.</p></div></div>
       <div class="opening-summary-grid">
-        <div class="metric-card"><div class="metric-label">후원자 선예약 확정</div><div class="metric-value">${openingStats(getOpeningScreening()).earlybirdSeats}</div><div class="metric-note">지정좌석 잔여 ${openingStats(getOpeningScreening()).designatedRemaining}석</div></div>
+        <div class="metric-card"><div class="metric-label">후원자 사전예약 확정</div><div class="metric-value">${openingStats(getOpeningScreening()).earlybirdSeats}</div><div class="metric-note">지정좌석 잔여 ${openingStats(getOpeningScreening()).designatedRemaining}석</div></div>
         <div class="metric-card"><div class="metric-label">일반석 확정</div><div class="metric-value">${openingStats(getOpeningScreening()).generalSeats}</div><div class="metric-note">자유석 운영</div></div>
         <div class="metric-card"><div class="metric-label">실제 참석</div><div class="metric-value">${actualAttendees(getOpeningScreening().id)}</div><div class="metric-note">현장 참석 확인 기준</div></div>
       </div>
@@ -1954,7 +1930,7 @@ function openingBookingIntro(screening, phase, stats) {
   if (phase.phase === "earlybird") {
     return `
       <div class="opening-booking-intro earlybird">
-        <div class="badges"><span class="badge ok">얼리버드</span><span class="badge warn">후원자 선예약</span><span class="badge blue">지정좌석</span></div>
+        <div class="badges"><span class="badge ok">얼리버드</span><span class="badge warn">후원자 사전예약</span><span class="badge blue">지정좌석</span></div>
         <h3>${esc(EARLYBIRD_MESSAGE)}입니다.</h3>
         <p>후원자명을 남기고 신청하면 확정 시 지정좌석이 자동 배정됩니다. 지정좌석 잔여 ${stats.designatedRemaining}석 / 총 ${stats.designatedCapacity}석</p>
       </div>
@@ -1964,7 +1940,7 @@ function openingBookingIntro(screening, phase, stats) {
     <div class="opening-booking-intro general">
       <div class="badges"><span class="badge blue">일반석</span><span class="badge">자유석</span></div>
       <h3>일반석 신청이 열렸습니다.</h3>
-      <p>후원자 선예약 기간이 종료되어 자유석으로 접수됩니다. 현장에서 예약번호와 신청자 이름을 알려주세요.</p>
+      <p>후원자 사전예약 기간이 종료되어 자유석으로 접수됩니다. 현장에서 예약번호와 신청자 이름을 알려주세요.</p>
     </div>
   `;
 }
