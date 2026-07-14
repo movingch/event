@@ -1589,10 +1589,10 @@ function adminScreenings() {
     <section class="card">
       <div class="section-title">
         <div>
-          <h2>${editing ? "상영 회차 수정" : "상영 회차 추가"}</h2>
+          <h2>${editing ? "영화·상영관 수정" : "영화·상영관 추가"}</h2>
           <p>시간, 영화제목, GV담당자, 모더레이터, 담당스태프, 연락처, 기타 사항을 언제든지 바꿀 수 있습니다.</p>
         </div>
-        ${editing ? `<button class="btn btn-outline" type="button" data-action="cancel-edit">새 회차 추가로 전환</button>` : ""}
+        ${editing ? `<button class="btn btn-outline" type="button" data-action="cancel-edit">신규 영화·상영관 추가로 전환</button>` : ""}
       </div>
       <form id="screeningForm" data-editing="${editing ? esc(editing.id) : ""}">
         <div class="form-grid">
@@ -1649,15 +1649,15 @@ function adminScreenings() {
           </div>
         </div>
         <div class="form-actions">
-          <button class="btn btn-dark" type="submit">${editing ? "수정 저장" : "상영 회차 추가"}</button>
-          <button class="btn btn-outline" type="button" data-action="export-screenings">상영 회차 CSV</button>
+          <button class="btn btn-dark" type="submit">${editing ? "수정 저장" : "영화·상영관 추가"}</button>
+          <button class="btn btn-outline" type="button" data-action="export-screenings">영화·상영관 CSV</button>
         </div>
       </form>
     </section>
 
     <section class="card">
       <div class="section-title">
-        <div><h2>등록된 상영 회차</h2><p>삭제 시 해당 회차 신청 정보도 함께 정리할지 확인합니다.</p></div>
+        <div><h2>등록된 영화·상영관</h2><p>삭제 시 해당 영화의 신청 정보도 함께 정리할지 확인합니다.</p></div>
       </div>
       ${screeningTable(sortedScreenings(), { manage: true })}
     </section>
@@ -1680,7 +1680,7 @@ function adminReservations() {
       </div>
       <section class="filters reservation-filters" aria-label="신청자 필터">
         <input class="input" id="reservationSearch" type="search" placeholder="이름, 연락처, 영화, 메모 검색" />
-        <select class="select" id="reservationScreeningFilter"><option value="">전체 회차</option>${options}</select>
+        <select class="select" id="reservationScreeningFilter"><option value="">전체 영화</option>${options}</select>
         <select class="select" id="reservationStatusFilter"><option value="">전체 상태</option><option>확정</option><option>대기</option><option>취소</option></select>
         <select class="select" id="reservationAttendanceFilter"><option value="">전체 참석여부</option><option value="attended">참석</option><option value="not-attended">미참석</option></select>
         <select class="select" id="reservationTicketFilter"><option value="">전체 티켓구분</option><option value="얼리버드">얼리버드</option><option value="일반">일반석</option><option value="normal">일반상영</option></select>
@@ -1849,8 +1849,8 @@ function groupByDate() {
 function statsTable(rows, headers) {
   if (!rows.length) return `<div class="empty">통계 데이터가 없습니다.</div>`;
   return `
-    <div class="table-wrap">
-      <table>
+    <div class="table-wrap stats-table-wrap">
+      <table class="stats-table">
         <thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
         <tbody>
           ${rows.map((row) => `

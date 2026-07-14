@@ -1793,3 +1793,116 @@ tr:last-child td { border-bottom: 0; }
     padding: 4px 5px !important;
   }
 }
+
+
+/* v19: 관리자 명단·상세 통계 화면 정밀 압축 및 반응형 정렬 */
+.admin-layout {
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+}
+.admin-panel,
+.admin-panel > *,
+.grid-2 > * {
+  min-width: 0;
+}
+.admin-panel .card {
+  padding: clamp(14px, 1.5vw, 20px);
+}
+
+/* 신청자 명단: 화면 안에 더 많은 정보를 안정적으로 배치 */
+.reservation-filters {
+  grid-template-columns: minmax(180px, 1.35fr) repeat(4, minmax(125px, .8fr));
+  gap: 8px;
+}
+.reservation-filters .btn {
+  min-height: 40px;
+  padding: 8px 12px;
+}
+.reservation-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.reservation-table {
+  width: 100%;
+  min-width: 1060px;
+  table-layout: fixed;
+}
+.reservation-table th,
+.reservation-table td {
+  padding: 7px 6px;
+  font-size: 12px;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+.reservation-table th { font-size: 11px; }
+.reservation-table .help { font-size: 10px; line-height: 1.25; }
+.reservation-table .badge { padding: 5px 7px; font-size: 10px; }
+.reservation-table .btn-small { padding: 6px 8px; font-size: 10px; min-height: 30px; }
+.reservation-table .row-actions { gap: 4px; }
+.reservation-table th:nth-child(1), .reservation-table td:nth-child(1) { width: 8%; }
+.reservation-table th:nth-child(2), .reservation-table td:nth-child(2) { width: 13%; }
+.reservation-table th:nth-child(3), .reservation-table td:nth-child(3) { width: 5%; }
+.reservation-table th:nth-child(4), .reservation-table td:nth-child(4) { width: 9%; min-width: 0; }
+.reservation-table th:nth-child(5), .reservation-table td:nth-child(5) { width: 15%; }
+.reservation-table th:nth-child(6), .reservation-table td:nth-child(6) { width: 8%; }
+.reservation-table th:nth-child(7), .reservation-table td:nth-child(7) { width: 11%; min-width: 0; }
+.reservation-table th:nth-child(8), .reservation-table td:nth-child(8) { width: 4%; text-align: center; }
+.reservation-table th:nth-child(9), .reservation-table td:nth-child(9) { width: 8%; }
+.reservation-table th:nth-child(10), .reservation-table td:nth-child(10) { width: 9%; }
+.reservation-table th:nth-child(11), .reservation-table td:nth-child(11) { width: 10%; }
+
+/* 상세 통계: 고정 레이아웃과 좁은 간격으로 카드 밖 이탈 방지 */
+.stats-table-wrap,
+.venue-stats-table { width: 100%; max-width: 100%; }
+.stats-table,
+.venue-stats-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.stats-table th,
+.stats-table td,
+.venue-stats-table th,
+.venue-stats-table td {
+  padding: 8px 6px;
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.stats-table th:first-child,
+.stats-table td:first-child,
+.venue-stats-table th:first-child,
+.venue-stats-table td:first-child {
+  width: 24%;
+  min-width: 0;
+  text-align: left;
+}
+.stats-table th:not(:first-child),
+.stats-table td:not(:first-child) { width: 10.85%; }
+.venue-stats-table th:not(:first-child),
+.venue-stats-table td:not(:first-child) { width: 10.85%; }
+.admin-panel .grid-2 { gap: 12px; }
+.admin-panel .chart-row {
+  grid-template-columns: minmax(120px, 1.15fr) minmax(100px, 1fr) 74px;
+  gap: 8px;
+}
+.admin-panel .chart-name,
+.admin-panel .chart-value { font-size: 12px; }
+
+@media (max-width: 1180px) {
+  .admin-layout { grid-template-columns: 190px minmax(0, 1fr); gap: 12px; }
+  .reservation-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reservation-table { min-width: 980px; }
+  .admin-panel .grid-2 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .admin-layout { grid-template-columns: 1fr; }
+  .reservation-filters { grid-template-columns: 1fr; }
+  .reservation-table { min-width: 920px; }
+  .stats-table,
+  .venue-stats-table { min-width: 680px; }
+  .stats-table-wrap,
+  .venue-stats-table { overflow-x: auto; }
+}
