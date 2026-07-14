@@ -1393,7 +1393,7 @@ function screeningTable(screenings, options = {}) {
             <th>대기</th>
             <th>GV·모더레이터</th>
             <th>담당</th>
-            ${options.manage ? "<th>관리</th>" : "<th>명단</th>"}
+            ${options.manage ? "<th>관리</th>" : ""}
           </tr>
         </thead>
         <tbody>
@@ -1404,8 +1404,8 @@ function screeningTable(screenings, options = {}) {
             const phase = isOpening ? openingPhaseInfo(screening) : null;
             return `
               <tr>
-                <td><strong>${esc(screening.title)}</strong>${isOpening ? `<br><span class="help">얼리버드 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
-                <td><strong>${esc(screening.venue)}</strong></td>
+                <td>${options.manage ? `<strong>${esc(screening.title)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.title)}</strong></button>`}${isOpening ? `<br><span class="help">얼리버드 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
+                <td>${options.manage ? `<strong>${esc(screening.venue)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.venue)}</strong></button>`}</td>
                 <td><span class="badge ${info.className}">${esc(info.text)}</span>${isOpening ? `<br><span class="badge ${phase.className}">${esc(phase.label)}</span>` : ""}</td>
                 <td>${esc(formatDateTime(screening.startTime))}</td>
                 <td>${Number(screening.capacity || 0)}명</td>
@@ -1414,16 +1414,7 @@ function screeningTable(screenings, options = {}) {
                 <td>${waitlistSeats(screening.id)}명</td>
                 <td>${esc(screening.gvHost || "-")}<br><span class="help">${esc(screening.moderator || "-")}</span></td>
                 <td>${esc(screening.staff || "-")}<br><span class="help">${esc(screening.staffPhone || "-")}</span></td>
-                <td>
-                  <div class="row-actions">
-                    ${options.manage ? `
-                      <button class="btn btn-outline btn-small" type="button" data-action="edit-screening" data-id="${esc(screening.id)}">수정</button>
-                      <button class="btn btn-danger btn-small" type="button" data-action="delete-screening" data-id="${esc(screening.id)}">삭제</button>
-                    ` : `
-                      <button class="btn btn-outline btn-small" type="button" data-action="view-roster" data-id="${esc(screening.id)}">명단·참석</button>
-                    `}
-                  </div>
-                </td>
+                ${options.manage ? `<td><div class="row-actions"><button class="btn btn-outline btn-small" type="button" data-action="edit-screening" data-id="${esc(screening.id)}">수정</button><button class="btn btn-danger btn-small" type="button" data-action="delete-screening" data-id="${esc(screening.id)}">삭제</button></div></td>` : ""}
               </tr>
             `;
           }).join("")}
@@ -1710,7 +1701,7 @@ function reservationTable(reservations, options = {}) {
       <table class="reservation-table">
         <thead>
           <tr>
-            <th>상영관</th><th>영화 / 시간</th><th>상태</th><th>참석</th><th>신청자</th><th>예약번호</th><th>티켓/좌석</th><th>인원</th><th>신청일</th><th>메모</th><th class="screen-only">관리</th>
+            <th>상영관</th><th>영화 / 시간</th><th>상태·참석</th><th>신청자</th><th>예약번호</th><th>티켓/좌석</th><th>인원</th><th>신청일</th><th>메모</th><th class="screen-only">관리</th>
           </tr>
         </thead>
         <tbody>
@@ -1721,10 +1712,11 @@ function reservationTable(reservations, options = {}) {
               <tr class="${attended ? "attended-row" : ""}">
                 <td><strong>${esc(screening?.venue || "삭제된 상영관")}</strong></td>
                 <td>${screening ? `<strong>${esc(screening.title)}</strong><br><span class="help">${esc(formatDateTime(screening.startTime))}</span>` : "삭제된 회차"}</td>
-                <td><span class="badge ${reservationStatusClass(reservation)}">${esc(reservation.status)}</span></td>
-                <td class="attendance-cell">
-                  <span class="badge ${attended ? "ok" : "warn"} screen-only">${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : "미참석"}</span>
-                  <button class="btn ${attended ? "btn-outline" : "btn-dark"} btn-small screen-only" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="${attended ? "false" : "true"}" ${reservation.status === "취소" ? "disabled" : ""}>${attended ? "참석 취소" : "참석 확인"}</button>
+                <td class="status-attendance-cell">
+                  <div class="status-attendance-stack screen-only">
+                    <span class="badge ${reservationStatusClass(reservation)}">${esc(reservation.status)}</span>
+                    <button class="attendance-toggle ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="${attended ? "false" : "true"}" ${reservation.status === "취소" ? "disabled" : ""}>${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : "미참석"}</button>
+                  </div>
                   <div class="print-only print-check"><span class="check-box">${attended ? "✓" : ""}</span></div>
                 </td>
                 <td><strong>${esc(reservation.name)}</strong><br><span class="help">${esc(reservation.phone || "-")} ${reservation.email ? `· ${esc(reservation.email)}` : ""}</span></td>

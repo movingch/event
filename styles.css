@@ -1906,3 +1906,68 @@ tr:last-child td { border-bottom: 0; }
   .stats-table-wrap,
   .venue-stats-table { overflow-x: auto; }
 }
+
+/* v20: 신청자 명단 초밀도 정렬 + 상태/참석 통합 */
+.roster-link {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(179,63,47,.35);
+  text-underline-offset: 3px;
+}
+.roster-link:hover { color: var(--accent); }
+.reservation-table { min-width: 930px; }
+.reservation-table th,
+.reservation-table td {
+  padding: 4px 4px;
+  font-size: 11px;
+  line-height: 1.18;
+  vertical-align: middle;
+}
+.reservation-table th { font-size: 10px; }
+.reservation-table .help { font-size: 9px; line-height: 1.12; }
+.reservation-table .badge { padding: 3px 6px; font-size: 9px; }
+.reservation-table .btn-small { padding: 4px 6px; font-size: 9px; min-height: 25px; border-radius: 10px; }
+.reservation-table .row-actions { gap: 3px; }
+.reservation-table th:nth-child(1), .reservation-table td:nth-child(1) { width: 8%; }
+.reservation-table th:nth-child(2), .reservation-table td:nth-child(2) { width: 14%; }
+.reservation-table th:nth-child(3), .reservation-table td:nth-child(3) { width: 9%; }
+.reservation-table th:nth-child(4), .reservation-table td:nth-child(4) { width: 15%; }
+.reservation-table th:nth-child(5), .reservation-table td:nth-child(5) { width: 8%; }
+.reservation-table th:nth-child(6), .reservation-table td:nth-child(6) { width: 11%; }
+.reservation-table th:nth-child(7), .reservation-table td:nth-child(7) { width: 4%; text-align:center; }
+.reservation-table th:nth-child(8), .reservation-table td:nth-child(8) { width: 9%; }
+.reservation-table th:nth-child(9), .reservation-table td:nth-child(9) { width: 9%; }
+.reservation-table th:nth-child(10), .reservation-table td:nth-child(10) { width: 13%; }
+.status-attendance-stack { display: grid; gap: 3px; justify-items: stretch; }
+.status-attendance-stack .badge { width: 100%; text-align: center; }
+.attendance-toggle {
+  border: 1px solid rgba(58,41,27,.18);
+  border-radius: 999px;
+  padding: 4px 5px;
+  background: #f5ead8;
+  color: #8a5200;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.attendance-toggle.is-attended { background: #e5f0e7; color: #24784f; }
+.attendance-toggle:disabled { opacity: .45; cursor: not-allowed; }
+#rosterModal .modal { width: min(1180px, calc(100vw - 24px)); }
+#rosterModal .modal-body { padding: 12px; }
+
+@media (max-width: 1180px) {
+  .reservation-table { min-width: 880px; }
+}
+@media (max-width: 760px) {
+  .reservation-table { min-width: 840px; }
+}
