@@ -1600,3 +1600,47 @@ tr:last-child td { border-bottom: 0; }
   .staff-capacity { margin-top:.8rem; }
   .staff-screening-card .reservation-table-wrap { margin-left:-.5rem; margin-right:-.5rem; }
 }
+
+/* v14 스태프 권한, 비밀번호 변경, 상영관별 명단 및 인쇄 최적화 */
+.staff-password-card { margin-bottom: 1.25rem; }
+.staff-password-card > div { margin-bottom: 1rem; }
+.staff-password-card h2 { margin: 0 0 .35rem; }
+.staff-password-card p { margin: 0; color: var(--muted); }
+.staff-pin-form { display: grid; grid-template-columns: 140px minmax(130px,1fr) 140px minmax(130px,1fr) 160px minmax(130px,1fr) auto; gap: .65rem; align-items: end; }
+.staff-pin-form .label { margin: 0; }
+.reservation-table th, .reservation-table td { vertical-align: middle; }
+.reservation-table td:nth-child(4) { min-width: 155px; }
+
+@media (max-width: 980px) {
+  .staff-pin-form { grid-template-columns: 1fr 1fr; }
+  .staff-pin-form .btn { grid-column: 1 / -1; }
+}
+
+@media print {
+  @page { size: A4 landscape; margin: 8mm; }
+  body { font-size: 9px; }
+  .header, .footer, .staff-portal-title, .staff-stats, .staff-password-card { display: none !important; }
+  .staff-screening-card { page-break-after: always; break-after: page; margin: 0; padding: 0; border: 0; }
+  .staff-screening-card:last-child { page-break-after: auto; break-after: auto; }
+  .staff-screening-card > .section-title { display: flex !important; flex-direction: row !important; margin: 0 0 5px; }
+  .staff-screening-card h2 { margin: 2px 0; font-size: 14px; }
+  .staff-screening-card p { margin: 0; font-size: 9px; }
+  .staff-capacity { padding: 4px 7px; min-width: 80px; }
+  .reservation-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+  .reservation-table th, .reservation-table td { padding: 3px 4px !important; font-size: 8px !important; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; }
+  .reservation-table th { white-space: nowrap; }
+  .reservation-table td { white-space: nowrap; }
+  .reservation-table th:nth-child(1), .reservation-table td:nth-child(1) { width: 5%; }
+  .reservation-table th:nth-child(2), .reservation-table td:nth-child(2) { width: 10%; }
+  .reservation-table th:nth-child(3), .reservation-table td:nth-child(3) { width: 5%; text-align: center; }
+  .reservation-table th:nth-child(4), .reservation-table td:nth-child(4) { width: 15%; min-width: 0; }
+  .reservation-table th:nth-child(5), .reservation-table td:nth-child(5) { width: 22%; }
+  .reservation-table th:nth-child(6), .reservation-table td:nth-child(6) { width: 15%; }
+  .reservation-table th:nth-child(7), .reservation-table td:nth-child(7) { width: 5%; text-align: center; }
+  .reservation-table th:nth-child(8), .reservation-table td:nth-child(8) { width: 11%; }
+  .reservation-table th:nth-child(9), .reservation-table td:nth-child(9) { width: 12%; }
+  .reservation-table .help { display: inline; font-size: 7px; white-space: nowrap; }
+  .print-check { justify-content: center; }
+  .check-box { width: 15px; height: 15px; border-width: 1px; }
+  .table-note { max-width: none; }
+}
