@@ -19,7 +19,8 @@ const OPENING_VIDEO_EMBED = "https://www.youtube.com/embed/dM0quIEmrYA?autoplay=
 const OPENING_VIDEO_TITLE = "영화 얼굴 메인 예고편";
 const OPENING_HEADLINE = "박정민 배우, 머내마을영화제 개막식에 오다";
 const OPENING_HEADLINE_LINES = ["박정민 배우,", "머내마을영화제", "개막식에 오다"];
-const EARLYBIRD_MESSAGE = "박정민배우를 가장 가까이서 만날 수 있는 후원자님들을 위한 사전예약";
+const EARLYBIRD_MESSAGE = "후원자님들만을 위한 사전예약";
+const OPENING_PROMO_COPY = "박정민배우를 가장 가까이서 만날 수 있는 특별한 혜택을 후원자님들께 드립니다. 마을 주민들이 한땀한땀 만들어가는 이 영화제에 여러분의 손길을 보태주십시오. 후원자님들을 위해 좌석을 준비했습니다. 후원자님들만을 위한 사전예약입니다.";
 
 const seedOpeningScreening = {
   id: OPENING_FILM_ID,
@@ -565,7 +566,7 @@ function youtubeThumbnailUrl(url) {
 function openingHeadlineMarkup() {
   return `
     <span class="headline-line">박정민 배우,</span>
-    <span class="headline-line headline-accent">머내마을</span>
+    <span class="headline-line headline-accent">머내마을영화제</span>
     <span class="headline-line">개막식에 오다</span>
   `;
 }
@@ -831,7 +832,7 @@ function renderGeneralHome() {
     <section class="section">
       <div class="section-title">
         <div>
-          <h2>신청 가능한 상영작 미리보기</h2>
+          <h2>영화관람신청하기</h2>
           <p>보고 싶은 영화를 선택하고 참석 인원과 연락처를 남겨주세요.</p>
         </div>
         <a class="chip-link" href="#/apply">전체 보기</a>
@@ -860,7 +861,7 @@ function renderOpeningHome(opening) {
         </div>
         <h1 class="opening-title-stack">${openingHeadlineMarkup()}</h1>
         <p class="opening-home-lead">개막식 영화 &lt;얼굴&gt;<br>${esc(openingDateLine)} · ${esc(opening.guest || "박정민 배우")} 참석</p>
-        <p>${esc(EARLYBIRD_MESSAGE)}입니다. 개막식 당일까지 메인 화면에서 개막식 예매를 가장 먼저 안내합니다. 후원자 사전예약은 지정좌석으로, 일반석 오픈 이후 신청자는 자유석으로 운영됩니다.</p>
+        <p>${esc(OPENING_PROMO_COPY)}</p>
         <div class="opening-home-facts" aria-label="개막식 핵심 정보">
           <div><span>개막식</span><strong>9월 9일 저녁 7시</strong></div>
           <div><span>장소</span><strong>동천농협강당</strong></div>
@@ -908,7 +909,7 @@ function renderOpeningHome(opening) {
     <section class="section">
       <div class="section-title">
         <div>
-          <h2>영화제 상영작 미리보기</h2>
+          <h2>영화관람신청하기</h2>
           <p>개막식 이후에도 9월 13일까지 마을 곳곳에서 상영이 이어집니다.</p>
         </div>
         <a class="chip-link" href="#/apply">전체 보기</a>
@@ -963,7 +964,7 @@ function renderOpeningTicketing() {
           <span class="badge warn">${esc(opening.guest || "박정민 배우")} 참석</span>
         </div>
         <h1 class="opening-title-stack opening-title-detail">${openingHeadlineMarkup()}<span class="opening-title-sub">개막식 영화 &lt;얼굴&gt; · 후원자 사전예약</span></h1>
-        <p><strong>${esc(formatDateTime(opening.startTime))} · ${esc(opening.venue)}</strong><br>박정민 배우가 함께하는 개막식 상영입니다. ${esc(EARLYBIRD_MESSAGE)}을 먼저 열고, 확정된 후원자님께는 지정좌석을 배정합니다.</p>
+        <p><strong>${esc(formatDateTime(opening.startTime))} · ${esc(opening.venue)}</strong><br>${esc(OPENING_PROMO_COPY)}</p>
         <div class="cta-row">
           <button class="btn btn-light" type="button" data-action="book" data-id="${esc(opening.id)}" ${phase.allowBooking ? "" : "disabled"}>${phase.allowBooking ? "개막작 신청하기" : phase.label}</button>
           <button class="btn btn-primary" type="button" data-action="donate">후원하기</button>
@@ -1354,8 +1355,8 @@ function adminOverview() {
     <section class="card">
       <div class="section-title">
         <div>
-          <h2>상영 회차별 신청·참석 현황</h2>
-          <p>마감 임박, 정원 도달, 대기 발생 회차와 실제 참석 인원을 함께 확인하세요.</p>
+          <h2>영화별 신청·참석 현황</h2>
+          <p>마감 임박, 정원 도달, 대기 발생 영화와 실제 참석 인원을 함께 확인하세요.</p>
         </div>
         <button class="btn btn-outline" type="button" data-action="export-stats">통계 CSV</button>
       </div>
@@ -1376,14 +1377,14 @@ function adminOverview() {
 }
 
 function screeningTable(screenings, options = {}) {
-  if (!screenings.length) return `<div class="empty">등록된 상영 회차가 없습니다.</div>`;
+  if (!screenings.length) return `<div class="empty">등록된 영화가 없습니다.</div>`;
   return `
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>상영관</th>
             <th>영화</th>
+            <th>상영관</th>
             <th>상태</th>
             <th>시간</th>
             <th>정원</th>
@@ -1403,8 +1404,8 @@ function screeningTable(screenings, options = {}) {
             const phase = isOpening ? openingPhaseInfo(screening) : null;
             return `
               <tr>
-                <td><strong>${esc(screening.venue)}</strong></td>
                 <td><strong>${esc(screening.title)}</strong>${isOpening ? `<br><span class="help">얼리버드 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
+                <td><strong>${esc(screening.venue)}</strong></td>
                 <td><span class="badge ${info.className}">${esc(info.text)}</span>${isOpening ? `<br><span class="badge ${phase.className}">${esc(phase.label)}</span>` : ""}</td>
                 <td>${esc(formatDateTime(screening.startTime))}</td>
                 <td>${Number(screening.capacity || 0)}명</td>
