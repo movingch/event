@@ -768,13 +768,14 @@ function appHeader() {
   return `
     <header class="header">
       <a class="logo" href="#/">
-        <div class="logo-mark">M9</div>
+        <div class="logo-mark"><img src="assets/munae-horse-logo.png" alt="머내마을영화제 말 캐릭터 로고"></div>
         <div>
           <div class="logo-title">제9회 머내마을영화제</div>
           <div class="logo-sub">마을이 함께 만드는 주민주도영화제</div>
         </div>
       </a>
       <nav class="nav" aria-label="주요 메뉴">
+        <a href="https://www.meonaeff.com/" target="_blank" rel="noopener noreferrer" class="festival-home-link">머내마을영화제 홈페이지</a>
         <a href="#/opening">개막식 티켓팅</a>
         <a href="#/apply">영화 신청</a>
         <button type="button" data-action="donate">후원하기</button>
