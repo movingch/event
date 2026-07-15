@@ -89,7 +89,7 @@ function buildMessage(body) {
     ].join('\n');
   }
   const name = safeText(body.name, 30) || '신청자';
-  const reservationId = safeText(body.reservationId, 60) || '현장 확인';
+  const reservationId = safeText(body.reservationNumber || body.reservationId, 60) || '현장 확인';
   const movieTitle = safeText(body.movieTitle, 80) || '상영작';
   const seatAndPeople = safeText(body.seatAndPeople, 80) || '자유석 / 1명';
   const dateTime = safeText(body.dateTime, 80) || '일시 미정';

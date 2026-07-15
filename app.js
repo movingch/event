@@ -168,7 +168,7 @@ const LEGACY_DEMO_SCREENING_MIGRATION = {
 const seedReservations = [
   {
     id: "rsv-1001",
-    reservationNumber: "동-001",
+    reservationNumber: "동천-001",
     screeningId: OPENING_FILM_ID,
     name: "홍길동",
     phone: "010-1234-5678",
@@ -191,7 +191,7 @@ const seedReservations = [
   },
   {
     id: "rsv-1002",
-    reservationNumber: "야-001",
+    reservationNumber: "야외-001",
     screeningId: "scr-004",
     name: "김마을",
     phone: "010-2222-3333",
@@ -302,13 +302,13 @@ function normalizeState(data) {
   if (!screenings.some((screening) => screening.isOpening === true)) {
     screenings = [normalizeScreening(seedOpeningScreening), ...screenings];
   }
-  return {
+  return applyVenueReservationNumbering({
     screenings,
     reservations: Array.isArray(data.reservations) ? data.reservations.map(normalizeReservation) : [],
     donations: Array.isArray(data.donations) ? data.donations : [],
     sponsorClicks: Number(data.sponsorClicks || 0),
     lastUpdated: data.lastUpdated || new Date().toISOString()
-  };
+  });
 }
 
 function loadState() {
@@ -334,6 +334,7 @@ function loadState() {
 }
 
 function persist() {
+  applyVenueReservationNumbering(state);
   state.lastUpdated = new Date().toISOString();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -734,7 +735,27 @@ function openingStats(screening = getOpeningScreening()) {
 
 function venueReservationPrefix(venue) {
   const cleaned = String(venue || "상영관").trim().replace(/^[^0-9A-Za-z가-힣]+/, "");
-  return cleaned.charAt(0) || "상";
+  const chars = Array.from(cleaned).filter((char) => /[0-9A-Za-z가-힣]/.test(char));
+  return chars.slice(0, 2).join("") || "상영";
+}
+
+function applyVenueReservationNumbering(targetState) {
+  if (!targetState || !Array.isArray(targetState.screenings) || !Array.isArray(targetState.reservations)) return targetState;
+  const screeningById = new Map(targetState.screenings.map((screening) => [screening.id, screening]));
+  const counters = new Map();
+  const sorted = [...targetState.reservations].sort((a, b) => {
+    const venueA = String(screeningById.get(a.screeningId)?.venue || "상영관");
+    const venueB = String(screeningById.get(b.screeningId)?.venue || "상영관");
+    return venueA.localeCompare(venueB, "ko") || String(a.createdAt || "").localeCompare(String(b.createdAt || "")) || String(a.id || "").localeCompare(String(b.id || ""));
+  });
+  sorted.forEach((reservation) => {
+    const screening = screeningById.get(reservation.screeningId);
+    const venueKey = String(screening?.venue || "상영관").trim();
+    const next = (counters.get(venueKey) || 0) + 1;
+    counters.set(venueKey, next);
+    reservation.reservationNumber = `${venueReservationPrefix(venueKey)}-${String(next).padStart(3, "0")}`;
+  });
+  return targetState;
 }
 
 function nextVenueReservationNumber(screening) {
@@ -2407,7 +2428,8 @@ function reservationSmsMessage(reservation, screening) {
 
 function reservationSmsPayload(reservation, screening) {
   return {
-    reservationId: reservation.id,
+    reservationId: reservationDisplayNumber(reservation, screening),
+    reservationNumber: reservationDisplayNumber(reservation, screening),
     name: String(reservation.name || "").trim(),
     phone: normalizePhoneForSms(reservation.phone),
     movieTitle: cleanMovieTitle(screening?.title),
@@ -2613,14 +2635,6 @@ function showReservationComplete(reservation, status) {
             <button class="btn btn-outline btn-small" type="button" data-result="email-confirmation">메일로 보내기</button>
           </div>
         </div>
-        <div class="sms-auto-box">
-          <div>
-            <h3>문자 자동발송</h3>
-            <p>${isConfirmed ? "예약 확인 문자를 입력하신 연락처로 발송합니다." : "대기 신청은 운영진이 확정 처리한 뒤 문자 발송 버튼으로 안내할 수 있습니다."}</p>
-            <span class="badge ${smsStatusClass(reservation)}" data-sms-status-for="${esc(reservation.id)}">${esc(smsStatusText(reservation))}</span>
-          </div>
-          <button class="btn btn-outline btn-small" type="button" data-result="send-sms-again" ${isConfirmed ? "" : "disabled"}>문자 다시 발송</button>
-        </div>
         <div class="form-actions result-actions">
           <button class="btn btn-primary" type="button" data-result="confirm">확인</button>
         </div>
@@ -2646,10 +2660,6 @@ function showReservationComplete(reservation, status) {
     }
     if (result === "email-confirmation") {
       openEmailConfirmation(confirmationMessage, reservation);
-      return;
-    }
-    if (result === "send-sms-again") {
-      sendReservationSms(reservation, screening, { manual: true });
       return;
     }
     modal.remove();
