@@ -808,7 +808,7 @@ function renderHome() {
 }
 
 function renderGeneralHome() {
-  const popular = sortedScreenings().filter((screening) => !isOpeningScreening(screening)).slice(0, 3);
+  const popular = sortedScreenings().filter((screening) => !isOpeningScreening(screening));
   return `
     <section class="hero">
       <div class="hero-grid">
@@ -850,7 +850,7 @@ function renderOpeningHome(opening) {
   const stats = openingStats(opening);
   const poster = openingPosterSrc(opening);
   const videoUrl = openingVideoUrl(opening);
-  const regularPreview = sortedScreenings().filter((screening) => !isOpeningScreening(screening)).slice(0, 3);
+  const regularPreview = sortedScreenings().filter((screening) => !isOpeningScreening(screening));
   const openingDateLine = `${formatDateTime(opening.startTime)} · ${opening.venue}`;
   return `
     <section class="opening-home-hero">
