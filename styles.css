@@ -2058,3 +2058,23 @@ tr:last-child td { border-bottom: 0; }
     white-space: nowrap;
   }
 }
+
+/* v24: 개막식 사전신청과 후원 신청 분리 */
+.donation-page-hero {
+  padding: clamp(28px, 5vw, 64px);
+  border-radius: 32px;
+  background: linear-gradient(135deg, #211d19, #49392f);
+  color: #fff;
+  margin-bottom: 22px;
+}
+.donation-page-hero h1 { margin: 10px 0 18px; font-size: clamp(34px, 6vw, 64px); letter-spacing: -.06em; }
+.donation-story { max-width: 920px; font-size: clamp(16px, 2vw, 21px); line-height: 1.85; color: #f8eee6; }
+.donation-form-card { max-width: 900px; margin: 0 auto; }
+.donation-form { margin-top: 16px; }
+.donation-agreement { display: flex; gap: 10px; flex-direction: column; padding: 16px; border-radius: 18px; background: #f4eee7; color: var(--muted); line-height: 1.55; }
+.donation-agreement strong { color: var(--ink); }
+.donation-result { padding: 20px; border-radius: 20px; background: #edf6ee; }
+@media (max-width: 720px) {
+  .donation-page-hero { border-radius: 22px; padding: 25px 20px; }
+  .donation-story { font-size: 15px; line-height: 1.72; }
+}

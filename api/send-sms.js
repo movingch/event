@@ -78,6 +78,16 @@ function safeText(value, maxLength = 80) {
 }
 
 function buildMessage(body) {
+  if (body && body.kind === 'donation') {
+    const donorName = safeText(body.donorName, 30) || '후원자';
+    const depositorName = safeText(body.depositorName, 30) || donorName;
+    return [
+      `${donorName} 후원자님, 머내마을영화제 후원 참여에 진심으로 감사드립니다.`,
+      `입금자명: ${depositorName}`,
+      '주민들이 손수 만드는 영화제를 위해 소중하게 사용하겠습니다.',
+      '제9회 머내마을영화제에서 반갑게 뵙겠습니다.'
+    ].join('\n');
+  }
   const name = safeText(body.name, 30) || '신청자';
   const reservationId = safeText(body.reservationId, 60) || '현장 확인';
   const movieTitle = safeText(body.movieTitle, 80) || '상영작';
@@ -161,7 +171,7 @@ module.exports = async function handler(req, res) {
     content,
     messages: [{ to }]
   };
-  if (messageType !== 'SMS') naverPayload.subject = '머내마을영화제 예약';
+  if (messageType !== 'SMS') naverPayload.subject = body.kind === 'donation' ? '머내마을영화제 후원 감사' : '머내마을영화제 예약';
 
   if (process.env.SMS_DRY_RUN === 'true') {
     return sendJson(res, 200, {
