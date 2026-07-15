@@ -1427,11 +1427,11 @@ function renderStaffLogin(preselectedId = "") {
       <div class="login-card">
         <div class="eyebrow">상영관 담당자 전용</div>
         <h1>신청자 확인</h1>
-        <p>담당 회차를 선택하고 관리자가 부여한 스태프 비밀번호를 입력하세요. 로그인한 회차의 신청자 명단만 확인할 수 있습니다.</p>
+        <p>담당 영화를 선택하고 관리자가 부여한 스태프 비밀번호를 입력하세요. 로그인한 영화의 신청자 명단만 확인할 수 있습니다.</p>
         <form id="staffLoginForm">
-          <label class="label" for="staffScreeningId">담당 상영 회차</label>
+          <label class="label" for="staffScreeningId">담당 영화</label>
           <select class="select" id="staffScreeningId" name="screeningId" required>
-            <option value="">회차를 선택하세요</option>${options}
+            <option value="">영화를 선택하세요</option>${options}
           </select>
           <label class="label" for="staffPin">스태프 비밀번호</label>
           <input class="input" id="staffPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required />
@@ -1953,27 +1953,16 @@ function reservationTable(reservations, options = {}) {
 
 function adminStats() {
   const byVenue = groupByVenue();
+  const byFilm = groupByFilm();
   const byDate = groupByDate();
-  const screenings = sortedScreenings();
-  const maxSeats = Math.max(1, ...screenings.map((s) => Math.max(confirmedSeats(s.id), actualAttendees(s.id))));
   return `
-    <section class="grid-2">
-      <div class="card">
-        <div class="section-title"><div><h2>영화별 신청·참석률</h2><p>확정 신청 인원과 실제 참석 인원을 함께 봅니다.</p></div></div>
-        <div class="chart-list">
-          ${screenings.map((s) => `
-            <div class="chart-row">
-              <div class="chart-name">${esc(s.title)}<br><span class="help">${esc(s.venue)}</span></div>
-              <div class="chart-track"><span style="width:${Math.min((confirmedSeats(s.id) / maxSeats) * 100, 100)}%"></span></div>
-              <div class="chart-value">신청 ${confirmedSeats(s.id)}명<br><span class="help">참석 ${actualAttendees(s.id)}명</span></div>
-            </div>
-          `).join("")}
-        </div>
-      </div>
-      <div class="card">
-        <div class="section-title"><div><h2>상영관별 통계</h2><p>상영관별 정원 대비 확정 신청 인원과 실제 참석 인원입니다.</p></div></div>
-        ${statsTable(byVenue, ["상영관", "회차", "정원", "확정 신청", "실제 참석", "대기", "신청률", "참석률"])}
-      </div>
+    <section class="card">
+      <div class="section-title"><div><h2>영화별 참석현황</h2><p>영화와 상영관별 신청, 확정, 실제 참석, 취소와 대기 현황을 세부적으로 확인합니다.</p></div></div>
+      ${filmStatsTable(byFilm)}
+    </section>
+    <section class="card">
+      <div class="section-title"><div><h2>상영관별 통계</h2><p>상영관별 신청, 확정, 실제 참석, 취소와 대기 현황입니다.</p></div></div>
+      ${venueStatsTable(byVenue)}
     </section>
     <section class="card">
       <div class="section-title"><div><h2>날짜별 통계</h2><p>일자별 운영 규모와 신청 현황을 봅니다.</p></div></div>
@@ -2000,6 +1989,43 @@ function adminStats() {
       </div>
     </section>
   `;
+}
+
+
+function groupByFilm() {
+  return sortedScreenings().map((screening) => {
+    const reservations = state.reservations.filter((r) => r.screeningId === screening.id);
+    const active = reservations.filter((r) => r.status !== "취소");
+    const canceled = reservations.filter((r) => r.status === "취소");
+    const capacity = Number(screening.capacity || 0);
+    const confirmed = confirmedSeats(screening.id);
+    const attended = actualAttendees(screening.id);
+    return {
+      title: screening.title || "제목 미정",
+      venue: screening.venue || "상영관 미정",
+      capacity,
+      applications: active.length,
+      applicants: active.reduce((sum, r) => sum + Number(r.seats || 0), 0),
+      confirmed,
+      attended,
+      canceledApplications: canceled.length,
+      canceledSeats: canceled.reduce((sum, r) => sum + Number(r.seats || 0), 0),
+      waitlist: waitlistSeats(screening.id),
+      rate: capacity ? Math.round((confirmed / capacity) * 100) : 0,
+      attendanceRate: confirmed ? Math.round((attended / confirmed) * 100) : 0
+    };
+  });
+}
+
+function filmStatsTable(rows) {
+  if (!rows.length) return `<div class="empty">통계 데이터가 없습니다.</div>`;
+  const totals = rows.reduce((a, r) => ({ capacity:a.capacity+r.capacity, applications:a.applications+r.applications, applicants:a.applicants+r.applicants, confirmed:a.confirmed+r.confirmed, attended:a.attended+r.attended, canceledApplications:a.canceledApplications+r.canceledApplications, canceledSeats:a.canceledSeats+r.canceledSeats, waitlist:a.waitlist+r.waitlist }), {capacity:0,applications:0,applicants:0,confirmed:0,attended:0,canceledApplications:0,canceledSeats:0,waitlist:0});
+  const totalRate = totals.capacity ? Math.round((totals.confirmed / totals.capacity) * 100) : 0;
+  const totalAttendanceRate = totals.confirmed ? Math.round((totals.attended / totals.confirmed) * 100) : 0;
+  return `<div class="table-wrap film-stats-table-wrap"><table class="film-stats-table"><thead><tr><th>영화</th><th>상영관</th><th>정원</th><th>신청 건/인원</th><th>확정</th><th>참석</th><th>취소 건/인원</th><th>대기</th><th>신청률</th><th>참석률</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td><strong>${esc(r.title)}</strong></td><td>${esc(r.venue)}</td><td>${r.capacity}</td><td>${r.applications}건 / ${r.applicants}명</td><td>${r.confirmed}명</td><td>${r.attended}명</td><td>${r.canceledApplications}건 / ${r.canceledSeats}명</td><td>${r.waitlist}명</td><td>${r.rate}%</td><td>${r.attendanceRate}%</td></tr>`).join("")}
+    <tr class="total-row"><td colspan="2"><strong>전체 합계</strong></td><td>${totals.capacity}</td><td>${totals.applications}건 / ${totals.applicants}명</td><td>${totals.confirmed}명</td><td>${totals.attended}명</td><td>${totals.canceledApplications}건 / ${totals.canceledSeats}명</td><td>${totals.waitlist}명</td><td>${totalRate}%</td><td>${totalAttendanceRate}%</td></tr>
+  </tbody></table></div>`;
 }
 
 function groupByVenue() {

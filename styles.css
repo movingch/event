@@ -2134,3 +2134,51 @@ tr:last-child td { border-bottom: 0; }
   border-color: #b8d6c0;
   color: #24784f;
 }
+
+
+/* v32: 신청자 명단 밀도 개선 및 영화별 상세 통계 */
+.reservation-table {
+  min-width: 940px;
+}
+.reservation-table th,
+.reservation-table td {
+  padding: 5px 5px;
+  font-size: 13px;
+  line-height: 1.22;
+  vertical-align: middle;
+}
+.reservation-table th { font-size: 12px; white-space: nowrap; }
+.reservation-table .help { font-size: 11px; line-height: 1.18; }
+.reservation-table .badge { padding: 3px 6px; font-size: 10px; }
+.reservation-table .btn-small { min-height: 27px; padding: 4px 5px; font-size: 10px; }
+.reservation-table .row-actions { gap: 3px; }
+.reservation-table th:nth-child(1), .reservation-table td:nth-child(1) { width: 10%; }
+.reservation-table th:nth-child(2), .reservation-table td:nth-child(2) { width: 17%; }
+.reservation-table th:nth-child(3), .reservation-table td:nth-child(3) { width: 20%; }
+.reservation-table th:nth-child(4), .reservation-table td:nth-child(4) { width: 10%; }
+.reservation-table th:nth-child(5), .reservation-table td:nth-child(5) { width: 11%; }
+.reservation-table th:nth-child(6), .reservation-table td:nth-child(6) { width: 5%; text-align:center; }
+.reservation-table th:nth-child(7), .reservation-table td:nth-child(7) { width: 10%; }
+.reservation-table th:nth-child(8), .reservation-table td:nth-child(8) { width: 8%; }
+.reservation-table th:nth-child(9), .reservation-table td:nth-child(9) { width: 9%; }
+.applicant-name-line { gap: 5px; }
+
+.film-stats-table-wrap { width:100%; max-width:100%; overflow-x:auto; }
+.film-stats-table { width:100%; min-width:980px; table-layout:fixed; }
+.film-stats-table th, .film-stats-table td { padding:7px 5px; font-size:12px; line-height:1.2; vertical-align:middle; }
+.film-stats-table th { white-space:nowrap; font-size:11px; }
+.film-stats-table th:nth-child(1), .film-stats-table td:nth-child(1) { width:18%; }
+.film-stats-table th:nth-child(2), .film-stats-table td:nth-child(2) { width:14%; }
+.film-stats-table th:nth-child(3), .film-stats-table td:nth-child(3) { width:7%; text-align:center; }
+.film-stats-table th:nth-child(4), .film-stats-table td:nth-child(4) { width:13%; text-align:center; }
+.film-stats-table th:nth-child(5), .film-stats-table td:nth-child(5),
+.film-stats-table th:nth-child(6), .film-stats-table td:nth-child(6),
+.film-stats-table th:nth-child(8), .film-stats-table td:nth-child(8),
+.film-stats-table th:nth-child(9), .film-stats-table td:nth-child(9),
+.film-stats-table th:nth-child(10), .film-stats-table td:nth-child(10) { width:7%; text-align:center; }
+.film-stats-table th:nth-child(7), .film-stats-table td:nth-child(7) { width:13%; text-align:center; }
+@media (max-width: 720px) {
+  .reservation-table { min-width: 860px; }
+  .reservation-table th, .reservation-table td { padding:4px; font-size:12px; }
+  .film-stats-table { min-width:900px; }
+}
