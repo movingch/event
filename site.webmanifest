@@ -1,0 +1,12 @@
+{
+  "name": "제9회 머내마을영화제",
+  "short_name": "머내영화제",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8F1E7",
+  "theme_color": "#1E1915",
+  "icons": [
+    {"src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}
