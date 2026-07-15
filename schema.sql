@@ -46,7 +46,7 @@ create table reservations (
   status text not null check (status in ('확정', '대기', '취소')) default '확정',
 
   -- 개막작 티켓 구분
-  ticket_type text not null default '일반' check (ticket_type in ('얼리버드', '일반', '일반상영')),
+  ticket_type text not null default '일반' check (ticket_type in ('사전신청', '일반', '일반상영')),
   seat_type text,
   seat_assignment text,
   donor_name text,
@@ -106,7 +106,7 @@ select
   coalesce(sum(r.seats) filter (where r.status = '대기'), 0) as waitlist_seats,
   coalesce(sum(r.attended_seats) filter (where r.attended = true and r.status <> '취소'), 0) as actual_attendees,
   s.capacity - coalesce(sum(r.seats) filter (where r.status = '확정'), 0) as remaining_seats,
-  coalesce(sum(r.seats) filter (where r.status = '확정' and r.ticket_type = '얼리버드'), 0) as earlybird_confirmed_seats,
+  coalesce(sum(r.seats) filter (where r.status = '확정' and r.ticket_type = '사전신청'), 0) as earlybird_confirmed_seats,
   coalesce(sum(r.seats) filter (where r.status = '확정' and r.ticket_type = '일반'), 0) as general_confirmed_seats,
   case when s.capacity > 0 then round(coalesce(sum(r.seats) filter (where r.status = '확정'), 0)::numeric / s.capacity * 100, 1) else 0 end as occupancy_rate
 from screenings s

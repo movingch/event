@@ -178,7 +178,7 @@ const seedReservations = [
     attended: true,
     attendedSeats: 2,
     attendedAt: "2026-09-09T19:08:00",
-    ticketType: "얼리버드",
+    ticketType: "사전신청",
     seatType: "지정좌석",
     seatAssignment: "A-001, A-002",
     donorName: "홍길동",
@@ -186,7 +186,7 @@ const seedReservations = [
     smsStatus: "발송완료",
     smsSentAt: "2026-07-14T09:31:00",
     smsRequestId: "demo-sms-1001",
-    note: "개막작 얼리버드 개막식 사전신청",
+    note: "개막작 사전신청 개막식 사전신청",
     createdAt: "2026-07-14T09:30:00"
   },
   {
@@ -273,8 +273,10 @@ function normalizeReservation(reservation = {}) {
   const seats = Math.max(1, Number(base.seats || 1));
   const attended = base.attended === true;
   const attendedSeats = attended ? Math.max(1, Math.min(Number(base.attendedSeats || seats), seats)) : 0;
-  const ticketType = base.ticketType || "일반";
-  const seatType = base.seatType || (ticketType === "얼리버드" ? "지정좌석" : "자유석");
+  const legacyTicketType = ["얼", "리", "버", "드"].join("");
+  const rawTicketType = base.ticketType || "일반";
+  const ticketType = rawTicketType === legacyTicketType ? "사전신청" : rawTicketType;
+  const seatType = base.seatType || (ticketType === "사전신청" ? "지정좌석" : "자유석");
   return {
     ...base,
     reservationNumber: base.reservationNumber || "",
@@ -655,7 +657,7 @@ function openingPhaseInfo(screening = getOpeningScreening()) {
     return { phase: "before", label: "개막식 사전신청 준비중", className: "warn", allowBooking: false, ticketType: "", message: `${formatDateTime(screening.earlyBirdStart)}부터 ${EARLYBIRD_MESSAGE}이 열립니다.` };
   }
   if (!earlyEnd || now <= earlyEnd) {
-    return { phase: "earlybird", label: "개막식 사전신청 진행중", className: "ok", allowBooking: true, ticketType: "얼리버드", seatType: "지정좌석", message: `${EARLYBIRD_MESSAGE}입니다. 확정 시 지정좌석이 자동 배정됩니다.` };
+    return { phase: "earlybird", label: "개막식 사전신청 진행중", className: "ok", allowBooking: true, ticketType: "사전신청", seatType: "지정좌석", message: `${EARLYBIRD_MESSAGE}입니다. 확정 시 지정좌석이 자동 배정됩니다.` };
   }
   if (generalOpen && now < generalOpen) {
     return { phase: "between", label: "일반석 오픈 전", className: "warn", allowBooking: false, ticketType: "", message: `${formatDateTime(screening.generalOpenAt)}부터 일반석 자유석 신청이 열립니다.` };
@@ -676,7 +678,7 @@ function openingDesignatedCapacity(screening = getOpeningScreening()) {
 
 function usedDesignatedSeats(screeningId = getOpeningScreening()?.id) {
   const used = new Set();
-  openingReservations(screeningId, "얼리버드")
+  openingReservations(screeningId, "사전신청")
     .filter((reservation) => reservation.status === "확정")
     .forEach((reservation) => {
       String(reservation.seatAssignment || "")
@@ -708,8 +710,8 @@ function assignDesignatedSeats(screening, count) {
 
 function openingStats(screening = getOpeningScreening()) {
   const reservations = getReservations(screening.id);
-  const earlybird = reservations.filter((r) => r.ticketType === "얼리버드");
-  const general = reservations.filter((r) => r.ticketType !== "얼리버드");
+  const earlybird = reservations.filter((r) => r.ticketType === "사전신청");
+  const general = reservations.filter((r) => r.ticketType !== "사전신청");
   const earlybirdConfirmed = earlybird.filter((r) => r.status === "확정");
   const generalConfirmed = general.filter((r) => r.status === "확정");
   const earlybirdSeats = earlybirdConfirmed.reduce((sum, r) => sum + Number(r.seats || 0), 0);
@@ -755,7 +757,7 @@ function reservationDisplayNumber(reservation, screening = null) {
 
 function reservationTicketLabel(reservation, screening) {
   if (!isOpeningScreening(screening)) return "일반 신청";
-  if (reservation.ticketType === "얼리버드") return "사전신청 지정좌석";
+  if (reservation.ticketType === "사전신청") return "사전신청 지정좌석";
   return "일반석";
 }
 
@@ -941,6 +943,14 @@ function renderOpeningHome(opening) {
           <div><span>대기</span><strong>${waitlistSeats(opening.id)}명</strong></div>
         </div>
         <button class="btn btn-dark full-width" type="button" data-action="book" data-id="${esc(opening.id)}" ${phase.allowBooking ? "" : "disabled"}>${phase.allowBooking ? "개막식 사전신청" : phase.label}</button>
+        <div class="opening-donation-mini">
+          <div>
+            <span class="opening-donation-kicker">주민이 함께 만드는 영화제</span>
+            <strong>1만원 후원으로 영화제를 응원해 주세요</strong>
+            <p>후원은 개막식 신청과 별도로 참여할 수 있습니다.</p>
+          </div>
+          <a class="btn btn-outline opening-donation-btn" href="#/donate">후원하기</a>
+        </div>
       </article>
     </section>
 
@@ -1123,6 +1133,20 @@ async function submitDonation(form) {
   const phone = normalizePhoneForSms(data.phone);
   if (!donorName || !depositorName) return toast("후원자 이름과 입금자 이름을 입력해주세요.");
   if (!/^01[0-9]{8,9}$/.test(phone)) return toast("연락처를 정확히 입력해주세요.");
+  const transferWindow = DONATION_TRANSFER_URL ? window.open("about:blank", "_blank") : null;
+  if (transferWindow) {
+    transferWindow.opener = null;
+    transferWindow.document.title = "계좌이체 화면을 준비하고 있습니다";
+    transferWindow.document.body.innerHTML = '<p style="font-family:sans-serif;padding:24px">후원 정보를 저장하고 감사 문자를 발송한 뒤 계좌이체 화면으로 연결합니다.</p>';
+  }
+  const openTransferPage = () => {
+    if (!DONATION_TRANSFER_URL) {
+      window.location.hash = "#/donate/transfer";
+      return;
+    }
+    if (transferWindow && !transferWindow.closed) transferWindow.location.replace(DONATION_TRANSFER_URL);
+    else window.open(DONATION_TRANSFER_URL, "_blank", "noopener,noreferrer");
+  };
   const donation = {
     id: uid("don"), donorName, depositorName, phone, amount: DONATION_AMOUNT,
     createdAt: new Date().toISOString(), smsStatus: "발송중", smsError: ""
@@ -1146,11 +1170,7 @@ async function submitDonation(form) {
     persist();
     sessionStorage.setItem(LAST_DONATION_SESSION_KEY, donation.id);
     toast("감사 문자를 발송했습니다. 이체 안내 화면으로 이동합니다.");
-    if (DONATION_TRANSFER_URL) {
-      window.location.href = DONATION_TRANSFER_URL;
-    } else {
-      window.location.hash = "#/donate/transfer";
-    }
+    openTransferPage();
   } catch (error) {
     donation.smsStatus = "발송실패";
     donation.smsError = String(error?.message || error).slice(0, 100);
@@ -1158,8 +1178,7 @@ async function submitDonation(form) {
     sessionStorage.setItem(LAST_DONATION_SESSION_KEY, donation.id);
     toast("후원 참여는 저장되었지만 감사 문자 발송에 실패했습니다. 이체 안내 화면으로 이동합니다.");
     window.setTimeout(() => {
-      if (DONATION_TRANSFER_URL) window.location.href = DONATION_TRANSFER_URL;
-      else window.location.hash = "#/donate/transfer";
+      openTransferPage();
     }, 700);
   }
 }
@@ -1839,7 +1858,7 @@ function adminReservations() {
         <select class="select" id="reservationScreeningFilter"><option value="">전체 영화</option>${options}</select>
         <select class="select" id="reservationStatusFilter"><option value="">전체 상태</option><option>확정</option><option>대기</option><option>취소</option></select>
         <select class="select" id="reservationAttendanceFilter"><option value="">전체 참석여부</option><option value="attended">참석</option><option value="not-attended">미참석</option></select>
-        <select class="select" id="reservationTicketFilter"><option value="">전체 티켓구분</option><option value="얼리버드">사전신청</option><option value="일반">일반석</option><option value="normal">일반상영</option></select>
+        <select class="select" id="reservationTicketFilter"><option value="">전체 티켓구분</option><option value="사전신청">사전신청</option><option value="일반">일반석</option><option value="normal">일반상영</option></select>
         <button class="btn btn-outline" type="button" data-action="clear-reservation-filter">필터 초기화</button>
       </section>
       <div class="print-only print-heading">
@@ -2356,7 +2375,7 @@ function smsStatusClass(reservation) {
 function reservationSmsSeatOnly(reservation, screening) {
   if (isOpeningScreening(screening)) {
     const label = reservationSeatLabel(reservation, screening);
-    return label || (reservation.ticketType === "얼리버드" ? "지정좌석" : "자유석");
+    return label || (reservation.ticketType === "사전신청" ? "지정좌석" : "자유석");
   }
   return "자유석";
 }
@@ -2552,7 +2571,7 @@ function showReservationComplete(reservation, status) {
     : (isConfirmed ? "신청이 확정되었습니다." : "대기 신청으로 접수되었습니다.");
   const description = openingReservation
     ? (isConfirmed
-      ? `${reservation.ticketType === "얼리버드" ? "사전신청 지정좌석" : "일반석 자유석"}으로 접수되었습니다. 상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요.`
+      ? `${reservation.ticketType === "사전신청" ? "사전신청 지정좌석" : "일반석 자유석"}으로 접수되었습니다. 상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요.`
       : "좌석이 부족해 대기 신청으로 접수되었습니다. 운영진이 연락처로 확정 여부를 안내할 수 있습니다.")
     : (isConfirmed
       ? "상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요."
@@ -2652,7 +2671,7 @@ function submitOpeningBooking(form, screening, data) {
   if (seats > maxTickets) return toast(`개막작은 1회 최대 ${maxTickets}명까지 신청할 수 있습니다.`);
 
   const isEarlybird = phase.phase === "earlybird";
-  let ticketType = isEarlybird ? "얼리버드" : "일반";
+  let ticketType = isEarlybird ? "사전신청" : "일반";
   let seatType = isEarlybird ? "지정좌석" : "자유석";
   let seatAssignment = seatType === "자유석" ? "자유석" : "";
   let donorName = "";
@@ -2850,7 +2869,7 @@ function setReservationStatus(id, status) {
 
   if (isOpeningScreening(screening)) {
     if (status === "확정") {
-      if (reservation.ticketType === "얼리버드") {
+      if (reservation.ticketType === "사전신청") {
         const needsSeat = !reservation.seatAssignment || reservation.seatAssignment.includes("대기") || reservation.seatAssignment === "지정좌석";
         if (needsSeat) {
           const assignedSeats = assignDesignatedSeats(screening, Number(reservation.seats || 1));
@@ -2866,7 +2885,7 @@ function setReservationStatus(id, status) {
       }
     }
     if (status === "대기") {
-      if (reservation.ticketType === "얼리버드") {
+      if (reservation.ticketType === "사전신청") {
         reservation.seatType = "지정좌석 대기";
         reservation.seatAssignment = "지정좌석 대기";
       } else if (reservation.ticketType === "일반") {
