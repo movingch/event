@@ -1,4 +1,13 @@
 const DONATION_MESSAGE = "머내마을영화제는 용인시 수지구 주민들이 모여 어린이부터 시니어까지 감독, 시나리오작가, 배우, 연출이 되어서 직접 영화를 제작하고 상영합니다. 또한 동네 곳곳이 영화상영관이 되어 동네에 펼쳐지는 영화축제입니다.\n\n머내마을영화제는 손수 주민들이 만들어가는 순수 주민주도형 영화제입니다.\n\n현재 마을의 귀한 분들이 십시일반 후원에 참여해 주십니다. 여전히 이 멋진 영화제를 진행하기에 부족한 가운데 있기에 여러분의 소중한 1만원의 후원이 필요합니다. 마음이 움직이신다면 이 영화제에 후원으로 기꺼이 참여해 주시길 부탁드립니다.";
+
+const DONATION_AMOUNT = 10000;
+// 실제 후원 계좌 정보를 아래 세 값에 입력하세요.
+const DONATION_BANK_NAME = "은행명 입력";
+const DONATION_ACCOUNT_NUMBER = "계좌번호 입력";
+const DONATION_ACCOUNT_HOLDER = "예금주 입력";
+// 별도의 간편이체/결제 링크가 있다면 입력하세요. 비워두면 계좌이체 안내 화면을 표시합니다.
+const DONATION_TRANSFER_URL = "https://aq.gy/f/2hekV";
+const LAST_DONATION_SESSION_KEY = "munae-last-donation-id";
 const STORAGE_KEY = "munaeFilmFest9.webapp.v1";
 const ADMIN_SESSION_KEY = "munaeFilmFest9.admin";
 const STAFF_SESSION_KEY = "munaeFilmFest9.staff";
@@ -159,6 +168,7 @@ const LEGACY_DEMO_SCREENING_MIGRATION = {
 const seedReservations = [
   {
     id: "rsv-1001",
+    reservationNumber: "동-001",
     screeningId: OPENING_FILM_ID,
     name: "홍길동",
     phone: "010-1234-5678",
@@ -181,6 +191,7 @@ const seedReservations = [
   },
   {
     id: "rsv-1002",
+    reservationNumber: "야-001",
     screeningId: "scr-004",
     name: "김마을",
     phone: "010-2222-3333",
@@ -266,6 +277,7 @@ function normalizeReservation(reservation = {}) {
   const seatType = base.seatType || (ticketType === "얼리버드" ? "지정좌석" : "자유석");
   return {
     ...base,
+    reservationNumber: base.reservationNumber || "",
     seats,
     status: base.status || "확정",
     attended,
@@ -718,6 +730,29 @@ function openingStats(screening = getOpeningScreening()) {
   };
 }
 
+function venueReservationPrefix(venue) {
+  const cleaned = String(venue || "상영관").trim().replace(/^[^0-9A-Za-z가-힣]+/, "");
+  return cleaned.charAt(0) || "상";
+}
+
+function nextVenueReservationNumber(screening) {
+  const prefix = venueReservationPrefix(screening?.venue);
+  const used = state.reservations
+    .filter((reservation) => {
+      const itemScreening = state.screenings.find((item) => item.id === reservation.screeningId);
+      return itemScreening?.venue === screening?.venue;
+    })
+    .map((reservation) => Number(String(reservation.reservationNumber || "").match(/-(\d+)$/)?.[1] || 0));
+  const next = Math.max(0, ...used) + 1;
+  return `${prefix}-${String(next).padStart(3, "0")}`;
+}
+
+function reservationDisplayNumber(reservation, screening = null) {
+  if (reservation?.reservationNumber) return reservation.reservationNumber;
+  const targetScreening = screening || state.screenings.find((item) => item.id === reservation?.screeningId);
+  return `${venueReservationPrefix(targetScreening?.venue)}-${String(Math.max(1, state.reservations.filter((item) => item.screeningId === reservation?.screeningId && String(item.createdAt || "") <= String(reservation?.createdAt || "")).length)).padStart(3, "0")}`;
+}
+
 function reservationTicketLabel(reservation, screening) {
   if (!isOpeningScreening(screening)) return "일반 신청";
   if (reservation.ticketType === "얼리버드") return "사전신청 지정좌석";
@@ -795,6 +830,7 @@ function render() {
   if (!route) view = renderHome();
   else if (route === "opening") view = renderOpeningTicketing();
   else if (route === "apply") view = renderApply();
+  else if (route === "donate" && sub === "transfer") view = renderDonationTransferPage();
   else if (route === "donate") view = renderDonationPage();
   else if (route === "staff") view = renderStaff(sub || "");
   else if (route === "admin") view = renderAdmin(sub || "overview");
@@ -1069,7 +1105,7 @@ function renderDonationPage() {
         </div>
         <div class="donation-agreement full-span">
           <strong>후원 안내</strong>
-          <span>후원금 1만원 참여 의사를 남기는 신청입니다. 실제 입금 확인은 운영진이 입금자 이름으로 확인합니다.</span>
+          <span>후원하기를 누르면 후원 정보가 저장되고 감사 문자 발송 후 계좌이체 화면으로 이동합니다. 실제 입금 확인은 운영진이 입금자 이름으로 확인합니다.</span>
         </div>
         <div class="form-actions full-span">
           <button class="btn btn-primary" type="submit">후원하겠습니다</button>
@@ -1088,7 +1124,7 @@ async function submitDonation(form) {
   if (!donorName || !depositorName) return toast("후원자 이름과 입금자 이름을 입력해주세요.");
   if (!/^01[0-9]{8,9}$/.test(phone)) return toast("연락처를 정확히 입력해주세요.");
   const donation = {
-    id: uid("don"), donorName, depositorName, phone, amount: 10000,
+    id: uid("don"), donorName, depositorName, phone, amount: DONATION_AMOUNT,
     createdAt: new Date().toISOString(), smsStatus: "발송중", smsError: ""
   };
   state.donations = Array.isArray(state.donations) ? state.donations : [];
@@ -1100,7 +1136,7 @@ async function submitDonation(form) {
   try {
     const response = await fetch(SMS_API_ENDPOINT, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "donation", phone, donorName, depositorName, amount: 10000 })
+      body: JSON.stringify({ kind: "donation", phone, donorName, depositorName, amount: DONATION_AMOUNT })
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.ok === false) throw new Error(result.error || `HTTP ${response.status}`);
@@ -1108,21 +1144,65 @@ async function submitDonation(form) {
     donation.smsRequestId = result.requestId || "";
     donation.smsSentAt = new Date().toISOString();
     persist();
-    form.hidden = true;
-    const resultBox = document.getElementById("donationResult");
-    if (resultBox) {
-      resultBox.hidden = false;
-      resultBox.innerHTML = `<div class="support-complete"><div class="icon-badge">♥</div><div><h3>${esc(donorName)} 후원자님, 감사합니다.</h3><p>후원 참여가 접수되었고 입력하신 연락처로 감사 문자를 발송했습니다.</p></div></div>`;
+    sessionStorage.setItem(LAST_DONATION_SESSION_KEY, donation.id);
+    toast("감사 문자를 발송했습니다. 이체 안내 화면으로 이동합니다.");
+    if (DONATION_TRANSFER_URL) {
+      window.location.href = DONATION_TRANSFER_URL;
+    } else {
+      window.location.hash = "#/donate/transfer";
     }
-    toast("후원 참여가 접수되었습니다. 감사합니다.");
   } catch (error) {
     donation.smsStatus = "발송실패";
     donation.smsError = String(error?.message || error).slice(0, 100);
     persist();
-    if (submitButton) { submitButton.disabled = false; submitButton.textContent = "후원하겠습니다"; }
-    toast("후원 참여는 저장되었지만 감사 문자 발송에 실패했습니다. SENS 설정을 확인해주세요.");
+    sessionStorage.setItem(LAST_DONATION_SESSION_KEY, donation.id);
+    toast("후원 참여는 저장되었지만 감사 문자 발송에 실패했습니다. 이체 안내 화면으로 이동합니다.");
+    window.setTimeout(() => {
+      if (DONATION_TRANSFER_URL) window.location.href = DONATION_TRANSFER_URL;
+      else window.location.hash = "#/donate/transfer";
+    }, 700);
   }
 }
+
+function renderDonationTransferPage() {
+  const donationId = sessionStorage.getItem(LAST_DONATION_SESSION_KEY);
+  const donation = (state.donations || []).find((item) => item.id === donationId) || [...(state.donations || [])].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
+  const donorName = donation?.donorName || "후원자";
+  const depositorName = donation?.depositorName || "입금자";
+  const accountReady = ![DONATION_BANK_NAME, DONATION_ACCOUNT_NUMBER, DONATION_ACCOUNT_HOLDER].some((value) => String(value).includes("입력"));
+  return `
+    <section class="donation-page-hero transfer-hero">
+      <div class="eyebrow">후원 신청 완료</div>
+      <h1>${esc(donorName)} 후원자님, 감사합니다.</h1>
+      <p>감사 문자 발송을 요청했습니다. 아래 내용을 확인한 뒤 후원금 1만원을 이체해 주세요.</p>
+    </section>
+    <section class="card donation-transfer-card">
+      <div class="transfer-summary">
+        <div><span>이체 금액</span><strong>${DONATION_AMOUNT.toLocaleString("ko-KR")}원</strong></div>
+        <div><span>입금자 이름</span><strong>${esc(depositorName)}</strong></div>
+      </div>
+      <div class="bank-account-box ${accountReady ? "" : "is-placeholder"}">
+        <div><span>은행</span><strong>${esc(DONATION_BANK_NAME)}</strong></div>
+        <div><span>계좌번호</span><strong>${esc(DONATION_ACCOUNT_NUMBER)}</strong></div>
+        <div><span>예금주</span><strong>${esc(DONATION_ACCOUNT_HOLDER)}</strong></div>
+      </div>
+      ${accountReady ? `
+        <div class="form-actions transfer-actions">
+          <button class="btn btn-primary" type="button" data-action="copy-donation-account">계좌번호 복사</button>
+          <button class="btn btn-outline" type="button" data-action="copy-donation-details" data-depositor="${esc(depositorName)}">이체정보 전체 복사</button>
+        </div>` : `
+        <div class="notice notice-warn">운영 계좌 정보가 아직 코드에 입력되지 않았습니다. <code>app.js</code> 상단의 후원 계좌 정보를 입력한 뒤 배포해 주세요.</div>`}
+      <div class="transfer-help">
+        <strong>이체하실 때</strong>
+        <p>입금자 이름을 <b>${esc(depositorName)}</b>으로 입력해 주세요. 운영진이 입금자 이름으로 후원 완료를 확인합니다.</p>
+      </div>
+      <div class="form-actions">
+        <a class="btn btn-outline" href="#/">메인으로 돌아가기</a>
+      </div>
+    </section>
+  `;
+}
+
 
 function renderApply() {
   const venues = uniqueValues("venue");
@@ -1803,7 +1883,7 @@ function reservationTable(reservations, options = {}) {
                   <button class="attendance-toggle compact-attendance screen-only ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="${attended ? "false" : "true"}" ${reservation.status === "취소" ? "disabled" : ""}>${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : "미참석"}</button>
                   <span class="print-only print-attendance-text">${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : "미참석"}</span>
                 </td>
-                <td><strong>${esc(reservation.id)}</strong><br><span class="help">${esc(reservation.ticketType || "일반")}</span></td>
+                <td><strong>${esc(reservationDisplayNumber(reservation, screening))}</strong><br><span class="help">${esc(reservation.ticketType || "일반")}</span></td>
                 <td class="ticket-seat-cell"><strong>${esc(reservationTicketLabel(reservation, screening))}</strong><br><span class="help">${esc(reservationSeatLabel(reservation, screening))}</span>${reservation.donorName ? `<br><span class="help">후원자 ${esc(reservation.donorName)}</span>` : ""}</td>
                 <td>${Number(reservation.seats || 0)}명</td>
                 <td>${esc(formatDateTime(reservation.createdAt))}</td>
@@ -2293,7 +2373,7 @@ function reservationConfirmationMessage(reservation, screening, status) {
   const statusText = statusLabel === "확정" ? "예약이 완료되었습니다." : "대기 신청으로 접수되었습니다.";
   return [
     `${reservation.name} 님 ${statusText}`,
-    `예약번호: ${reservation.id}`,
+    `예약번호: ${reservationDisplayNumber(reservation, screening)}`,
     `영화명: ${movieTitle}`,
     `좌석/인원: ${reservationSmsSeatAndPeople(reservation, screening)}`,
     `일시: ${time}`,
@@ -2499,7 +2579,7 @@ function showReservationComplete(reservation, status) {
         </div>
         <div class="reservation-number-box">
           <span>예약번호</span>
-          <strong>${esc(reservation.id)}</strong>
+          <strong>${esc(reservationDisplayNumber(reservation, screening))}</strong>
         </div>
         ${openingReservation ? `<div class="reservation-number-box seat-result-box"><span>${esc(reservationTicketLabel(reservation, screening))}</span><strong>${esc(seatNotice)}</strong></div>` : ""}
         <div class="confirmation-message-box">
@@ -2595,6 +2675,7 @@ function submitOpeningBooking(form, screening, data) {
 
   const reservation = normalizeReservation({
     id: uid("rsv"),
+    reservationNumber: nextVenueReservationNumber(screening),
     screeningId: screening.id,
     name: data.name.trim(),
     phone: data.phone.trim(),
@@ -2620,7 +2701,7 @@ function submitOpeningBooking(form, screening, data) {
   persist();
   closeModals();
   render();
-  const message = status === "확정" ? `개막작 신청이 확정되었습니다. 예약번호: ${reservation.id}` : `개막작 대기 신청으로 접수되었습니다. 예약번호: ${reservation.id}`;
+  const message = status === "확정" ? `개막작 신청이 확정되었습니다. 예약번호: ${reservationDisplayNumber(reservation, screening)}` : `개막작 대기 신청으로 접수되었습니다. 예약번호: ${reservationDisplayNumber(reservation, screening)}`;
   toast(message);
   showReservationComplete(reservation, status);
   autoSendReservationSms(reservation, screening, status);
@@ -2678,6 +2759,7 @@ function submitBooking(form) {
   const status = seats <= Math.max(remainingSeats(screening), 0) ? "확정" : "대기";
   const reservation = normalizeReservation({
     id: uid("rsv"),
+    reservationNumber: nextVenueReservationNumber(screening),
     screeningId: screening.id,
     name: data.name.trim(),
     phone: data.phone.trim(),
@@ -2699,7 +2781,7 @@ function submitBooking(form) {
   persist();
   closeModals();
   render();
-  const message = status === "확정" ? `신청이 확정되었습니다. 예약번호: ${reservation.id}` : `대기 신청으로 접수되었습니다. 예약번호: ${reservation.id}`;
+  const message = status === "확정" ? `신청이 확정되었습니다. 예약번호: ${reservationDisplayNumber(reservation, screening)}` : `대기 신청으로 접수되었습니다. 예약번호: ${reservationDisplayNumber(reservation, screening)}`;
   toast(message);
   showReservationComplete(reservation, status);
   autoSendReservationSms(reservation, screening, status);
@@ -2853,7 +2935,7 @@ function staffAddReservation() {
   const seats = Math.max(1, Number(prompt("신청 인원을 입력하세요.", "1") || 1));
   const status = prompt("상태를 입력하세요: 확정 / 대기 / 취소", "확정") || "확정";
   const note = prompt("메모를 입력하세요.", "") || "";
-  state.reservations.push(normalizeReservation({ id: uid("rsv"), screeningId: screening.id, name:name.trim(), phone:phone.trim(), email:"", seats, status:["확정","대기","취소"].includes(status)?status:"확정", attended:false, attendedSeats:0, note:note.trim(), createdAt:new Date().toISOString() }));
+  state.reservations.push(normalizeReservation({ id: uid("rsv"), reservationNumber: nextVenueReservationNumber(screening), screeningId: screening.id, name:name.trim(), phone:phone.trim(), email:"", seats, status:["확정","대기","취소"].includes(status)?status:"확정", attended:false, attendedSeats:0, note:note.trim(), createdAt:new Date().toISOString() }));
   persist(); render(); toast("신청자를 추가했습니다.");
 }
 
@@ -2901,7 +2983,7 @@ function exportReservations() {
   state.reservations.forEach((reservation) => {
     const screening = state.screenings.find((s) => s.id === reservation.screeningId);
     rows.push([
-      reservation.id,
+      reservationDisplayNumber(reservation, screening),
       reservation.status,
       reservationTicketLabel(reservation, screening),
       reservation.seatType || "",
@@ -3012,6 +3094,15 @@ document.addEventListener("click", (event) => {
   const action = button.dataset.action;
   const id = button.dataset.id;
   if (action === "donate") handleDonate();
+  if (action === "copy-donation-account") {
+    copyTextToClipboard(DONATION_ACCOUNT_NUMBER);
+    toast("계좌번호를 복사했습니다.");
+  }
+  if (action === "copy-donation-details") {
+    const depositor = button.dataset.depositor || "";
+    copyTextToClipboard(`${DONATION_BANK_NAME} ${DONATION_ACCOUNT_NUMBER} (${DONATION_ACCOUNT_HOLDER})\n후원금: ${DONATION_AMOUNT.toLocaleString("ko-KR")}원\n입금자명: ${depositor}`);
+    toast("이체정보를 복사했습니다.");
+  }
   if (action === "play-video") playYoutubeVideo(button);
   if (action === "book") openBooking(id);
   if (action === "close-modal") closeModals();

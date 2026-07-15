@@ -2078,3 +2078,19 @@ tr:last-child td { border-bottom: 0; }
   .donation-page-hero { border-radius: 22px; padding: 25px 20px; }
   .donation-story { font-size: 15px; line-height: 1.72; }
 }
+
+/* v25 donation transfer */
+.transfer-hero p { max-width: 760px; }
+.donation-transfer-card { max-width: 760px; margin: 20px auto 48px; }
+.transfer-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+.transfer-summary > div, .bank-account-box > div { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:14px 16px; border:1px solid var(--line); border-radius:16px; background:var(--surface-2); }
+.transfer-summary span, .bank-account-box span { color:var(--muted); font-size:.9rem; }
+.transfer-summary strong { font-size:1.25rem; }
+.bank-account-box { display:grid; gap:10px; padding:16px; border:1px solid var(--line); border-radius:20px; background:#fff; }
+.bank-account-box strong { text-align:right; word-break:break-all; }
+.bank-account-box.is-placeholder { opacity:.75; }
+.transfer-actions { margin-top:16px; }
+.transfer-help { margin-top:18px; padding:16px; border-radius:18px; background:var(--surface-2); }
+.transfer-help p { margin:6px 0 0; color:var(--muted); }
+.notice-warn { margin-top:16px; padding:14px 16px; border-radius:16px; background:#fff3df; color:#785117; }
+@media (max-width: 640px) { .transfer-summary { grid-template-columns:1fr; } .bank-account-box > div { align-items:flex-start; } }
