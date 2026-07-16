@@ -27,8 +27,8 @@ const OPENING_VIDEO_EMBED = "https://www.youtube.com/embed/dM0quIEmrYA?autoplay=
 const OPENING_VIDEO_TITLE = "영화 얼굴 메인 예고편";
 const OPENING_HEADLINE = "박정민 배우, 머내마을영화제 개막식에 오다";
 const OPENING_HEADLINE_LINES = ["박정민 배우,", "머내마을영화제", "개막식에 오다"];
-const EARLYBIRD_MESSAGE = "개막식 사전신청";
-const OPENING_PROMO_COPY = "박정민배우를 만날 수 있는 개막식에 여러분을 초대합니다. 사전신청하셔서 이 멋진 시간을 놓치지 마세요";
+const EARLYBIRD_MESSAGE = "개막작 신청";
+const OPENING_PROMO_COPY = "박정민배우를 만날 수 있는 개막식에 여러분을 초대합니다. 개막작 신청하셔서 이 멋진 시간을 놓치지 마세요";
 
 const seedOpeningScreening = {
   id: OPENING_FILM_ID,
@@ -186,7 +186,7 @@ const seedReservations = [
     smsStatus: "발송완료",
     smsSentAt: "2026-07-14T09:31:00",
     smsRequestId: "demo-sms-1001",
-    note: "개막작 사전신청 개막식 사전신청",
+    note: "개막작 신청",
     createdAt: "2026-07-14T09:30:00"
   },
   {
@@ -667,18 +667,18 @@ function openingPhaseInfo(screening = getOpeningScreening()) {
   const generalOpen = toDate(screening.generalOpenAt || screening.earlyBirdEnd);
   const generalEnd = toDate(screening.generalEndAt || screening.startTime);
   if (screening.status === "준비중" || (earlyStart && now < earlyStart)) {
-    return { phase: "before", label: "개막식 사전신청 준비중", className: "warn", allowBooking: false, ticketType: "", message: `${formatDateTime(screening.earlyBirdStart)}부터 ${EARLYBIRD_MESSAGE}이 열립니다.` };
+    return { phase: "before", label: "개막작 신청 준비중", className: "warn", allowBooking: false, ticketType: "", message: `${formatDateTime(screening.earlyBirdStart)}부터 ${EARLYBIRD_MESSAGE}이 열립니다.` };
   }
   if (!earlyEnd || now <= earlyEnd) {
-    return { phase: "earlybird", label: "개막식 사전신청 진행중", className: "ok", allowBooking: true, ticketType: "사전신청", seatType: "", message: `${EARLYBIRD_MESSAGE}입니다.` };
+    return { phase: "earlybird", label: "개막작 신청 진행중", className: "ok", allowBooking: true, ticketType: "사전신청", seatType: "", message: `${EARLYBIRD_MESSAGE}입니다.` };
   }
   if (generalOpen && now < generalOpen) {
     return { phase: "between", label: "일반 신청 전", className: "warn", allowBooking: false, ticketType: "", message: `${formatDateTime(screening.generalOpenAt)}부터 일반 신청이 열립니다.` };
   }
   if (generalEnd && now > generalEnd) {
-    return { phase: "closed", label: "신청 마감", className: "danger", allowBooking: false, ticketType: "", message: `${formatDateTime(screening.generalEndAt || screening.startTime)}에 개막식 사전신청이 마감되었습니다.` };
+    return { phase: "closed", label: "신청 마감", className: "danger", allowBooking: false, ticketType: "", message: `${formatDateTime(screening.generalEndAt || screening.startTime)}에 개막작 신청이 마감되었습니다.` };
   }
-  return { phase: "general", label: "일반 신청", className: "blue", allowBooking: true, ticketType: "일반", seatType: "", message: "개막식 사전신청 기간이 끝나 일반 신청이 가능합니다." };
+  return { phase: "general", label: "일반 신청", className: "blue", allowBooking: true, ticketType: "일반", seatType: "", message: "개막작 신청 기간이 끝나 일반 신청이 가능합니다." };
 }
 
 function openingReservations(screeningId = getOpeningScreening()?.id, type = "") {
@@ -794,7 +794,7 @@ function reservationDisplayNumber(reservation, screening = null) {
 
 function reservationTicketLabel(reservation, screening) {
   if (!isOpeningScreening(screening)) return "일반 신청";
-  return reservation.ticketType === "사전신청" ? "사전신청" : "일반 신청";
+  return reservation.ticketType === "사전신청" ? "개막작 신청" : "일반 신청";
 }
 
 function reservationSeatLabel() {
@@ -848,11 +848,10 @@ function appHeader() {
       </a>
       <nav class="nav" aria-label="주요 메뉴">
         <a href="https://www.meonaeff.com/" target="_blank" rel="noopener noreferrer" class="festival-home-link">머내마을영화제 홈페이지</a>
-        <a href="#/opening">개막식 사전신청</a>
         <a href="#/apply">영화 신청</a>
         <a href="#/donate">후원하기</a>
-        <a href="#/staff" class="staff-link">스태프</a>
-        <a href="#/admin" class="primary-link">관리자</a>
+        <a href="#/staff" class="staff-link utility-link">STAFF</a>
+        <a href="#/admin" class="primary-link admin-link utility-link">ADMIN</a>
       </nav>
     </header>
   `;
@@ -944,7 +943,7 @@ function renderOpeningHome(opening) {
           <div><span>상영작</span><strong>얼굴</strong></div>
         </div>
         <div class="cta-row">
-          <button class="btn btn-light" type="button" data-action="book" data-id="${esc(opening.id)}" ${phase.allowBooking ? "" : "disabled"}>${phase.allowBooking ? "개막식 사전신청" : phase.label}</button>
+          <button class="btn btn-light" type="button" data-action="book" data-id="${esc(opening.id)}" ${phase.allowBooking ? "" : "disabled"}>${phase.allowBooking ? "개막작 신청" : phase.label}</button>
         </div>
         <p class="opening-home-note">${esc(EARLYBIRD_MESSAGE)} · 전체 잔여 ${stats.remainingTotal}석</p>
       </div>
@@ -965,27 +964,7 @@ function renderOpeningHome(opening) {
         </div>
         ${renderVideoPlayer(opening, "개막식 소개영상")}
       </article>
-      <article class="card opening-ticket-card">
-        <div class="icon-badge">🎟️</div>
-        <h2>개막식 사전신청</h2>
-        <p>${esc(phase.message || EARLYBIRD_MESSAGE + "입니다.")}</p>
-        <p class="opening-card-copy">개막식 사전신청은 후원 여부와 관계없이 누구나 신청할 수 있습니다.</p>
-        <div class="opening-mini-grid">
-          <div><span>정원</span><strong>${Number(opening.capacity || 0)}명</strong></div>
-          <div><span>확정</span><strong>${confirmedSeats(opening.id)}명</strong></div>
-          <div><span>잔여</span><strong>${stats.remainingTotal}석</strong></div>
-          <div><span>대기</span><strong>${waitlistSeats(opening.id)}명</strong></div>
-        </div>
-        <button class="btn btn-dark full-width" type="button" data-action="book" data-id="${esc(opening.id)}" ${phase.allowBooking ? "" : "disabled"}>${phase.allowBooking ? "개막식 사전신청" : phase.label}</button>
-        <div class="opening-donation-mini">
-          <div>
-            <span class="opening-donation-kicker">주민이 함께 만드는 영화제</span>
-            <strong>1만원 후원으로 영화제를 응원해 주세요</strong>
-            <p>후원은 개막식 신청과 별도로 참여할 수 있습니다.</p>
-          </div>
-          <a class="btn btn-outline opening-donation-btn" href="#/donate">후원하기</a>
-        </div>
-      </article>
+
     </section>
 
     <section class="section">
@@ -1020,7 +999,7 @@ function openingInlineCard() {
         <p>개막식 영화 &lt;얼굴&gt; · 9월 9일 저녁 7시 동천농협강당 · 박정민 배우 참석. 개막식은 현장 안내에 따라 운영됩니다. 전체 잔여 ${stats.remainingTotal}석</p>
       </div>
       <div class="cta-row">
-        <a class="btn btn-dark" href="#/opening">개막식 사전신청 보기</a>
+        <a class="btn btn-dark" href="#/opening">개막작 신청 보기</a>
         <button class="btn btn-outline" type="button" data-action="book" data-id="${esc(opening.id)}" ${phase.allowBooking ? "" : "disabled"}>${phase.allowBooking ? "바로 신청" : phase.label}</button>
       </div>
     </section>
@@ -1045,10 +1024,10 @@ function renderOpeningTicketing() {
           <span class="badge ${phase.className}">${esc(phase.label)}</span>
           <span class="badge warn">${esc(opening.guest || "박정민 배우")} 참석</span>
         </div>
-        <h1 class="opening-title-stack opening-title-detail">${openingHeadlineMarkup()}<span class="opening-title-sub">개막식 영화 &lt;얼굴&gt; · 개막식 사전신청</span></h1>
+        <h1 class="opening-title-stack opening-title-detail">${openingHeadlineMarkup()}<span class="opening-title-sub">개막식 영화 &lt;얼굴&gt; · 개막작 신청</span></h1>
         <p><strong>${esc(formatDateTime(opening.startTime))} · ${esc(opening.venue)}</strong><br>${esc(OPENING_PROMO_COPY)}</p>
         <div class="cta-row">
-          <button class="btn btn-light" type="button" data-action="book" data-id="${esc(opening.id)}" ${phase.allowBooking ? "" : "disabled"}>${phase.allowBooking ? "개막식 사전신청" : phase.label}</button>
+          <button class="btn btn-light" type="button" data-action="book" data-id="${esc(opening.id)}" ${phase.allowBooking ? "" : "disabled"}>${phase.allowBooking ? "개막작 신청" : phase.label}</button>
         </div>
       </div>
       <aside class="opening-status-card">
@@ -1084,7 +1063,7 @@ function renderOpeningTicketing() {
     <section class="opening-flow-grid">
       <article class="card opening-flow-card active">
         <div class="icon-badge">①</div>
-        <h2>개막식 사전신청</h2>
+        <h2>개막작 신청</h2>
         <p>기간: ${esc(earlybirdPeriod)}</p>
         <p>${esc(EARLYBIRD_MESSAGE)}입니다. 신청 순서에 따라 접수됩니다.</p>
       </article>
@@ -1097,7 +1076,7 @@ function renderOpeningTicketing() {
       <article class="card opening-flow-card">
         <div class="icon-badge">③</div>
         <h2>입장 운영</h2>
-        <p>사전신청 ${stats.earlybirdSeats}명 접수</p>
+        <p>개막작 신청 ${stats.earlybirdSeats}명 접수</p>
         <p>일반 신청 ${stats.generalSeats}명 접수</p>
       </article>
     </section>
@@ -1106,12 +1085,12 @@ function renderOpeningTicketing() {
       <div class="section-title">
         <div>
           <h2>개막작 신청 현황</h2>
-          <p>사전신청과 일반 신청을 구분해 보여줍니다. 실제 운영 일정과 정원은 관리자 대시보드에서 수정할 수 있습니다.</p>
+          <p>개막작 신청과 일반 신청을 구분해 보여줍니다. 실제 운영 일정과 정원은 관리자 대시보드에서 수정할 수 있습니다.</p>
         </div>
         <a class="btn btn-outline" href="#/admin/opening">관리자 설정</a>
       </div>
       <div class="opening-summary-grid">
-        <div class="metric-card"><div class="metric-label">사전신청</div><div class="metric-value">${stats.earlybirdSeats}</div><div class="metric-note">신청 인원</div></div>
+        <div class="metric-card"><div class="metric-label">개막작 신청</div><div class="metric-value">${stats.earlybirdSeats}</div><div class="metric-note">신청 인원</div></div>
         <div class="metric-card"><div class="metric-label">일반 신청</div><div class="metric-value">${stats.generalSeats}</div><div class="metric-note">신청 인원</div></div>
         <div class="metric-card"><div class="metric-label">전체 잔여</div><div class="metric-value">${stats.remainingTotal}</div><div class="metric-note">총 ${Number(opening.capacity || 0)}명</div></div>
         <div class="metric-card"><div class="metric-label">실제 참석</div><div class="metric-value">${actualAttendees(opening.id)}</div><div class="metric-note">현장 참석 확인 기준</div></div>
@@ -1427,9 +1406,9 @@ function renderStaffLogin(preselectedId = "") {
       <div class="login-card">
         <div class="eyebrow">상영관 담당자 전용</div>
         <h1>신청자 확인</h1>
-        <p>담당 회차를 선택하고 관리자가 부여한 스태프 비밀번호를 입력하세요. 로그인한 회차의 신청자 명단만 확인할 수 있습니다.</p>
+        <p>담당 상영 영화를 선택하고 관리자가 부여한 스태프 비밀번호를 입력하세요. 로그인한 영화의 신청자 명단만 확인할 수 있습니다.</p>
         <form id="staffLoginForm">
-          <label class="label" for="staffScreeningId">담당 상영 회차</label>
+          <label class="label" for="staffScreeningId">담당 상영 영화</label>
           <select class="select" id="staffScreeningId" name="screeningId" required>
             <option value="">회차를 선택하세요</option>${options}
           </select>
@@ -1451,6 +1430,8 @@ function submitStaffLogin(form) {
   if (!screening || !screening.staffPin) return toast("이 회차에는 아직 스태프 비밀번호가 설정되지 않았습니다.");
   if (String(data.pin || "") !== String(screening.staffPin)) return toast("스태프 비밀번호가 맞지 않습니다.");
   const venueScreenings = state.screenings.filter((item) => item.venue === screening.venue && String(item.staffPin || "") === String(screening.staffPin || ""));
+  venueScreenings.forEach((item) => { item.staffPresent = true; });
+  persist();
   sessionStorage.setItem(STAFF_SESSION_KEY, JSON.stringify({
     staffName: screening.staff || "담당 스태프",
     venue: screening.venue,
@@ -1496,7 +1477,7 @@ function isAdminAuthed() {
 
 function renderAdmin(tab) {
   if (!isAdminAuthed()) return renderAdminLogin();
-  const active = ["overview", "opening", "screenings", "reservations", "stats", "backup"].includes(tab) ? tab : "overview";
+  const active = ["overview", "opening", "screenings", "reservations", "stats", "staff", "backup"].includes(tab) ? tab : "overview";
   return `
     <section class="section-title">
       <div>
@@ -1513,6 +1494,7 @@ function renderAdmin(tab) {
         ${adminTabLink("overview", "운영요약", active)}
         ${adminTabLink("reservations", "신청자명단", active)}
         ${adminTabLink("stats", "상세통계", active)}
+        ${adminTabLink("staff", "STAFF 관리", active)}
         ${adminTabLink("opening", "개막작관리", active)}
         ${adminTabLink("screenings", "상영관, 영화 관리", active)}
       </aside>
@@ -1522,6 +1504,7 @@ function renderAdmin(tab) {
         ${active === "screenings" ? adminScreenings() : ""}
         ${active === "reservations" ? adminReservations() : ""}
         ${active === "stats" ? adminStats() : ""}
+        ${active === "staff" ? adminStaffManagement() : ""}
         ${active === "backup" ? adminBackup() : ""}
       </div>
     </section>
@@ -1621,7 +1604,7 @@ function screeningTable(screenings, options = {}) {
             const phase = isOpening ? openingPhaseInfo(screening) : null;
             return `
               <tr>
-                <td>${options.manage ? `<strong>${esc(screening.title)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.title)}</strong></button>`}${isOpening ? `<br><span class="help">사전신청 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
+                <td>${options.manage ? `<strong>${esc(screening.title)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.title)}</strong></button>`}${isOpening ? `<br><span class="help">개막작 신청 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
                 <td>${options.manage ? `<strong>${esc(screening.venue)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.venue)}</strong></button>`}</td>
                 <td><span class="badge ${info.className}">${esc(info.text)}</span>${isOpening ? `<br><span class="badge ${phase.className}">${esc(phase.label)}</span>` : ""}</td>
                 <td>${esc(formatDateTime(screening.startTime))}</td>
@@ -1641,6 +1624,76 @@ function screeningTable(screenings, options = {}) {
   `;
 }
 
+
+function adminStaffManagement() {
+  const rows = sortedScreenings();
+  const activeSession = readStaffSession();
+  const activeIds = new Set(activeSession?.screeningIds || []);
+  if (!rows.length) return `<section class="card"><div class="empty">등록된 상영 영화가 없습니다.</div></section>`;
+  return `
+    <section class="card staff-admin-card">
+      <div class="section-title">
+        <div>
+          <h2>STAFF 목록</h2>
+          <p>영화별 담당 STAFF 접속 상태와 비밀번호를 관리합니다. STAFF가 비밀번호를 입력하고 들어오면 자동으로 있음으로 표시됩니다.</p>
+        </div>
+      </div>
+      <div class="table-wrap staff-admin-table-wrap">
+        <table class="staff-admin-table">
+          <thead>
+            <tr>
+              <th>영화이름</th>
+              <th>STAFF</th>
+              <th>비번관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((screening) => {
+              const isPresent = Boolean(screening.staffPresent) || activeIds.has(screening.id);
+              return `
+                <tr>
+                  <td><strong>${esc(screening.title)}</strong><br><span class="help">${esc(screening.venue)} · ${esc(formatDateTime(screening.startTime))}</span></td>
+                  <td><span class="badge ${isPresent ? "ok" : "muted"}">STAFF ${isPresent ? "있음" : "없음"}</span>${screening.staff ? `<br><span class="help">${esc(screening.staff)}</span>` : ""}</td>
+                  <td>
+                    <div class="staff-pin-admin-row">
+                      <input class="input" type="text" value="${esc(screening.staffPin || "")}" data-staff-pin-input="${esc(screening.id)}" placeholder="비밀번호" />
+                      <button class="btn btn-outline btn-small" type="button" data-action="save-staff-pin" data-id="${esc(screening.id)}">저장</button>
+                      <button class="btn btn-outline btn-small" type="button" data-action="clear-staff-present" data-id="${esc(screening.id)}">없음</button>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function saveStaffPin(screeningId) {
+  const screening = state.screenings.find((item) => item.id === screeningId);
+  if (!screening) return toast("상영 영화를 찾을 수 없습니다.");
+  const input = document.querySelector(`[data-staff-pin-input="${CSS.escape(screeningId)}"]`);
+  const pin = String(input?.value || "").trim();
+  if (!pin) return toast("비밀번호를 입력하세요.");
+  screening.staffPin = pin;
+  persist();
+  render();
+  toast("STAFF 비밀번호를 저장했습니다.");
+}
+
+function clearStaffPresent(screeningId) {
+  const screening = state.screenings.find((item) => item.id === screeningId);
+  if (!screening) return toast("상영 영화를 찾을 수 없습니다.");
+  screening.staffPresent = false;
+  const session = readStaffSession();
+  if (session?.screeningIds?.includes(screeningId)) sessionStorage.removeItem(STAFF_SESSION_KEY);
+  persist();
+  render();
+  toast("STAFF 상태를 없음으로 변경했습니다.");
+}
+
 function adminOpening() {
   const opening = getOpeningScreening();
   const phase = openingPhaseInfo(opening);
@@ -1651,7 +1704,7 @@ function adminOpening() {
       <div class="section-title">
         <div>
           <h2>개막식·개막작 티켓팅 설정</h2>
-          <p>개막식 “얼굴”, 박정민 배우 참석, 메인 화면 노출 종료일, 포스터·소개영상, 개막식 사전신청 기간과 일반 신청 기간을 관리합니다.</p>
+          <p>개막식 “얼굴”, 박정민 배우 참석, 메인 화면 노출 종료일, 포스터·소개영상, 개막작 신청 기간과 일반 신청 기간을 관리합니다.</p>
         </div>
         <a class="btn btn-outline" href="#/opening">관객 화면 보기</a>
       </div>
@@ -1703,11 +1756,11 @@ function adminOpening() {
             <input class="input" id="openingEnd" name="endTime" type="datetime-local" value="${esc(toLocalInputValue(opening.endTime))}" />
           </div>
           <div>
-            <label class="label" for="earlyBirdStart">개막식 사전신청 시작</label>
+            <label class="label" for="earlyBirdStart">개막작 신청 시작</label>
             <input class="input" id="earlyBirdStart" name="earlyBirdStart" type="datetime-local" value="${esc(toLocalInputValue(opening.earlyBirdStart))}" />
           </div>
           <div>
-            <label class="label" for="earlyBirdEnd">개막식 사전신청 종료</label>
+            <label class="label" for="earlyBirdEnd">개막작 신청 종료</label>
             <input class="input" id="earlyBirdEnd" name="earlyBirdEnd" type="datetime-local" value="${esc(toLocalInputValue(opening.earlyBirdEnd))}" />
           </div>
           <div>
@@ -1764,7 +1817,7 @@ function adminOpening() {
 
     <section class="metric-grid opening-metrics">
       <div class="metric-card"><div class="metric-label">현재 단계</div><div class="metric-value text-value">${esc(phase.label)}</div><div class="metric-note">${esc(phase.message || "")}</div></div>
-      <div class="metric-card"><div class="metric-label">사전신청</div><div class="metric-value">${stats.earlybirdSeats}</div><div class="metric-note">확정 신청 인원</div></div>
+      <div class="metric-card"><div class="metric-label">개막작 신청</div><div class="metric-value">${stats.earlybirdSeats}</div><div class="metric-note">확정 신청 인원</div></div>
       <div class="metric-card"><div class="metric-label">일반 신청</div><div class="metric-value">${stats.generalSeats}</div><div class="metric-note">확정 신청 인원</div></div>
       <div class="metric-card"><div class="metric-label">대기 인원</div><div class="metric-value">${waitlistSeats(opening.id)}</div><div class="metric-note">확정 전 대기 인원</div></div>
     </section>
@@ -1774,7 +1827,7 @@ function adminOpening() {
       <div class="section-title">
         <div>
           <h2>개막작 신청자 현황</h2>
-          <p>개막식 사전신청과 일반 신청 현황을 표시합니다.</p>
+          <p>개막작 신청과 일반 신청 현황을 표시합니다.</p>
         </div>
         <button class="btn btn-dark" type="button" data-action="print">인쇄용 명단</button>
       </div>
@@ -1881,9 +1934,8 @@ function adminReservations() {
       <section class="filters reservation-filters" aria-label="신청자 필터">
         <input class="input" id="reservationSearch" type="search" placeholder="이름, 연락처, 영화, 메모 검색" />
         <select class="select" id="reservationScreeningFilter"><option value="">전체 영화</option>${options}</select>
-        <select class="select" id="reservationStatusFilter"><option value="">전체 상태</option><option>확정</option><option>대기</option><option>취소</option></select>
         <select class="select" id="reservationAttendanceFilter"><option value="">전체 참석여부</option><option value="attended">참석</option><option value="not-attended">참석 미처리</option></select>
-        <select class="select" id="reservationTicketFilter"><option value="">전체 티켓구분</option><option value="사전신청">사전신청</option><option value="일반">일반석</option><option value="normal">일반상영</option></select>
+        <select class="select" id="reservationTicketFilter"><option value="">전체 티켓구분</option><option value="사전신청">개막작 신청</option><option value="일반">일반석</option><option value="normal">일반상영</option></select>
         <button class="btn btn-outline" type="button" data-action="clear-reservation-filter">필터 초기화</button>
       </section>
       <div class="print-only print-heading">
@@ -1927,17 +1979,15 @@ function reservationTable(reservations, options = {}) {
                   ${reservation.email ? `<span class="help applicant-email">${esc(reservation.email)}</span>` : ""}
                   <span class="print-only print-attendance-text">${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : ""}</span>
                 </td>
-                <td><strong>${esc(reservationDisplayNumber(reservation, screening))}</strong><br><span class="help">${esc(reservation.ticketType || "일반")}</span></td>
+                <td><strong>${esc(reservationDisplayNumber(reservation, screening))}</strong><br><span class="help">${esc(reservationTicketLabel(reservation, screening))}</span></td>
                 <td class="ticket-seat-cell"><strong>${esc(reservationTicketLabel(reservation, screening))}</strong><br><span class="help">${esc(reservationSeatLabel(reservation, screening))}</span>${reservation.donorName ? `<br><span class="help">후원자 ${esc(reservation.donorName)}</span>` : ""}</td>
                 <td>${Number(reservation.seats || 0)}명</td>
                 <td>${esc(formatDateTime(reservation.createdAt))}</td>
                 <td class="table-note">${esc(reservation.note || "-")}</td>
                 <td class="screen-only">
                   <div class="row-actions reservation-manage-grid">
-                    <button class="btn btn-outline btn-small" type="button" data-action="set-reservation-status" data-id="${esc(reservation.id)}" data-status="확정">확정</button>
-                    <button class="btn btn-outline btn-small attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true" ${reservation.status === "취소" ? "disabled" : ""} title="${attended ? `현재 참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : "참석 인원 입력"}">참석</button>
-                    <button class="btn btn-outline btn-small" type="button" data-action="set-reservation-status" data-id="${esc(reservation.id)}" data-status="취소">취소</button>
-                    <button class="btn btn-outline btn-small" type="button" data-action="set-reservation-status" data-id="${esc(reservation.id)}" data-status="대기">대기</button>
+                    <button class="btn btn-outline btn-small attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true" title="${attended ? `현재 참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : "참석 인원 입력"}">참석</button>
+                    <button class="btn btn-outline btn-small" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="false">취소</button>
                     <button class="btn btn-outline btn-small" type="button" data-action="staff-edit-reservation" data-id="${esc(reservation.id)}">수정</button>
                     <button class="btn btn-danger btn-small" type="button" data-action="delete-reservation" data-id="${esc(reservation.id)}">삭제</button>
                   </div>
@@ -1953,23 +2003,14 @@ function reservationTable(reservations, options = {}) {
 
 
 function adminStats() {
+  const byMovie = groupByMovie();
   const byVenue = groupByVenue();
   const byDate = groupByDate();
-  const screenings = sortedScreenings();
-  const maxSeats = Math.max(1, ...screenings.map((s) => Math.max(confirmedSeats(s.id), actualAttendees(s.id))));
   return `
     <section class="grid-2">
       <div class="card">
-        <div class="section-title"><div><h2>영화별 신청·참석률</h2><p>확정 신청 인원과 실제 참석 인원을 함께 봅니다.</p></div></div>
-        <div class="chart-list">
-          ${screenings.map((s) => `
-            <div class="chart-row">
-              <div class="chart-name">${esc(s.title)}<br><span class="help">${esc(s.venue)}</span></div>
-              <div class="chart-track"><span style="width:${Math.min((confirmedSeats(s.id) / maxSeats) * 100, 100)}%"></span></div>
-              <div class="chart-value">신청 ${confirmedSeats(s.id)}명<br><span class="help">참석 ${actualAttendees(s.id)}명</span></div>
-            </div>
-          `).join("")}
-        </div>
+        <div class="section-title"><div><h2>영화별 통계</h2><p>영화를 기준으로 신청, 참석, 대기와 신청률을 집계합니다.</p></div></div>
+        ${statsTable(byMovie, ["영화", "회차", "정원", "확정 신청", "실제 참석", "대기", "신청률", "참석률"])}
       </div>
       <div class="card">
         <div class="section-title"><div><h2>상영관별 통계</h2><p>상영관별 정원 대비 확정 신청 인원과 실제 참석 인원입니다.</p></div></div>
@@ -1982,9 +2023,9 @@ function adminStats() {
     </section>
     ${getOpeningScreening() ? `
     <section class="card">
-      <div class="section-title"><div><h2>개막작 세부 통계</h2><p>사전신청과 일반 신청, 실제 참석 현황입니다.</p></div></div>
+      <div class="section-title"><div><h2>개막작 세부 통계</h2><p>개막작 신청과 일반 신청, 실제 참석 현황입니다.</p></div></div>
       <div class="opening-summary-grid">
-        <div class="metric-card"><div class="metric-label">개막식 사전신청 확정</div><div class="metric-value">${openingStats(getOpeningScreening()).earlybirdSeats}</div><div class="metric-note">확정 신청 인원</div></div>
+        <div class="metric-card"><div class="metric-label">개막작 신청 확정</div><div class="metric-value">${openingStats(getOpeningScreening()).earlybirdSeats}</div><div class="metric-note">확정 신청 인원</div></div>
         <div class="metric-card"><div class="metric-label">일반 신청 확정</div><div class="metric-value">${openingStats(getOpeningScreening()).generalSeats}</div><div class="metric-note">확정 신청 인원</div></div>
         <div class="metric-card"><div class="metric-label">실제 참석</div><div class="metric-value">${actualAttendees(getOpeningScreening().id)}</div><div class="metric-note">현장 참석 확인 기준</div></div>
       </div>
@@ -2001,6 +2042,26 @@ function adminStats() {
       </div>
     </section>
   `;
+}
+
+function groupByMovie() {
+  const map = new Map();
+  state.screenings.forEach((screening) => {
+    const key = screening.title || "제목 미정";
+    const movieReservations = state.reservations.filter((r) => r.screeningId === screening.id);
+    const current = map.get(key) || { name: key, screenings: 0, capacity: 0, confirmed: 0, attended: 0, waitlist: 0 };
+    current.screenings += 1;
+    current.capacity += Number(screening.capacity || 0);
+    current.confirmed += movieReservations.filter((r) => r.status === "확정").reduce((sum, r) => sum + Number(r.seats || 0), 0);
+    current.attended += movieReservations.filter((r) => r.attended === true).reduce((sum, r) => sum + Number(r.attendedSeats || r.seats || 0), 0);
+    current.waitlist += movieReservations.filter((r) => r.status === "대기").reduce((sum, r) => sum + Number(r.seats || 0), 0);
+    map.set(key, current);
+  });
+  return [...map.values()].map((item) => ({
+    ...item,
+    rate: item.capacity ? Math.round((item.confirmed / item.capacity) * 100) : 0,
+    attendanceRate: item.confirmed ? Math.round((item.attended / item.confirmed) * 100) : 0
+  })).sort((a, b) => String(a.name).localeCompare(String(b.name), "ko"));
 }
 
 function groupByVenue() {
@@ -2131,7 +2192,7 @@ function openingBookingIntro(screening, phase, stats) {
   if (phase.phase === "earlybird") {
     return `
       <div class="opening-booking-intro earlybird">
-        <div class="badges"><span class="badge ok">사전신청</span></div>
+        <div class="badges"><span class="badge ok">개막작 신청</span></div>
         <h3>${esc(EARLYBIRD_MESSAGE)}입니다.</h3>
         <p>후원 여부와 관계없이 신청할 수 있으며, 현장 안내에 따라 입장합니다. 전체 잔여 ${stats.remainingTotal}명</p>
       </div>
@@ -2307,7 +2368,7 @@ function hydrateRoute(route, sub) {
   }
   if (route === "admin" && sub === "reservations" && isAdminAuthed()) {
     updateReservationTable();
-    ["reservationSearch", "reservationScreeningFilter", "reservationStatusFilter", "reservationAttendanceFilter", "reservationTicketFilter"].forEach((id) => {
+    ["reservationSearch", "reservationScreeningFilter", "reservationAttendanceFilter", "reservationTicketFilter"].forEach((id) => {
       document.getElementById(id)?.addEventListener("input", updateReservationTable);
       document.getElementById(id)?.addEventListener("change", updateReservationTable);
     });
@@ -2342,7 +2403,6 @@ function updateScreeningList() {
 function updateReservationTable() {
   const search = document.getElementById("reservationSearch")?.value.trim().toLowerCase() || "";
   const screeningId = document.getElementById("reservationScreeningFilter")?.value || "";
-  const status = document.getElementById("reservationStatusFilter")?.value || "";
   const attendance = document.getElementById("reservationAttendanceFilter")?.value || "";
   const ticket = document.getElementById("reservationTicketFilter")?.value || "";
   const container = document.getElementById("reservationTable");
@@ -2355,7 +2415,7 @@ function updateReservationTable() {
       const matchAttendance = !attendance || (attendance === "attended" ? reservation.attended === true : reservation.attended !== true);
       const ticketType = isOpeningScreening(screening) ? reservation.ticketType : "normal";
       const matchTicket = !ticket || ticketType === ticket;
-      return (!search || text.includes(search)) && (!screeningId || reservation.screeningId === screeningId) && (!status || reservation.status === status) && matchAttendance && matchTicket;
+      return (!search || text.includes(search)) && (!screeningId || reservation.screeningId === screeningId) && matchAttendance && matchTicket;
     });
   container.innerHTML = reservationTable(filtered);
 }
@@ -2677,7 +2737,7 @@ function submitOpeningBooking(form, screening, data) {
   const seatType = "";
   const seatAssignment = "";
   const donorName = "";
-  const status = seats <= Math.max(remainingSeats(screening), 0) ? "확정" : "대기";
+  const status = "확정";
 
   const reservation = normalizeReservation({
     id: uid("rsv"),
@@ -2762,7 +2822,7 @@ function submitBooking(form) {
   if (!screening) return toast("상영 정보를 찾을 수 없습니다.");
   if (form.dataset.opening === "true" || isOpeningScreening(screening)) return submitOpeningBooking(form, screening, data);
   const seats = Math.max(1, Number(data.seats || 1));
-  const status = seats <= Math.max(remainingSeats(screening), 0) ? "확정" : "대기";
+  const status = "확정";
   const reservation = normalizeReservation({
     id: uid("rsv"),
     reservationNumber: nextVenueReservationNumber(screening),
@@ -2875,8 +2935,6 @@ function setAttendance(id, attended) {
   const reservation = state.reservations.find((r) => r.id === id);
   if (!reservation) return;
   if (!canManageReservation(reservation)) return toast("이 신청자를 관리할 권한이 없습니다.");
-  if (reservation.status === "취소" && attended) return toast("취소된 신청은 참석 처리할 수 없습니다.");
-
   if (attended === true) {
     const requestedSeats = Math.max(1, Number(reservation.seats || 1));
     const input = prompt(`${reservation.name}님의 실제 참석 인원을 입력하세요.`, String(reservation.attendedSeats || requestedSeats));
@@ -2885,8 +2943,10 @@ function setAttendance(id, attended) {
     if (!Number.isFinite(attendedSeats) || attendedSeats < 0) {
       return toast("실제 참석 인원을 0 이상의 숫자로 입력해주세요.");
     }
+    reservation.status = "확정";
     reservation.attended = attendedSeats > 0;
     reservation.attendedSeats = attendedSeats;
+    reservation.seats = Math.floor(attendedSeats);
     reservation.attendedAt = reservation.attended ? new Date().toISOString() : "";
   } else {
     reservation.attended = false;
@@ -2913,21 +2973,124 @@ function staffAddReservation() {
   const name = prompt("신청자 이름을 입력하세요.", ""); if (!name?.trim()) return;
   const phone = prompt("연락처를 입력하세요.", "") || "";
   const seats = Math.max(1, Number(prompt("신청 인원을 입력하세요.", "1") || 1));
-  const status = prompt("상태를 입력하세요: 확정 / 대기 / 취소", "확정") || "확정";
   const note = prompt("메모를 입력하세요.", "") || "";
-  state.reservations.push(normalizeReservation({ id: uid("rsv"), reservationNumber: nextVenueReservationNumber(screening), screeningId: screening.id, name:name.trim(), phone:phone.trim(), email:"", seats, status:["확정","대기","취소"].includes(status)?status:"확정", attended:false, attendedSeats:0, note:note.trim(), createdAt:new Date().toISOString() }));
+  state.reservations.push(normalizeReservation({ id: uid("rsv"), reservationNumber: nextVenueReservationNumber(screening), screeningId: screening.id, name:name.trim(), phone:phone.trim(), email:"", seats, status:"확정", attended:false, attendedSeats:0, note:note.trim(), createdAt:new Date().toISOString() }));
   persist(); render(); toast("신청자를 추가했습니다.");
 }
 
 function staffEditReservation(id) {
-  const r = state.reservations.find(x => x.id === id);
+  const r = state.reservations.find((x) => x.id === id);
   if (!r || !canManageReservation(r)) return toast("이 신청자를 관리할 권한이 없습니다.");
-  const name = prompt("신청자 이름", r.name); if (name === null || !name.trim()) return;
-  const phone = prompt("연락처", r.phone || ""); if (phone === null) return;
-  const seats = Number(prompt("신청 인원", String(r.seats || 1))); if (!Number.isFinite(seats) || seats < 1) return toast("신청 인원을 확인하세요.");
-  const note = prompt("메모", r.note || ""); if (note === null) return;
-  r.name=name.trim(); r.phone=phone.trim(); r.seats=Math.floor(seats); r.note=note.trim();
-  persist(); render(); toast("신청자 정보를 수정했습니다.");
+  const screening = state.screenings.find((s) => s.id === r.screeningId);
+  const modal = document.getElementById("bookingModal");
+  const body = document.getElementById("bookingBody");
+  document.getElementById("bookingTitle").textContent = "신청자 정보 수정";
+  const screeningOptions = sortedScreenings().map((s) => `<option value="${esc(s.id)}" ${s.id === r.screeningId ? "selected" : ""}>${esc(s.venue)} · ${esc(s.title)} · ${esc(formatDateTime(s.startTime))}</option>`).join("");
+  body.innerHTML = `
+    <form id="reservationEditForm" data-id="${esc(r.id)}">
+      <div class="form-grid">
+        <div class="full">
+          <label class="label" for="editScreeningId">영화 / 상영관 / 시간</label>
+          <select class="select" id="editScreeningId" name="screeningId">${screeningOptions}</select>
+        </div>
+        <div>
+          <label class="label" for="editName">신청자 이름</label>
+          <input class="input" id="editName" name="name" value="${esc(r.name || "")}" required />
+        </div>
+        <div>
+          <label class="label" for="editPhone">연락처</label>
+          <input class="input" id="editPhone" name="phone" value="${esc(r.phone || "")}" />
+        </div>
+        <div>
+          <label class="label" for="editEmail">이메일</label>
+          <input class="input" id="editEmail" name="email" type="email" value="${esc(r.email || "")}" />
+        </div>
+        <div>
+          <label class="label" for="editReservationNumber">예약번호</label>
+          <input class="input" id="editReservationNumber" name="reservationNumber" value="${esc(reservationDisplayNumber(r, screening))}" />
+        </div>
+        <div>
+          <label class="label" for="editTicketType">티켓 구분</label>
+          <select class="select" id="editTicketType" name="ticketType">
+            <option value="사전신청" ${r.ticketType === "사전신청" ? "selected" : ""}>개막작 신청</option>
+            <option value="일반" ${r.ticketType === "일반" ? "selected" : ""}>일반 신청</option>
+            <option value="" ${!r.ticketType ? "selected" : ""}>일반상영</option>
+          </select>
+        </div>
+        <div>
+          <label class="label" for="editSeatAssignment">좌석</label>
+          <input class="input" id="editSeatAssignment" name="seatAssignment" value="${esc(r.seatAssignment || "")}" placeholder="예: A-001 또는 자유석" />
+        </div>
+        <div>
+          <label class="label" for="editSeats">인원</label>
+          <input class="input" id="editSeats" name="seats" type="number" min="0" value="${Number(r.seats || 0)}" />
+        </div>
+        <div>
+          <label class="label" for="editAttendedSeats">실제 참석 인원</label>
+          <input class="input" id="editAttendedSeats" name="attendedSeats" type="number" min="0" value="${Number(r.attendedSeats || 0)}" />
+        </div>
+        <div>
+          <label class="label" for="editStatus">상태</label>
+          <select class="select" id="editStatus" name="status">
+            <option ${r.status === "확정" ? "selected" : ""}>확정</option>
+            <option ${r.status === "대기" ? "selected" : ""}>대기</option>
+            <option ${r.status === "취소" ? "selected" : ""}>취소</option>
+          </select>
+        </div>
+        <div>
+          <label class="label" for="editDonorName">후원자명/입금자명</label>
+          <input class="input" id="editDonorName" name="donorName" value="${esc(r.donorName || "")}" />
+        </div>
+        <label class="checkbox-line sms-consent-line full">
+          <input type="checkbox" name="smsConsent" ${r.smsConsent === false ? "" : "checked"} />
+          <span>예약 확인 문자 수신 동의</span>
+        </label>
+        <div class="full">
+          <label class="label" for="editNote">메모</label>
+          <textarea class="textarea" id="editNote" name="note">${esc(r.note || "")}</textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-dark" type="submit">수정 저장</button>
+        <button class="btn btn-outline" type="button" data-action="close-modal">닫기</button>
+      </div>
+    </form>
+  `;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+  setTimeout(() => document.getElementById("editName")?.focus(), 0);
+}
+
+function submitReservationEdit(form) {
+  const id = form.dataset.id;
+  const r = state.reservations.find((x) => x.id === id);
+  if (!r || !canManageReservation(r)) return toast("이 신청자를 관리할 권한이 없습니다.");
+  const data = formDataObject(form);
+  const seats = Math.max(0, Math.floor(Number(data.seats || 0)));
+  const attendedSeats = Math.max(0, Math.floor(Number(data.attendedSeats || 0)));
+  r.screeningId = data.screeningId || r.screeningId;
+  r.name = String(data.name || "").trim();
+  r.phone = String(data.phone || "").trim();
+  r.email = String(data.email || "").trim();
+  r.reservationNumber = String(data.reservationNumber || "").trim();
+  r.ticketType = String(data.ticketType || "").trim();
+  r.seatAssignment = String(data.seatAssignment || "").trim();
+  r.seatType = r.seatAssignment ? "지정좌석" : "";
+  r.seats = seats;
+  r.attendedSeats = attendedSeats;
+  r.attended = attendedSeats > 0;
+  r.attendedAt = r.attended ? (r.attendedAt || new Date().toISOString()) : "";
+  r.status = ["확정", "대기", "취소"].includes(data.status) ? data.status : "확정";
+  r.donorName = String(data.donorName || "").trim();
+  r.smsConsent = data.smsConsent === "on";
+  r.note = String(data.note || "").trim();
+  persist();
+  closeModals();
+  const rosterOpen = document.getElementById("rosterModal")?.classList.contains("open");
+  const screeningId = r.screeningId;
+  render();
+  if (rosterOpen) openRoster(screeningId);
+  toast("신청자 모든 항목을 수정했습니다.");
 }
 
 function deleteReservation(id) {
@@ -2988,7 +3151,7 @@ function exportReservations() {
 }
 
 function exportScreenings() {
-  const rows = [["회차ID", "영화", "상영관", "시작", "종료", "정원", "신청건수", "신청인원", "확정신청건수", "확정신청인원", "사전신청인원", "일반신청인원", "참석확인건수", "실제참석인원", "대기인원", "신청률", "참석률", "상태", "개막작여부", "티켓팅단계", "GV", "모더레이터", "담당스태프", "연락처", "기타"]];
+  const rows = [["회차ID", "영화", "상영관", "시작", "종료", "정원", "신청건수", "신청인원", "확정신청건수", "확정신청인원", "개막작신청인원", "일반신청인원", "참석확인건수", "실제참석인원", "대기인원", "신청률", "참석률", "상태", "개막작여부", "티켓팅단계", "GV", "모더레이터", "담당스태프", "연락처", "기타"]];
   sortedScreenings().forEach((s) => {
     const stats = isOpeningScreening(s) ? openingStats(s) : null;
     const phase = isOpeningScreening(s) ? openingPhaseInfo(s) : null;
@@ -2998,7 +3161,7 @@ function exportScreenings() {
 }
 
 function exportStats() {
-  const rows = [["영화", "상영관", "상영시간", "정원", "신청건수", "신청인원", "확정신청인원", "사전신청인원", "일반신청인원", "실제참석인원", "대기", "남은좌석", "신청률", "참석률", "정원상태", "티켓팅단계"]];
+  const rows = [["영화", "상영관", "상영시간", "정원", "신청건수", "신청인원", "확정신청인원", "개막작신청인원", "일반신청인원", "실제참석인원", "대기", "남은좌석", "신청률", "참석률", "정원상태", "티켓팅단계"]];
   sortedScreenings().forEach((s) => {
     const stats = isOpeningScreening(s) ? openingStats(s) : null;
     const phase = isOpeningScreening(s) ? openingPhaseInfo(s) : null;
@@ -3087,18 +3250,30 @@ document.addEventListener("click", (event) => {
   if (action === "admin-logout") { sessionStorage.removeItem(ADMIN_SESSION_KEY); selectedScreeningId = null; render(); toast("로그아웃했습니다."); }
   if (action === "staff-add-reservation") staffAddReservation();
   if (action === "staff-edit-reservation") staffEditReservation(id);
-  if (action === "staff-logout") { sessionStorage.removeItem(STAFF_SESSION_KEY); window.location.hash = "#/staff"; render(); toast("스태프 관리 화면에서 로그아웃했습니다."); }
+  if (action === "staff-logout") {
+    const session = readStaffSession();
+    if (session?.screeningIds?.length) {
+      state.screenings.forEach((item) => { if (session.screeningIds.includes(item.id)) item.staffPresent = false; });
+      persist();
+    }
+    sessionStorage.removeItem(STAFF_SESSION_KEY);
+    window.location.hash = "#/staff";
+    render();
+    toast("스태프 관리 화면에서 로그아웃했습니다.");
+  }
   if (action === "print") window.print();
   if (action === "edit-screening") { selectedScreeningId = id; window.location.hash = "#/admin/screenings"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
   if (action === "cancel-edit") { selectedScreeningId = null; render(); }
   if (action === "delete-screening") deleteScreening(id);
+  if (action === "save-staff-pin") saveStaffPin(id);
+  if (action === "clear-staff-present") clearStaffPresent(id);
   if (action === "set-reservation-status") setReservationStatus(id, button.dataset.status);
   if (action === "set-attendance") setAttendance(id, button.dataset.attended === "true");
   if (action === "copy-confirmation") copyReservationConfirmation(id);
   if (action === "send-sms") sendReservationSmsById(id);
   if (action === "delete-reservation") deleteReservation(id);
   if (action === "clear-reservation-filter") {
-    ["reservationSearch", "reservationScreeningFilter", "reservationStatusFilter", "reservationAttendanceFilter", "reservationTicketFilter"].forEach((fieldId) => {
+    ["reservationSearch", "reservationScreeningFilter", "reservationAttendanceFilter", "reservationTicketFilter"].forEach((fieldId) => {
       const el = document.getElementById(fieldId);
       if (el) el.value = "";
     });
@@ -3135,6 +3310,7 @@ document.addEventListener("submit", (event) => {
   if (form.id === "staffPinChangeForm") submitStaffPinChange(form);
   if (form.id === "openingForm") submitOpeningSettings(form);
   if (form.id === "screeningForm") submitScreening(form);
+  if (form.id === "reservationEditForm") submitReservationEdit(form);
 });
 
 document.addEventListener("keydown", (event) => {
