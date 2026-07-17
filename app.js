@@ -1622,7 +1622,7 @@ function renderAdmin(tab) {
       </div>
       <div class="cta-row">
         <button class="btn btn-outline" type="button" data-action="print">인쇄</button>
-        <a class="btn btn-outline" href="#/admin/backup">백업·연동</a>
+        <button class="btn btn-outline" type="button" data-action="admin-tab" data-tab="backup">백업·연동</button>
         <button class="btn btn-danger" type="button" data-action="admin-logout">로그아웃</button>
       </div>
     </section>
@@ -1671,7 +1671,7 @@ function renderAdminLogin() {
 
 function adminTabLink(tab, label, active) {
   const href = `#/admin/${tab}`;
-  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="${href}" data-admin-tab="${esc(tab)}">${label}</a>`;
+  return `<button class="admin-tab ${tab === active ? "active" : ""}" type="button" data-action="admin-tab" data-tab="${esc(tab)}" data-admin-tab="${esc(tab)}" data-href="${href}">${label}</button>`;
 }
 
 function adminOverview() {
@@ -4020,10 +4020,29 @@ function todayFile() {
   return new Date().toISOString().slice(0, 10).replaceAll("-", "");
 }
 
+function goAdminTab(tab) {
+  if (!isAdminAuthed()) {
+    window.location.hash = "#/admin";
+    render();
+    return;
+  }
+  const safeTab = ["overview", "opening", "screenings", "reservations", "stats", "staff", "backup"].includes(tab) ? tab : "overview";
+  const nextHash = `#/admin/${safeTab}`;
+  if (window.location.hash === nextHash) render();
+  else window.location.hash = nextHash;
+}
+
 document.addEventListener("click", (event) => {
   const row = event.target.closest("[data-reservation-row]");
   if (row && !event.target.closest("button, input, select, textarea, a, label")) {
     setSelectedReservationAction(row.dataset.reservationRow);
+    return;
+  }
+  const adminTabAnchor = event.target.closest("[data-admin-tab]");
+  if (adminTabAnchor && !event.target.closest("[data-action]")) {
+    event.preventDefault();
+    const tab = adminTabAnchor.dataset.adminTab || "overview";
+    goAdminTab(tab);
     return;
   }
   const button = event.target.closest("[data-action]");
@@ -4042,19 +4061,7 @@ document.addEventListener("click", (event) => {
   }
   if (action === "admin-tab") {
     event.preventDefault();
-    const tab = button.dataset.tab || "overview";
-    const nextHash = `#/admin/${tab}`;
-    if (window.location.hash === nextHash) render();
-    else window.location.hash = nextHash;
-    return;
-  }
-  const adminTabAnchor = event.target.closest("[data-admin-tab]");
-  if (adminTabAnchor) {
-    event.preventDefault();
-    const tab = adminTabAnchor.dataset.adminTab || "overview";
-    const nextHash = `#/admin/${tab}`;
-    if (window.location.hash === nextHash) render();
-    else window.location.hash = nextHash;
+    goAdminTab(button.dataset.tab || button.dataset.adminTab || "overview");
     return;
   }
   if (action === "play-video") playYoutubeVideo(button);
