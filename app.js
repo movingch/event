@@ -3779,13 +3779,51 @@ function encodeGoogleDrivePayload(payload) {
 }
 
 async function postGoogleDrivePayload(url, payload) {
-  // v61: Apps Script가 e.postData.contents에서 바로 JSON을 읽도록 text/plain으로 전송합니다.
-  // no-cors 환경에서도 text/plain은 안정적으로 전달되고, 이전 payload= 방식도 Apps Script에서 계속 지원합니다.
-  return fetch(url, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "text/plain;charset=UTF-8" },
-    body: encodeGoogleDrivePayload(payload)
+  // v62: Apps Script에서 raw body가 0으로 들어오는 환경을 피하기 위해
+  // hidden form POST 방식으로 payload 필드를 전송합니다.
+  // Apps Script는 e.parameter.payload로 안정적으로 읽습니다.
+  const encoded = encodeGoogleDrivePayload(payload);
+  return new Promise((resolve) => {
+    const iframeName = `drive_sync_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const iframe = document.createElement("iframe");
+    iframe.name = iframeName;
+    iframe.style.display = "none";
+
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = url;
+    form.target = iframeName;
+    form.enctype = "application/x-www-form-urlencoded";
+    form.style.display = "none";
+
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "payload";
+    input.value = encoded;
+    form.appendChild(input);
+
+    const cleanup = () => {
+      window.setTimeout(() => {
+        if (form.parentNode) form.parentNode.removeChild(form);
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      }, 500);
+    };
+
+    iframe.addEventListener("load", () => {
+      cleanup();
+      resolve({ ok: true, transport: "form-post" });
+    }, { once: true });
+
+    document.body.appendChild(iframe);
+    document.body.appendChild(form);
+    form.submit();
+
+    // 일부 모바일 브라우저는 iframe load 이벤트를 늦게 보내거나 차단하므로
+    // 요청은 보낸 것으로 처리하고 화면 흐름을 막지 않습니다.
+    window.setTimeout(() => {
+      cleanup();
+      resolve({ ok: true, transport: "form-post-timeout" });
+    }, 3500);
   });
 }
 
