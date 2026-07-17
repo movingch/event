@@ -3775,16 +3775,16 @@ function promptDriveWebhookUrl() {
 
 
 function encodeGoogleDrivePayload(payload) {
-  return `payload=${encodeURIComponent(JSON.stringify(payload))}`;
+  return JSON.stringify(payload);
 }
 
 async function postGoogleDrivePayload(url, payload) {
-  // Apps Script 웹앱은 브라우저 CORS 응답을 제대로 돌려주지 않으므로 no-cors로 보냅니다.
-  // application/x-www-form-urlencoded 형식으로 보내면 e.parameter.payload와 e.postData.contents 양쪽에서 안정적으로 읽을 수 있습니다.
+  // v61: Apps Script가 e.postData.contents에서 바로 JSON을 읽도록 text/plain으로 전송합니다.
+  // no-cors 환경에서도 text/plain은 안정적으로 전달되고, 이전 payload= 방식도 Apps Script에서 계속 지원합니다.
   return fetch(url, {
     method: "POST",
     mode: "no-cors",
-    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    headers: { "Content-Type": "text/plain;charset=UTF-8" },
     body: encodeGoogleDrivePayload(payload)
   });
 }
