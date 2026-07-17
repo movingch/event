@@ -69,6 +69,16 @@ function normalizePhone(phone) {
   return digits;
 }
 
+
+function safeMultilineText(value, maxLength = 1200) {
+  return String(value || '')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim()
+    .slice(0, maxLength);
+}
+
 function safeText(value, maxLength = 80) {
   return String(value || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
@@ -78,6 +88,10 @@ function safeText(value, maxLength = 80) {
 }
 
 function buildMessage(body) {
+  if (body && body.kind === 'notice') {
+    const message = safeMultilineText(body.message, 1200);
+    if (message) return message;
+  }
   if (body && body.kind === 'donation') {
     const donorName = safeText(body.donorName, 30) || '후원자';
     const depositorName = safeText(body.depositorName, 30) || donorName;
@@ -171,7 +185,7 @@ module.exports = async function handler(req, res) {
     content,
     messages: [{ to }]
   };
-  if (messageType !== 'SMS') naverPayload.subject = body.kind === 'donation' ? '머내마을영화제 후원 감사' : '머내마을영화제 예약';
+  if (messageType !== 'SMS') naverPayload.subject = body.kind === 'donation' ? '머내마을영화제 후원 감사' : (body.kind === 'notice' ? '머내마을영화제 안내' : '머내마을영화제 예약');
 
   if (process.env.SMS_DRY_RUN === 'true') {
     return sendJson(res, 200, {

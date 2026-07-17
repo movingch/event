@@ -2758,3 +2758,102 @@ tr:last-child td { border-bottom: 0; }
     align-items: flex-start;
   }
 }
+
+/* v50: 신청자 명단 문자 일괄발송과 날짜 필터 */
+.bulk-sms-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  margin: 14px 0 16px;
+  padding: 16px;
+  border: 1px solid rgba(184, 62, 47, 0.22);
+  border-radius: 20px;
+  background: rgba(184, 62, 47, 0.08);
+}
+.bulk-sms-panel p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.bulk-sms-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.bulk-sms-panel .help {
+  grid-column: 1 / -1;
+  font-weight: 800;
+  color: var(--brand-red);
+}
+.sms-check-col {
+  width: 42px !important;
+  min-width: 42px !important;
+  text-align: center !important;
+}
+.reservation-sms-check,
+.sms-check-col input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand-red);
+}
+@media (max-width: 760px) {
+  .bulk-sms-panel {
+    grid-template-columns: 1fr;
+  }
+  .bulk-sms-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* v51: 신청자 목록 클릭형 관리 패널 */
+.reservation-click-row {
+  cursor: pointer;
+  transition: background 0.16s ease, box-shadow 0.16s ease;
+}
+.reservation-click-row:hover,
+.reservation-click-row:focus-visible {
+  background: rgba(184, 62, 47, 0.055);
+  outline: none;
+}
+.reservation-click-row.is-selected {
+  background: rgba(184, 62, 47, 0.09);
+  box-shadow: inset 4px 0 0 var(--brand-red);
+}
+.reservation-manage-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+.reservation-action-row td {
+  padding: 0 12px 12px !important;
+  background: rgba(184, 62, 47, 0.045);
+}
+.reservation-action-panel {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(184, 62, 47, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 251, 246, 0.95);
+}
+.reservation-action-panel p {
+  margin: 5px 0 0;
+}
+.reservation-action-buttons {
+  justify-content: flex-end;
+  gap: 7px;
+}
+@media (max-width: 820px) {
+  .reservation-action-panel {
+    grid-template-columns: 1fr;
+  }
+  .reservation-action-buttons {
+    justify-content: flex-start;
+  }
+}

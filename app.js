@@ -217,6 +217,9 @@ if (localStorage.getItem(STAFF_PIN_MIGRATION_KEY) !== "done") {
   localStorage.setItem(STAFF_PIN_MIGRATION_KEY, "done");
 }
 let selectedScreeningId = null;
+let reservationSmsSelectMode = false;
+let selectedReservationSmsIds = new Set();
+let selectedReservationActionId = null;
 
 function cloneData(value) {
   return JSON.parse(JSON.stringify(value));
@@ -2080,7 +2083,14 @@ function adminScreenings() {
 }
 
 function adminReservations() {
-  const options = sortedScreenings().map((s) => `<option value="${esc(s.id)}">${esc(s.venue)} · ${esc(s.title)}</option>`).join("");
+  const options = sortedScreenings().map((screening) => `<option value="${esc(screening.id)}">${esc(screening.venue)} · ${esc(screening.title)}</option>`).join("");
+  const dateOptions = uniqueValues("startTime")
+    .map((value) => String(value || "").slice(0, 10))
+    .filter(Boolean)
+    .filter((value, index, array) => array.indexOf(value) === index)
+    .sort()
+    .map((date) => `<option value="${esc(date)}">${esc(formatDateOnly(date))}</option>`)
+    .join("");
   return `
     <section class="card">
       <div class="section-title">
@@ -2089,6 +2099,7 @@ function adminReservations() {
           <p>상영관을 기준으로 신청자 명단을 확인하고, 현장 참석과 신청 정보를 관리할 수 있습니다.</p>
         </div>
         <div class="cta-row">
+          <button class="btn btn-primary" type="button" data-action="toggle-bulk-sms">예약문자전송하기</button>
           <button class="btn btn-dark" type="button" data-action="print">인쇄용 명단</button>
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 CSV</button>
         </div>
@@ -2097,9 +2108,25 @@ function adminReservations() {
         <input class="input" id="reservationSearch" type="search" placeholder="이름, 연락처, 영화, 메모 검색" />
         <select class="select" id="reservationScreeningFilter"><option value="">영화선택 필터</option>${options}</select>
         <select class="select" id="reservationAttendanceFilter"><option value="">전체 참석여부</option><option value="attended">참석</option><option value="canceled">취소</option></select>
-        <input class="input" id="reservationDateFilter" type="date" aria-label="날짜 필터" />
+        <select class="select" id="reservationDatePreset"><option value="">전체 날짜</option>${dateOptions}</select>
+        <input class="input" id="reservationDateFilter" type="date" aria-label="날짜 직접 선택" />
         <button class="btn btn-outline" type="button" data-action="clear-reservation-filter">필터 초기화</button>
       </section>
+      ${reservationSmsSelectMode ? `
+        <section class="bulk-sms-panel" aria-label="예약 문자 일괄 발송">
+          <div>
+            <strong>문자를 보낼 신청자를 체크하세요.</strong>
+            <p>체크 후 예약 완료 문자를 다시 보내거나, 별도 안내문자를 작성해 발송할 수 있습니다.</p>
+          </div>
+          <div class="bulk-sms-actions">
+            <button class="btn btn-outline btn-small" type="button" data-action="select-visible-reservations">현재 목록 전체선택</button>
+            <button class="btn btn-outline btn-small" type="button" data-action="clear-bulk-sms-selection">선택해제</button>
+            <button class="btn btn-dark btn-small" type="button" data-action="bulk-reservation-sms">예약관련문자 보내기</button>
+            <button class="btn btn-primary btn-small" type="button" data-action="open-bulk-notice-sms">별도안내문자 보내기</button>
+          </div>
+          <span class="help" id="bulkSmsSelectedCount">선택 0명</span>
+        </section>
+      ` : ""}
       <div class="print-only print-heading">
         <h2>오프라인 참석 체크 명단</h2>
         <p>현장에서는 참석 칸에 표시하고, 운영 종료 후 화면에서 실제 참석 인원을 입력하세요.</p>
@@ -2119,20 +2146,23 @@ function reservationTable(reservations, options = {}) {
       || String(a.name || "").localeCompare(String(b.name || ""), "ko")
       || String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
   });
+  const colSpan = options.smsSelectMode ? 10 : 9;
   return `
     <div class="table-wrap reservation-table-wrap">
       <table class="reservation-table">
         <thead>
           <tr>
-            <th>상영관</th><th>영화 / 시간</th><th>신청자</th><th>예약번호</th><th>티켓/좌석</th><th>인원</th><th>신청일</th><th>메모</th><th class="screen-only">관리</th>
+            ${options.smsSelectMode ? `<th class="screen-only sms-check-col"><input type="checkbox" data-action="toggle-visible-reservation-checks" aria-label="현재 목록 전체 선택" /></th>` : ""}<th>상영관</th><th>영화 / 시간</th><th>신청자</th><th>예약번호</th><th>티켓/좌석</th><th>인원</th><th>신청일</th><th>메모</th><th class="screen-only">관리</th>
           </tr>
         </thead>
         <tbody>
           ${sortedReservations.map((reservation) => {
             const screening = state.screenings.find((s) => s.id === reservation.screeningId);
             const attended = reservation.attended === true;
+            const selected = selectedReservationActionId === reservation.id;
             return `
-              <tr class="${attended ? "attended-row" : ""}">
+              <tr class="reservation-click-row ${attended ? "attended-row" : ""} ${selected ? "is-selected" : ""}" data-reservation-row="${esc(reservation.id)}" tabindex="0" title="클릭하면 상세 관리 버튼이 열립니다.">
+                ${options.smsSelectMode ? `<td class="screen-only sms-check-col"><input type="checkbox" class="reservation-sms-check" data-reservation-check="${esc(reservation.id)}" ${selectedReservationSmsIds.has(reservation.id) ? "checked" : ""} aria-label="${esc(reservation.name)} 문자 발송 선택" /></td>` : ""}
                 <td><strong>${esc(screening?.venue || "삭제된 상영관")}</strong></td>
                 <td>${screening ? `<strong>${esc(screening.title)}</strong><br><span class="help">${esc(formatDateTime(screening.startTime))}</span>` : "삭제된 회차"}</td>
                 <td class="applicant-cell">
@@ -2147,14 +2177,32 @@ function reservationTable(reservations, options = {}) {
                 <td>${esc(formatDateTime(reservation.createdAt))}</td>
                 <td class="table-note">${esc(reservation.note || "-")}</td>
                 <td class="screen-only">
-                  <div class="row-actions reservation-manage-grid">
-                    <button class="btn btn-outline btn-small attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true" title="${attended ? `현재 참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : "참석 인원 입력"}">참석</button>
+                  <div class="row-actions reservation-manage-compact">
+                    <button class="btn btn-outline btn-small attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true" title="참석 인원 입력">참석</button>
                     <button class="btn btn-outline btn-small" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="false">취소</button>
-                    <button class="btn btn-outline btn-small" type="button" data-action="staff-edit-reservation" data-id="${esc(reservation.id)}">수정</button>
-                    <button class="btn btn-danger btn-small" type="button" data-action="delete-reservation" data-id="${esc(reservation.id)}">삭제</button>
                   </div>
                 </td>
               </tr>
+              ${selected ? `
+                <tr class="reservation-action-row screen-only">
+                  <td colspan="${colSpan}">
+                    <div class="reservation-action-panel">
+                      <div>
+                        <strong>${esc(reservation.name)} 님 관리</strong>
+                        <p class="help">목록을 클릭하면 이 관리창이 열립니다. 참석 확인, 취소, 정보 수정, 삭제, 문자전송을 바로 처리할 수 있습니다.</p>
+                      </div>
+                      <div class="row-actions reservation-action-buttons">
+                        <button class="btn btn-outline btn-small attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true">참석</button>
+                        <button class="btn btn-outline btn-small" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="false">취소</button>
+                        <button class="btn btn-outline btn-small" type="button" data-action="staff-edit-reservation" data-id="${esc(reservation.id)}">수정</button>
+                        <button class="btn btn-danger btn-small" type="button" data-action="delete-reservation" data-id="${esc(reservation.id)}">삭제</button>
+                        <button class="btn btn-dark btn-small" type="button" data-action="send-sms" data-id="${esc(reservation.id)}">예약문자</button>
+                        <button class="btn btn-primary btn-small" type="button" data-action="open-single-notice-sms" data-id="${esc(reservation.id)}">별도안내문자</button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ` : ""}
             `;
           }).join("")}
         </tbody>
@@ -2530,9 +2578,19 @@ function hydrateRoute(route, sub) {
   }
   if (route === "admin" && sub === "reservations" && isAdminAuthed()) {
     updateReservationTable();
-    ["reservationSearch", "reservationScreeningFilter", "reservationAttendanceFilter", "reservationDateFilter"].forEach((id) => {
+    ["reservationSearch", "reservationScreeningFilter", "reservationAttendanceFilter", "reservationDatePreset", "reservationDateFilter"].forEach((id) => {
       document.getElementById(id)?.addEventListener("input", updateReservationTable);
       document.getElementById(id)?.addEventListener("change", updateReservationTable);
+    });
+    document.getElementById("reservationDatePreset")?.addEventListener("change", () => {
+      const direct = document.getElementById("reservationDateFilter");
+      if (direct) direct.value = "";
+      updateReservationTable();
+    });
+    document.getElementById("reservationDateFilter")?.addEventListener("change", () => {
+      const preset = document.getElementById("reservationDatePreset");
+      if (preset) preset.value = "";
+      updateReservationTable();
     });
   }
   if (route === "admin" && sub === "backup" && isAdminAuthed()) {
@@ -2566,7 +2624,9 @@ function updateReservationTable() {
   const search = document.getElementById("reservationSearch")?.value.trim().toLowerCase() || "";
   const screeningId = document.getElementById("reservationScreeningFilter")?.value || "";
   const attendance = document.getElementById("reservationAttendanceFilter")?.value || "";
-  const date = document.getElementById("reservationDateFilter")?.value || "";
+  const presetDate = document.getElementById("reservationDatePreset")?.value || "";
+  const customDate = document.getElementById("reservationDateFilter")?.value || "";
+  const date = customDate || presetDate;
   const container = document.getElementById("reservationTable");
   if (!container) return;
   const filtered = [...state.reservations]
@@ -2578,7 +2638,150 @@ function updateReservationTable() {
       const matchDate = !date || String(screening?.startTime || "").slice(0, 10) === date;
       return (!search || text.includes(search)) && (!screeningId || reservation.screeningId === screeningId) && matchAttendance && matchDate;
     });
-  container.innerHTML = reservationTable(filtered);
+  container.innerHTML = reservationTable(filtered, { smsSelectMode: reservationSmsSelectMode });
+  updateBulkSmsSelectedCount();
+}
+
+function updateBulkSmsSelectedCount() {
+  const el = document.getElementById("bulkSmsSelectedCount");
+  if (el) el.textContent = `선택 ${selectedReservationSmsIds.size}명`;
+}
+
+function refreshReservationView() {
+  if (document.getElementById("reservationTable")) updateReservationTable();
+  else render();
+}
+
+function setSelectedReservationAction(id) {
+  selectedReservationActionId = id || null;
+  refreshReservationView();
+}
+
+function visibleReservationIdsForSms() {
+  return Array.from(document.querySelectorAll("[data-reservation-check]")).map((checkbox) => checkbox.dataset.reservationCheck).filter(Boolean);
+}
+
+function getSelectedReservationsForSms() {
+  return [...selectedReservationSmsIds]
+    .map((id) => state.reservations.find((reservation) => reservation.id === id))
+    .filter(Boolean);
+}
+
+function setBulkSmsMode(enabled) {
+  reservationSmsSelectMode = enabled;
+  if (!enabled) selectedReservationSmsIds = new Set();
+  render();
+  if (enabled) toast("문자 발송할 신청자를 체크하세요.");
+}
+
+function selectVisibleReservationsForSms() {
+  visibleReservationIdsForSms().forEach((id) => selectedReservationSmsIds.add(id));
+  updateReservationTable();
+  toast("현재 보이는 신청자를 선택했습니다.");
+}
+
+function clearBulkSmsSelection() {
+  selectedReservationSmsIds = new Set();
+  updateReservationTable();
+  toast("문자 발송 선택을 해제했습니다.");
+}
+
+async function bulkSendReservationSms() {
+  const reservations = getSelectedReservationsForSms();
+  if (!reservations.length) return toast("문자를 보낼 신청자를 체크해 주세요.");
+  if (!confirm(`선택한 ${reservations.length}명에게 예약 관련 문자를 다시 보낼까요?`)) return;
+  let success = 0;
+  for (const reservation of reservations) {
+    const screening = state.screenings.find((item) => item.id === reservation.screeningId);
+    if (await sendReservationSms(reservation, screening, { manual: true })) success += 1;
+  }
+  toast(`예약 관련 문자 발송 요청 완료: ${success}/${reservations.length}명`);
+}
+
+function openNoticeSmsModalForReservations(reservations) {
+  if (!reservations.length) return toast("별도 안내문자를 보낼 신청자를 선택해 주세요.");
+  const modal = document.getElementById("bookingModal");
+  const body = document.getElementById("bookingBody");
+  if (!modal || !body) return;
+  document.getElementById("bookingTitle").textContent = "별도 안내문자 보내기";
+  body.innerHTML = `
+    <form id="bulkSmsNoticeForm" class="form-stack">
+      <p class="help">선택한 ${reservations.length}명에게 같은 안내문자를 보냅니다. 예약번호가 필요한 경우 본문에 직접 입력해 주세요.</p>
+      <label class="label" for="bulkSmsNoticeMessage">안내문자 내용</label>
+      <textarea class="textarea" id="bulkSmsNoticeMessage" name="message" rows="8" placeholder="예: 오늘 상영은 예정대로 진행됩니다. 상영 10분 전까지 도착해 주세요." required></textarea>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">선택자에게 문자발송하기</button>
+        <button class="btn btn-outline" type="button" data-action="close-modal">닫기</button>
+      </div>
+    </form>
+  `;
+  selectedReservationSmsIds = new Set(reservations.map((reservation) => reservation.id));
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function openBulkNoticeSmsModal() {
+  const reservations = getSelectedReservationsForSms();
+  if (!reservations.length) return toast("별도 안내문자를 보낼 신청자를 체크해 주세요.");
+  openNoticeSmsModalForReservations(reservations);
+}
+
+function openSingleNoticeSmsModal(id) {
+  const reservation = state.reservations.find((item) => item.id === id);
+  if (!reservation) return toast("신청자를 찾을 수 없습니다.");
+  openNoticeSmsModalForReservations([reservation]);
+}
+
+
+async function sendNoticeSms(reservation, message) {
+  const phone = normalizePhoneForSms(reservation.phone);
+  if (!phone || phone.length < 10) return false;
+  if (window.location.protocol !== "http:" && window.location.protocol !== "https:") {
+    toast("배포 주소에서 열어야 네이버 SENS 문자가 발송됩니다.");
+    return false;
+  }
+  const screening = state.screenings.find((item) => item.id === reservation.screeningId);
+  try {
+    const response = await fetch(SMS_API_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "notice",
+        phone,
+        name: reservation.name,
+        reservationNumber: reservationDisplayNumber(reservation, screening),
+        movieTitle: cleanMovieTitle(screening?.title),
+        message
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok === false) throw new Error(result.error || `HTTP ${response.status}`);
+    reservation.noticeSmsStatus = "발송완료";
+    reservation.noticeSmsSentAt = new Date().toISOString();
+    return true;
+  } catch (error) {
+    reservation.noticeSmsStatus = "발송실패";
+    reservation.noticeSmsError = String(error?.message || error).slice(0, 80);
+    return false;
+  }
+}
+
+async function submitBulkNoticeSms(form) {
+  const message = String(new FormData(form).get("message") || "").trim();
+  if (!message) return toast("보낼 안내문자를 입력해 주세요.");
+  const reservations = getSelectedReservationsForSms();
+  if (!reservations.length) return toast("문자를 보낼 신청자가 선택되지 않았습니다.");
+  if (!confirm(`선택한 ${reservations.length}명에게 별도 안내문자를 보낼까요?`)) return;
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit) { submit.disabled = true; submit.textContent = "발송 중..."; }
+  let success = 0;
+  for (const reservation of reservations) {
+    if (await sendNoticeSms(reservation, message)) success += 1;
+  }
+  persist();
+  closeModals();
+  updateReservationTable();
+  toast(`별도 안내문자 발송 요청 완료: ${success}/${reservations.length}명`);
 }
 
 function handleDonate() {
@@ -3390,6 +3593,11 @@ function todayFile() {
 }
 
 document.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-reservation-row]");
+  if (row && !event.target.closest("button, input, select, textarea, a, label")) {
+    setSelectedReservationAction(row.dataset.reservationRow);
+    return;
+  }
   const button = event.target.closest("[data-action]");
   if (!button) return;
   const action = button.dataset.action;
@@ -3433,6 +3641,16 @@ document.addEventListener("click", (event) => {
     render();
     toast("스태프 관리 화면에서 로그아웃했습니다.");
   }
+  if (action === "toggle-bulk-sms") setBulkSmsMode(!reservationSmsSelectMode);
+  if (action === "select-visible-reservations") selectVisibleReservationsForSms();
+  if (action === "clear-bulk-sms-selection") clearBulkSmsSelection();
+  if (action === "bulk-reservation-sms") bulkSendReservationSms();
+  if (action === "open-bulk-notice-sms") openBulkNoticeSmsModal();
+  if (action === "toggle-visible-reservation-checks") {
+    const checked = button.checked === true;
+    visibleReservationIdsForSms().forEach((reservationId) => checked ? selectedReservationSmsIds.add(reservationId) : selectedReservationSmsIds.delete(reservationId));
+    updateReservationTable();
+  }
   if (action === "print") window.print();
   if (action === "edit-screening") { selectedScreeningId = id; window.location.hash = "#/admin/screenings"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
   if (action === "cancel-edit") { selectedScreeningId = null; render(); }
@@ -3445,9 +3663,10 @@ document.addEventListener("click", (event) => {
   if (action === "set-attendance") setAttendance(id, button.dataset.attended === "true");
   if (action === "copy-confirmation") copyReservationConfirmation(id);
   if (action === "send-sms") sendReservationSmsById(id);
+  if (action === "open-single-notice-sms") openSingleNoticeSmsModal(id);
   if (action === "delete-reservation") deleteReservation(id);
   if (action === "clear-reservation-filter") {
-    ["reservationSearch", "reservationScreeningFilter", "reservationAttendanceFilter", "reservationDateFilter"].forEach((fieldId) => {
+    ["reservationSearch", "reservationScreeningFilter", "reservationAttendanceFilter", "reservationDatePreset", "reservationDateFilter"].forEach((fieldId) => {
       const el = document.getElementById(fieldId);
       if (el) el.value = "";
     });
@@ -3482,6 +3701,7 @@ document.addEventListener("submit", (event) => {
   if (form.id === "adminLoginForm") submitAdminLogin(form);
   if (form.id === "staffLoginForm") submitStaffLogin(form);
   if (form.id === "staffPinChangeForm") submitStaffPinChange(form);
+  if (form.id === "bulkSmsNoticeForm") submitBulkNoticeSms(form);
   if (form.id === "openingForm") submitOpeningSettings(form);
   if (form.id === "screeningForm") submitScreening(form);
   if (form.id === "reservationEditForm") submitReservationEdit(form);
@@ -3489,6 +3709,21 @@ document.addEventListener("submit", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeModals();
+  if ((event.key === "Enter" || event.key === " ") && event.target?.matches?.("[data-reservation-row]")) {
+    event.preventDefault();
+    setSelectedReservationAction(event.target.dataset.reservationRow);
+  }
+});
+
+
+document.addEventListener("change", (event) => {
+  const checkbox = event.target.closest("[data-reservation-check]");
+  if (!checkbox) return;
+  const id = checkbox.dataset.reservationCheck;
+  if (!id) return;
+  if (checkbox.checked) selectedReservationSmsIds.add(id);
+  else selectedReservationSmsIds.delete(id);
+  updateBulkSmsSelectedCount();
 });
 
 window.addEventListener("hashchange", () => {
