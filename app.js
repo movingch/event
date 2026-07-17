@@ -1509,7 +1509,7 @@ function renderStaffLogin(preselectedId = "") {
       <div class="login-card">
         <div class="eyebrow">상영관 담당자 전용</div>
         <h1>신청자 확인</h1>
-        <p>담당 상영 영화를 선택하고 관리자가 부여한 스태프 비밀번호를 입력하세요. 로그인한 영화의 신청자 명단만 확인할 수 있습니다.</p>
+        <p>담당 상영 영화를 선택하고 스탭 비밀번호를 입력하세요. 임시 스탭 비밀번호는 <strong>0909</strong>입니다.</p>
         <form id="staffLoginForm">
           <label class="label" for="staffScreeningId">담당 상영 영화</label>
           <select class="select" id="staffScreeningId" name="screeningId" required>
@@ -1620,7 +1620,7 @@ function renderAdminLogin() {
       <div class="login-card">
         <div class="eyebrow" style="background:rgba(179,63,47,.1);color:var(--brand-dark);">운영자 전용</div>
         <h1>관리자 로그인</h1>
-        <p>시제품 확인용 PIN은 <strong>0909</strong>입니다. 실제 배포 시에는 계정 로그인과 권한 관리를 서버에서 처리해야 합니다.</p>
+        <p>임시 비밀번호는 <strong>0909</strong>입니다. 앱 제작이 완료되면 변경될 예정입니다. 스탭 비번도 <strong>0909</strong>입니다.</p>
         <form id="adminLoginForm">
           <label class="label" for="adminPin">관리자 PIN</label>
           <input class="input" id="adminPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required />
