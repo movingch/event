@@ -3613,6 +3613,125 @@ function exportStats() {
   downloadFile(`munae9_stats_${todayFile()}.csv`, rowsToCsv(buildStatsRows()), "text/csv;charset=utf-8");
 }
 
+function tableRowsToObjects(rows) {
+  if (!Array.isArray(rows) || rows.length < 2) return [];
+  const headers = rows[0].map((header) => String(header || "").trim());
+  return rows.slice(1)
+    .filter((row) => Array.isArray(row) && row.some((cell) => String(cell ?? "").trim() !== ""))
+    .map((row) => headers.reduce((obj, header, index) => {
+      if (header) obj[header] = row[index] ?? "";
+      return obj;
+    }, {}));
+}
+
+function buildDriveApplicants() {
+  return state.reservations.map((reservation) => {
+    const screening = state.screenings.find((s) => s.id === reservation.screeningId);
+    return {
+      movieTitle: screening?.title || "삭제된 회차",
+      venue: screening?.venue || "",
+      screeningDate: formatDatePart(screening?.startTime || ""),
+      screeningTime: formatTimePart(screening?.startTime || ""),
+      reservationNumber: reservationDisplayNumber(reservation, screening),
+      name: reservation.name || "",
+      phone: reservation.phone || "",
+      email: reservation.email || "",
+      seat: reservationSeatLabel(reservation, screening),
+      count: Number(reservation.seats || 0),
+      attendedCount: reservation.attended ? Number(reservation.attendedSeats || reservation.seats || 0) : 0,
+      attendanceStatus: reservation.attended === true ? "참석" : "취소",
+      ticketType: reservationTicketLabel(reservation, screening),
+      donorName: reservation.donorName || "",
+      smsConsent: reservation.smsConsent === false ? "미동의" : "동의",
+      smsStatus: reservation.smsStatus || "미발송",
+      smsSentAt: reservation.smsSentAt || "",
+      createdAt: reservation.createdAt || "",
+      memo: reservation.note || ""
+    };
+  });
+}
+
+function buildDriveStats() {
+  return sortedScreenings().map((s) => {
+    const stats = isOpeningScreening(s) ? openingStats(s) : null;
+    const phase = isOpeningScreening(s) ? openingPhaseInfo(s) : null;
+    return {
+      movieTitle: s.title || "",
+      venue: s.venue || "",
+      screeningTime: s.startTime || "",
+      capacity: Number(s.capacity || 0),
+      applicationCount: applicationCount(s.id),
+      applicantCount: appliedSeats(s.id),
+      openingApplicantCount: stats ? stats.earlybirdSeats : 0,
+      generalApplicantCount: stats ? stats.generalSeats : 0,
+      attendedCount: actualAttendees(s.id),
+      canceledCount: canceledApplicationCount(s.id),
+      canceledSeats: canceledSeats(s.id),
+      remainingSeats: remainingSeats(s),
+      applicationRate: `${occupancyRate(s)}%`,
+      attendanceRate: `${attendanceRate(s.id)}%`,
+      status: statusInfo(s).text,
+      ticketingPhase: phase ? phase.label : ""
+    };
+  });
+}
+
+function buildDriveScreenings() {
+  return sortedScreenings().map((s) => {
+    const stats = isOpeningScreening(s) ? openingStats(s) : null;
+    const phase = isOpeningScreening(s) ? openingPhaseInfo(s) : null;
+    return {
+      movieTitle: s.title || "",
+      venue: s.venue || "",
+      screeningId: s.id || "",
+      startTime: s.startTime || "",
+      endTime: s.endTime || "",
+      capacity: Number(s.capacity || 0),
+      applicationCount: applicationCount(s.id),
+      applicantCount: appliedSeats(s.id),
+      openingApplicantCount: stats ? stats.earlybirdSeats : 0,
+      generalApplicantCount: stats ? stats.generalSeats : 0,
+      attendedCount: actualAttendees(s.id),
+      canceledCount: canceledApplicationCount(s.id),
+      canceledSeats: canceledSeats(s.id),
+      applicationRate: `${occupancyRate(s)}%`,
+      attendanceRate: `${attendanceRate(s.id)}%`,
+      status: s.status || "",
+      opening: isOpeningScreening(s) ? "개막작" : "",
+      ticketingPhase: phase ? phase.label : "",
+      gvHost: s.gvHost || "",
+      moderator: s.moderator || "",
+      staff: s.staff || "",
+      staffPhone: s.staffPhone || "",
+      notes: s.notes || ""
+    };
+  });
+}
+
+function buildGoogleDrivePayload(mode = "auto") {
+  const reservationRows = buildReservationRows();
+  const statsRows = buildStatsRows();
+  const screeningRows = buildScreeningRows();
+  return {
+    festival: "제9회 머내마을영화제",
+    mode,
+    generatedAt: new Date().toISOString(),
+    applicants: buildDriveApplicants(),
+    stats: buildDriveStats(),
+    screenings: buildDriveScreenings(),
+    rows: {
+      applicants: reservationRows,
+      stats: statsRows,
+      screenings: screeningRows
+    },
+    csv: {
+      applicants: rowsToCsv(reservationRows).replace(/^\ufeff/, ""),
+      stats: rowsToCsv(statsRows).replace(/^\ufeff/, ""),
+      screenings: rowsToCsv(screeningRows).replace(/^\ufeff/, "")
+    }
+  };
+}
+
 const DRIVE_WEBHOOK_STORAGE_KEY = "munae9DriveWebhookUrl";
 const DRIVE_AUTO_SYNC_STORAGE_KEY = "munae9DriveAutoSyncEnabled";
 const DRIVE_LAST_SYNC_STORAGE_KEY = "munae9DriveLastSyncAt";
@@ -3713,18 +3832,25 @@ async function syncGoogleDriveCore(options = {}) {
     if (!silent) toast("구글드라이브 연동 URL을 먼저 설정해 주세요.");
     return false;
   }
-  const reservationsOk = await syncRowsToGoogleDrive("reservations", { silent: true, prompt: false });
-  const statsOk = await syncRowsToGoogleDrive("stats", { silent: true, prompt: false });
-  if (reservationsOk && statsOk) {
+  const payload = buildGoogleDrivePayload(options.reason || "auto");
+  try {
+    await fetch(url, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
     setDriveLastSyncNow();
     if (!silent) {
-      toast("신청자현황과 통계를 구글드라이브 저장 요청으로 보냈습니다.");
+      toast("신청자현황, 통계, 상영관영화를 구글시트 저장 요청으로 보냈습니다.");
       window.setTimeout(render, 0);
     }
     return true;
+  } catch (error) {
+    console.error(error);
+    if (!silent) toast("구글드라이브 저장 요청에 실패했습니다. Apps Script URL을 확인해 주세요.");
+    return false;
   }
-  if (!silent) toast("구글드라이브 저장 요청에 실패했습니다. Apps Script URL을 확인해 주세요.");
-  return false;
 }
 
 function queueGoogleDriveAutoSync(reason = "data-change") {
