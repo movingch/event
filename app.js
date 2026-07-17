@@ -1029,22 +1029,16 @@ function renderOpeningHome(opening) {
         </div>
         <p class="opening-home-note">${esc(EARLYBIRD_MESSAGE)} · 전체 잔여 ${stats.remainingTotal}석</p>
       </div>
-      <figure class="opening-poster-hero">
-        <img src="${esc(poster)}" alt="개막식 영화 얼굴 포스터" loading="eager" />
-        <figcaption>개막식 영화 &lt;얼굴&gt; · 박정민 배우 참석</figcaption>
-      </figure>
     </section>
 
     <section class="opening-media-grid" id="opening-video">
-      <article class="card opening-media-card">
-        <div class="section-title compact-title">
-          <div>
-            <h2>개막식 소개영상</h2>
-            <p>소개영상은 메인 페이지 안에서 음소거 상태로 자동 반복재생됩니다.</p>
-          </div>
-          <a class="chip-link" href="${esc(videoUrl)}" target="_blank" rel="noopener noreferrer">유튜브에서 보기</a>
+      <article class="card opening-media-card opening-video-poster-card" aria-label="개막식 소개영상과 포스터">
+        <div class="opening-video-poster-grid">
+          ${renderVideoPlayer(opening, "개막식 소개영상")}
+          <figure class="opening-poster-mini">
+            <img src="${esc(poster)}" alt="개막식 영화 얼굴 포스터" loading="eager" />
+          </figure>
         </div>
-        ${renderVideoPlayer(opening, "개막식 소개영상")}
       </article>
 
       ${renderFestivalProgressWidget()}
@@ -1131,14 +1125,7 @@ function renderOpeningTicketing() {
         <img src="${esc(poster)}" alt="개막식 영화 얼굴 포스터" loading="lazy" />
         <figcaption>개막식 영화 &lt;얼굴&gt;</figcaption>
       </figure>
-      <article class="card opening-media-card">
-        <div class="section-title compact-title">
-          <div>
-            <h2>소개영상</h2>
-            <p>소개영상은 화면 안에서 음소거 상태로 자동 반복재생됩니다. 보이지 않으면 유튜브에서 보기 버튼을 눌러주세요.</p>
-          </div>
-          <a class="chip-link" href="${esc(videoUrl)}" target="_blank" rel="noopener noreferrer">유튜브에서 보기</a>
-        </div>
+      <article class="card opening-media-card opening-video-only" aria-label="개막식 소개영상">
         ${renderVideoPlayer(opening, "개막식 소개영상")}
       </article>
     </section>
@@ -1512,7 +1499,7 @@ function renderStaffLogin(preselectedId = "") {
         <form id="staffLoginForm">
           <label class="label" for="staffScreeningId">담당 상영 영화</label>
           <select class="select" id="staffScreeningId" name="screeningId" required>
-            <option value="">회차를 선택하세요</option>${options}
+            <option value="">상영관 영화를 선택하세요</option>${options}
           </select>
           <label class="label" for="staffPin">스태프 비밀번호</label>
           <input class="input" id="staffPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required />
