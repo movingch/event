@@ -1388,6 +1388,10 @@ function getStaffSession() {
   }
 }
 
+function readStaffSession() {
+  return getStaffSession();
+}
+
 function staffScreenings() {
   const session = getStaffSession();
   if (!session) return [];
@@ -1403,6 +1407,11 @@ function canStaffManageScreening(screeningId) {
 
 function canManageReservation(reservation) {
   return Boolean(reservation && canStaffManageScreening(reservation.screeningId));
+}
+
+function reservationAttendanceIndex(reservation) {
+  if (reservation?.attended === true) return `<span class="badge status-index ok">참석</span>`;
+  return `<span class="badge status-index danger">취소</span>`;
 }
 
 function renderStaff(preselectedId = "") {
@@ -1607,7 +1616,7 @@ function renderAdminLogin() {
 }
 
 function adminTabLink(tab, label, active) {
-  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="#/admin/${tab}" data-action="admin-tab" data-tab="${esc(tab)}">${label}</a>`;
+  return `<button class="admin-tab ${tab === active ? "active" : ""}" type="button" data-action="admin-tab" data-tab="${esc(tab)}">${label}</button>`;
 }
 
 function adminOverview() {
@@ -2049,7 +2058,7 @@ function reservationTable(reservations, options = {}) {
                 <td><strong>${esc(screening?.venue || "삭제된 상영관")}</strong></td>
                 <td>${screening ? `<strong>${esc(screening.title)}</strong><br><span class="help">${esc(formatDateTime(screening.startTime))}</span>` : "삭제된 회차"}</td>
                 <td class="applicant-cell">
-                  <div class="applicant-name-line"><strong>${esc(reservation.name)}</strong><span class="badge status-index ${reservationStatusClass(reservation)}">${esc(reservation.status)}</span></div>
+                  <div class="applicant-name-line"><strong>${esc(reservation.name)}</strong>${reservationAttendanceIndex(reservation)}</div>
                   <span class="help applicant-phone">${esc(reservation.phone || "-")}</span>
                   ${reservation.email ? `<span class="help applicant-email">${esc(reservation.email)}</span>` : ""}
                   <span class="print-only print-attendance-text">${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : ""}</span>
