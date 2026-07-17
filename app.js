@@ -918,6 +918,79 @@ function renderGeneralHome() {
   `;
 }
 
+
+function festivalDdayLabel(opening = getOpeningScreening()) {
+  const target = toDate(opening?.festivalStartDate || FESTIVAL_START_DATE);
+  if (!target) return "D-DAY";
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const targetStart = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const diff = Math.ceil((targetStart - todayStart) / 86400000);
+  if (diff > 0) return `D-${diff}`;
+  if (diff < 0) return `D+${Math.abs(diff)}`;
+  return "D-DAY";
+}
+
+function festivalProgressRows() {
+  return sortedScreenings().map((screening) => {
+    const applicants = appliedSeats(screening.id);
+    const capacity = Number(screening.capacity || 0);
+    const label = `${screening.title}${screening.venue ? ` · ${screening.venue}` : ""}`;
+    return { screening, label, applicants, capacity };
+  });
+}
+
+function renderFestivalProgressWidget() {
+  const opening = getOpeningScreening();
+  const screenings = sortedScreenings();
+  const rows = festivalProgressRows();
+  const totalApplicants = rows.reduce((sum, row) => sum + row.applicants, 0);
+  const totalApplications = getReservations("", { includeCanceled: false }).length;
+  const totalCapacity = screenings.reduce((sum, screening) => sum + Number(screening.capacity || 0), 0);
+  const maxApplicants = Math.max(1, ...rows.map((row) => row.applicants));
+  const visibleRows = rows.slice().sort((a, b) => b.applicants - a.applicants || a.label.localeCompare(b.label)).slice(0, 8);
+  const overallRate = totalCapacity ? Math.min(100, Math.round((totalApplicants / totalCapacity) * 100)) : 0;
+  return `
+    <article class="card festival-progress-card" aria-label="영화제 진행 상황">
+      <div class="section-title compact-title">
+        <div>
+          <h2>영화제 진행 상황</h2>
+          <p>현재 신청 흐름과 영화제까지 남은 시간을 한눈에 확인합니다.</p>
+        </div>
+        <span class="d-day-badge">${esc(festivalDdayLabel(opening))}</span>
+      </div>
+
+      <div class="festival-progress-metrics">
+        <div class="festival-progress-metric"><span>상영 영화 수</span><strong>${screenings.length}</strong><small>개 상영</small></div>
+        <div class="festival-progress-metric"><span>전체 신청자 수</span><strong>${totalApplicants}</strong><small>${totalApplications}건 접수</small></div>
+        <div class="festival-progress-metric"><span>전체 신청률</span><strong>${overallRate}%</strong><small>정원 ${totalCapacity}명 기준</small></div>
+      </div>
+
+      <div class="festival-progress-chart" aria-label="영화별 신청자 수 그래프">
+        ${visibleRows.map((row) => {
+          const width = Math.max(4, Math.round((row.applicants / maxApplicants) * 100));
+          const rate = row.capacity ? Math.round((row.applicants / row.capacity) * 100) : 0;
+          return `
+            <div class="festival-progress-row">
+              <div class="festival-progress-name">${esc(row.label)}</div>
+              <div class="festival-progress-track"><span style="width:${width}%"></span></div>
+              <div class="festival-progress-count"><strong>${row.applicants}</strong><small>${row.capacity ? `/${row.capacity}명 · ${rate}%` : "명"}</small></div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+
+      <div class="progress-donation-callout">
+        <div>
+          <strong>주민이 직접 만드는 영화제를 함께 지켜주세요.</strong>
+          <p>후원은 상영 준비, 공간 운영, 장비와 홍보물 제작, 주민 창작자와 스태프의 활동을 이어가는 힘이 됩니다.</p>
+        </div>
+        <a class="btn btn-primary" href="#/donate">후원하기</a>
+      </div>
+    </article>
+  `;
+}
+
 function renderOpeningHome(opening) {
   const phase = openingPhaseInfo(opening);
   const stats = openingStats(opening);
@@ -944,6 +1017,7 @@ function renderOpeningHome(opening) {
         </div>
         <div class="cta-row">
           <button class="btn btn-light" type="button" data-action="book" data-id="${esc(opening.id)}" ${phase.allowBooking ? "" : "disabled"}>${phase.allowBooking ? "개막작 신청" : phase.label}</button>
+          <a class="btn btn-primary" href="#/donate">후원하기</a>
         </div>
         <p class="opening-home-note">${esc(EARLYBIRD_MESSAGE)} · 전체 잔여 ${stats.remainingTotal}석</p>
       </div>
@@ -965,6 +1039,7 @@ function renderOpeningHome(opening) {
         ${renderVideoPlayer(opening, "개막식 소개영상")}
       </article>
 
+      ${renderFestivalProgressWidget()}
     </section>
 
     <section class="section">
@@ -1532,7 +1607,7 @@ function renderAdminLogin() {
 }
 
 function adminTabLink(tab, label, active) {
-  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="#/admin/${tab}">${label}</a>`;
+  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="#/admin/${tab}" data-action="admin-tab" data-tab="${esc(tab)}">${label}</a>`;
 }
 
 function adminOverview() {
@@ -3242,6 +3317,14 @@ document.addEventListener("click", (event) => {
     const depositor = button.dataset.depositor || "";
     copyTextToClipboard(`${DONATION_BANK_NAME} ${DONATION_ACCOUNT_NUMBER} (${DONATION_ACCOUNT_HOLDER})\n후원금: ${DONATION_AMOUNT.toLocaleString("ko-KR")}원\n입금자명: ${depositor}`);
     toast("이체정보를 복사했습니다.");
+  }
+  if (action === "admin-tab") {
+    event.preventDefault();
+    const tab = button.dataset.tab || "overview";
+    const nextHash = `#/admin/${tab}`;
+    if (window.location.hash === nextHash) render();
+    else window.location.hash = nextHash;
+    return;
   }
   if (action === "play-video") playYoutubeVideo(button);
   if (action === "book") openBooking(id);

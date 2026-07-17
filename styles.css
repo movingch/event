@@ -2270,3 +2270,138 @@ tr:last-child td { border-bottom: 0; }
   .staff-pin-admin-row { align-items: stretch; }
   .staff-pin-admin-row .input { max-width: none; flex: 1 1 100%; }
 }
+
+/* v38: 메인 진행상황 그래프와 후원 안내 */
+.festival-progress-card {
+  min-height: 100%;
+  gap: 16px;
+  background: linear-gradient(145deg, rgba(255,250,242,.98), rgba(247,238,225,.96));
+}
+.d-day-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 92px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 950;
+  letter-spacing: -0.04em;
+  box-shadow: 0 12px 24px rgba(58,41,27,.16);
+}
+.festival-progress-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.festival-progress-metric {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(111,100,88,.15);
+}
+.festival-progress-metric span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+.festival-progress-metric strong {
+  display: block;
+  margin-top: 4px;
+  font-size: clamp(28px, 4.3vw, 44px);
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -0.07em;
+}
+.festival-progress-metric small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+.festival-progress-chart {
+  display: grid;
+  gap: 10px;
+  padding: 4px 0;
+}
+.festival-progress-row {
+  display: grid;
+  grid-template-columns: minmax(82px, 1fr) minmax(92px, 1.35fr) minmax(62px, auto);
+  gap: 9px;
+  align-items: center;
+}
+.festival-progress-name {
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.25;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.festival-progress-track {
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(58,41,27,.12);
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.08);
+}
+.festival-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+.festival-progress-count {
+  text-align: right;
+  white-space: nowrap;
+}
+.festival-progress-count strong {
+  font-size: 18px;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+.festival-progress-count small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.progress-donation-callout {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: auto;
+  padding: 14px;
+  border-radius: 20px;
+  background: rgba(190,65,49,.1);
+  border: 1px solid rgba(190,65,49,.18);
+}
+.progress-donation-callout strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+.progress-donation-callout p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.progress-donation-callout .btn {
+  white-space: nowrap;
+}
+@media (max-width: 980px) {
+  .festival-progress-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .festival-progress-metrics { grid-template-columns: 1fr; }
+  .festival-progress-row { grid-template-columns: 1fr; gap: 5px; }
+  .festival-progress-count { text-align: left; }
+  .progress-donation-callout { grid-template-columns: 1fr; }
+}
