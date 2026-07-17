@@ -1692,7 +1692,8 @@ function adminOverview() {
           <h2>영화별 신청·참석 현황</h2>
           <p>영화별 신청, 참석, 취소 인원을 함께 확인하세요.</p>
         </div>
-        <button class="btn btn-outline" type="button" data-action="export-stats">통계 CSV</button>
+        <button class="btn btn-outline" type="button" data-action="export-stats">통계 엑셀저장</button>
+        <button class="btn btn-outline" type="button" data-action="sync-drive-stats">구글드라이브 저장</button>
       </div>
       ${screeningTable(sortedScreenings(), { compact: false })}
     </section>
@@ -1975,7 +1976,8 @@ function adminOpening() {
         <div class="form-actions">
           <button class="btn btn-dark" type="submit">개막작 설정 저장</button>
           <button class="btn btn-outline" type="button" data-action="view-roster" data-id="${esc(opening.id)}">개막작 명단·참석</button>
-          <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 CSV</button>
+          <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
+          <button class="btn btn-outline" type="button" data-action="sync-drive-reservations">구글드라이브 저장</button>
         </div>
       </form>
     </section>
@@ -2068,7 +2070,7 @@ function adminScreenings() {
         </div>
         <div class="form-actions">
           <button class="btn btn-dark" type="submit">${editing ? "수정 저장" : "영화·상영관 추가"}</button>
-          <button class="btn btn-outline" type="button" data-action="export-screenings">영화·상영관 CSV</button>
+          <button class="btn btn-outline" type="button" data-action="export-screenings">영화·상영관 엑셀저장</button>
         </div>
       </form>
     </section>
@@ -2101,7 +2103,7 @@ function adminReservations() {
         <div class="cta-row">
           <button class="btn btn-primary" type="button" data-action="toggle-bulk-sms">문자전송하기</button>
           <button class="btn btn-dark" type="button" data-action="print">인쇄용 명단</button>
-          <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 CSV</button>
+          <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
         </div>
       </div>
       <section class="filters reservation-filters" aria-label="신청자 필터">
@@ -2247,8 +2249,10 @@ function adminStats() {
         <div><h2>운영용 통계 내보내기</h2><p>보고서 작성, 공유, 현장 체크인 명단 준비에 활용하세요.</p></div>
       </div>
       <div class="cta-row">
-        <button class="btn btn-dark" type="button" data-action="export-stats">통계 CSV 다운로드</button>
-        <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 CSV 다운로드</button>
+        <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
+        <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
+        <button class="btn btn-primary" type="button" data-action="sync-drive-stats">통계 구글드라이브 저장</button>
+        <button class="btn btn-outline" type="button" data-action="sync-drive-reservations">신청자현황 구글드라이브 저장</button>
         <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
       </div>
     </section>
@@ -2356,7 +2360,7 @@ function adminBackup() {
         <div class="card compact">
           <h3>백업 다운로드</h3>
           <p>상영 회차, 신청자, 참석 체크, 후원 클릭 수를 하나의 JSON 파일로 저장합니다.</p>
-          <div class="form-actions"><button class="btn btn-dark" type="button" data-action="export-json">전체 JSON 백업</button></div>
+          <div class="form-actions"><button class="btn btn-dark" type="button" data-action="export-json">전체 JSON 백업</button><button class="btn btn-outline" type="button" data-action="reset-drive-webhook">구글드라이브 연동 URL 초기화</button></div>
         </div>
         <div class="card compact">
           <h3>백업 복원</h3>
@@ -3496,7 +3500,12 @@ function downloadFile(filename, content, type = "text/plain;charset=utf-8") {
   URL.revokeObjectURL(url);
 }
 
-function exportReservations() {
+
+function rowsToCsv(rows) {
+  return "\ufeff" + rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+}
+
+function buildReservationRows() {
   const rows = [["예약번호", "상태", "신청구분", "후원자명/입금자명", "참석여부", "참석처리일", "영화", "상영관", "상영시간", "신청자", "연락처", "이메일", "문자수신동의", "문자상태", "문자발송일", "문자요청ID", "신청인원", "실제참석인원", "신청일", "메모"]];
   state.reservations.forEach((reservation) => {
     const screening = state.screenings.find((s) => s.id === reservation.screeningId);
@@ -3505,7 +3514,7 @@ function exportReservations() {
       reservation.status,
       reservationTicketLabel(reservation, screening),
       reservation.donorName || "",
-      reservation.attended === true ? "참석" : "참석 미처리",
+      reservation.attended === true ? "참석" : "취소",
       reservation.attendedAt || "",
       screening?.title || "삭제된 회차",
       screening?.venue || "",
@@ -3523,20 +3532,20 @@ function exportReservations() {
       reservation.note
     ]);
   });
-  downloadFile(`munae9_reservations_${todayFile()}.csv`, "\ufeff" + rows.map((row) => row.map(csvEscape).join(",")).join("\n"), "text/csv;charset=utf-8");
+  return rows;
 }
 
-function exportScreenings() {
+function buildScreeningRows() {
   const rows = [["회차ID", "영화", "상영관", "시작", "종료", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석확인건수", "참석인원", "취소건수", "취소인원", "신청률", "참석률", "상태", "개막작여부", "티켓팅단계", "GV", "모더레이터", "담당스태프", "연락처", "기타"]];
   sortedScreenings().forEach((s) => {
     const stats = isOpeningScreening(s) ? openingStats(s) : null;
     const phase = isOpeningScreening(s) ? openingPhaseInfo(s) : null;
     rows.push([s.id, s.title, s.venue, s.startTime, s.endTime, s.capacity, applicationCount(s.id), appliedSeats(s.id), stats ? stats.earlybirdSeats : 0, stats ? stats.generalSeats : 0, attendedApplicationCount(s.id), actualAttendees(s.id), canceledApplicationCount(s.id), canceledSeats(s.id), `${occupancyRate(s)}%`, `${attendanceRate(s.id)}%`, s.status, isOpeningScreening(s) ? "개막작" : "", phase ? phase.label : "", s.gvHost, s.moderator, s.staff, s.staffPhone, s.notes]);
   });
-  downloadFile(`munae9_screenings_${todayFile()}.csv`, "\ufeff" + rows.map((row) => row.map(csvEscape).join(",")).join("\n"), "text/csv;charset=utf-8");
+  return rows;
 }
 
-function exportStats() {
+function buildStatsRows() {
   const rows = [["영화", "상영관", "상영시간", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석인원", "취소건수", "취소인원", "남은좌석", "신청률", "참석률", "정원상태", "티켓팅단계"]];
   sortedScreenings().forEach((s) => {
     const stats = isOpeningScreening(s) ? openingStats(s) : null;
@@ -3551,7 +3560,76 @@ function exportStats() {
   rows.push(["날짜별 통계"]);
   rows.push(["날짜", "회차", "정원", "신청", "참석", "취소", "신청률", "참석률"]);
   groupByDate().forEach((row) => rows.push([row.name, row.screenings, row.capacity, row.confirmed, row.attended, row.waitlist, `${row.rate}%`, `${row.attendanceRate}%`]));
-  downloadFile(`munae9_stats_${todayFile()}.csv`, "\ufeff" + rows.map((row) => row.map(csvEscape).join(",")).join("\n"), "text/csv;charset=utf-8");
+  return rows;
+}
+
+function exportReservations() {
+  downloadFile(`munae9_reservations_${todayFile()}.csv`, rowsToCsv(buildReservationRows()), "text/csv;charset=utf-8");
+}
+
+function exportScreenings() {
+  downloadFile(`munae9_screenings_${todayFile()}.csv`, rowsToCsv(buildScreeningRows()), "text/csv;charset=utf-8");
+}
+
+function exportStats() {
+  downloadFile(`munae9_stats_${todayFile()}.csv`, rowsToCsv(buildStatsRows()), "text/csv;charset=utf-8");
+}
+
+const DRIVE_WEBHOOK_STORAGE_KEY = "munae9DriveWebhookUrl";
+
+function getDriveWebhookUrl() {
+  return localStorage.getItem(DRIVE_WEBHOOK_STORAGE_KEY) || "";
+}
+
+function setDriveWebhookUrl(url) {
+  if (url) localStorage.setItem(DRIVE_WEBHOOK_STORAGE_KEY, url);
+}
+
+async function syncRowsToGoogleDrive(type) {
+  const labels = {
+    reservations: "신청자현황",
+    stats: "통계",
+    screenings: "영화상영관"
+  };
+  const rowsByType = {
+    reservations: buildReservationRows,
+    stats: buildStatsRows,
+    screenings: buildScreeningRows
+  };
+  const builder = rowsByType[type];
+  if (!builder) return toast("구글드라이브 저장 항목을 찾을 수 없습니다.");
+  let url = getDriveWebhookUrl();
+  if (!url) {
+    url = prompt("구글 Apps Script 웹앱 URL을 입력해 주세요.\n관리자 구글드라이브의 스프레드시트로 신청자현황과 통계를 저장합니다.");
+    if (!url) return;
+    setDriveWebhookUrl(url.trim());
+  }
+  const payload = {
+    festival: "제9회 머내마을영화제",
+    type,
+    title: labels[type] || type,
+    filename: `munae9_${type}_${todayFile()}.csv`,
+    generatedAt: new Date().toISOString(),
+    rows: builder(),
+    csv: rowsToCsv(builder()).replace(/^\ufeff/, "")
+  };
+  try {
+    await fetch(url, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    toast(`${labels[type]}을 구글드라이브 저장 요청으로 보냈습니다.`);
+  } catch (error) {
+    console.error(error);
+    toast("구글드라이브 저장 요청에 실패했습니다. Apps Script URL을 확인해 주세요.");
+  }
+}
+
+function resetGoogleDriveWebhookUrl() {
+  localStorage.removeItem(DRIVE_WEBHOOK_STORAGE_KEY);
+  toast("구글드라이브 연동 URL을 초기화했습니다.");
 }
 
 function exportJson() {
@@ -3688,6 +3766,10 @@ document.addEventListener("click", (event) => {
   if (action === "export-reservations") exportReservations();
   if (action === "export-screenings") exportScreenings();
   if (action === "export-stats") exportStats();
+  if (action === "sync-drive-reservations") syncRowsToGoogleDrive("reservations");
+  if (action === "sync-drive-stats") syncRowsToGoogleDrive("stats");
+  if (action === "sync-drive-screenings") syncRowsToGoogleDrive("screenings");
+  if (action === "reset-drive-webhook") resetGoogleDriveWebhookUrl();
   if (action === "export-json") exportJson();
   if (action === "reset-demo") {
     if (!confirm("데모 데이터로 초기화할까요? 현재 입력된 정보가 사라집니다.")) return;
