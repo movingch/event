@@ -1622,7 +1622,7 @@ function renderAdmin(tab) {
       </div>
       <div class="cta-row">
         <button class="btn btn-outline" type="button" data-action="print">인쇄</button>
-        <button class="btn btn-outline" type="button" data-action="admin-tab" data-tab="backup">백업·연동</button>
+        <a class="btn btn-outline admin-backup-direct" href="#/admin/backup" onclick="window.location.hash='#/admin/backup'; return false;">백업·연동</a>
         <button class="btn btn-danger" type="button" data-action="admin-logout">로그아웃</button>
       </div>
     </section>
@@ -1671,13 +1671,23 @@ function renderAdminLogin() {
 
 function adminTabLink(tab, label, active) {
   const href = `#/admin/${tab}`;
-  return `<button class="admin-tab ${tab === active ? "active" : ""}" type="button" data-action="admin-tab" data-tab="${esc(tab)}" data-admin-tab="${esc(tab)}" data-href="${href}">${label}</button>`;
+  const labelEsc = esc(label);
+  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="${href}" data-admin-tab="${esc(tab)}" onclick="window.location.hash='${href}'; return false;">${labelEsc}</a>`;
 }
 
 function adminOverview() {
   const totals = getTotals();
   const risky = sortedScreenings().filter((s) => statusInfo(s).className !== "ok");
   return `
+    <section class="card admin-backup-emergency-card">
+      <div class="section-title">
+        <div>
+          <h2>백업·연동 바로가기</h2>
+          <p>메뉴 버튼이 반응하지 않을 때도 이 버튼으로 백업·연동 화면을 바로 엽니다.</p>
+        </div>
+        <a class="btn btn-primary" href="#/admin/backup" onclick="window.location.hash='#/admin/backup'; return false;">백업·연동 열기</a>
+      </div>
+    </section>
     <section class="metric-grid">
       <div class="metric-card"><div class="metric-label">총 신청 건수</div><div class="metric-value">${totals.totalApplicationCount}</div><div class="metric-note">신청 인원 ${totals.totalAppliedSeats}명</div></div>
       <div class="metric-card"><div class="metric-label">신청 인원</div><div class="metric-value">${totals.totalAppliedSeats}</div><div class="metric-note">신청 ${totals.totalApplicationCount}건 · 신청률 ${totals.occupancy}%</div></div>
@@ -2110,10 +2120,10 @@ function adminReservations() {
         </div>
       </div>
       <section class="filters reservation-filters" aria-label="신청자 필터">
-        <input class="input" id="reservationSearch" type="search" placeholder="이름, 연락처, 영화, 메모 검색" />
-        <select class="select" id="reservationScreeningFilter"><option value="">영화선택 필터</option>${options}</select>
-        <select class="select" id="reservationAttendanceFilter"><option value="">전체 참석여부</option><option value="attended">참석</option><option value="canceled">취소</option></select>
-        <select class="select" id="reservationDatePreset"><option value="">전체 날짜</option>${dateOptions}</select>
+        <input class="input" id="reservationSearch" type="search" placeholder="검색" />
+        <select class="select" id="reservationScreeningFilter" aria-label="영화선택" title="영화선택"><option value="">영화선택: 전체</option>${options}</select>
+        <select class="select" id="reservationAttendanceFilter" aria-label="참석여부"><option value="">참석여부</option><option value="attended">참석</option><option value="canceled">취소</option></select>
+        <select class="select" id="reservationDatePreset" aria-label="날짜"><option value="">전체날짜</option>${dateOptions}</select>
         <input class="input" id="reservationDateFilter" type="date" aria-label="날짜 직접 선택" />
         <button class="btn btn-outline" type="button" data-action="clear-reservation-filter">필터 초기화</button>
       </section>
