@@ -1648,7 +1648,6 @@ function renderAdmin(tab) {
         <button class="btn btn-danger" type="button" data-action="admin-logout">로그아웃</button>
       </div>
     </section>
-    ${adminBackupAlwaysOnPanel(active)}
     <section class="admin-layout">
       <aside class="admin-sidebar" aria-label="관리자 메뉴">
         ${adminTabLink("overview", "운영요약", active)}
@@ -1702,15 +1701,6 @@ function adminOverview() {
   const totals = getTotals();
   const risky = sortedScreenings().filter((s) => statusInfo(s).className !== "ok");
   return `
-    <section class="card admin-backup-emergency-card">
-      <div class="section-title">
-        <div>
-          <h2>백업·연동 안내</h2>
-          <p>이제 백업·연동 기능은 화면 상단의 고정 패널에서 바로 실행됩니다. 메뉴 이동 없이 사용할 수 있습니다.</p>
-        </div>
-        <span class="badge badge-ok">상단 고정</span>
-      </div>
-    </section>
     <section class="metric-grid">
       <div class="metric-card"><div class="metric-label">총 신청 건수</div><div class="metric-value">${totals.totalApplicationCount}</div><div class="metric-note">신청 인원 ${totals.totalAppliedSeats}명</div></div>
       <div class="metric-card"><div class="metric-label">신청 인원</div><div class="metric-value">${totals.totalAppliedSeats}</div><div class="metric-note">신청 ${totals.totalApplicationCount}건 · 신청률 ${totals.occupancy}%</div></div>
@@ -2408,7 +2398,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=74">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=75">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -2452,7 +2442,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=74">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=75">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
