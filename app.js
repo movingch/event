@@ -319,6 +319,8 @@ function normalizeState(data) {
     reservations: Array.isArray(data.reservations) ? data.reservations.map(normalizeReservation) : [],
     donations: Array.isArray(data.donations) ? data.donations : [],
     sponsorClicks: Number(data.sponsorClicks || 0),
+    masterStaffPin: String(data.masterStaffPin || "0909"),
+    masterStaffPresent: Boolean(data.masterStaffPresent),
     lastUpdated: data.lastUpdated || new Date().toISOString()
   });
 }
@@ -1404,6 +1406,7 @@ function readStaffSession() {
 function staffScreenings() {
   const session = getStaffSession();
   if (!session) return [];
+  if (session.isMaster === true) return sortedScreenings();
   return sortedScreenings()
     .filter((screening) => session.screeningIds.includes(screening.id))
     .sort((a, b) => String(a.venue || "").localeCompare(String(b.venue || ""), "ko") || String(a.startTime || "").localeCompare(String(b.startTime || "")));
@@ -1432,7 +1435,7 @@ function renderStaff(preselectedId = "") {
     return renderStaffLogin(preselectedId);
   }
   const reservations = state.reservations
-    .filter((reservation) => session.screeningIds.includes(reservation.screeningId))
+    .filter((reservation) => session.isMaster === true || session.screeningIds.includes(reservation.screeningId))
     .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
   const totalSeats = reservations.filter((r) => r.status !== "취소").reduce((sum, r) => sum + Number(r.seats || 0), 0);
   const attendedSeats = reservations.filter((r) => r.attended).reduce((sum, r) => sum + Number(r.attendedSeats || 0), 0);
@@ -1442,8 +1445,8 @@ function renderStaff(preselectedId = "") {
     <section class="section-title staff-portal-title">
       <div>
         <div class="eyebrow">상영관 담당자 전용</div>
-        <h1>${esc(session.venue || screenings[0].venue)} 신청자 관리</h1>
-        <p>${esc(session.staffName)} 담당자가 자신의 상영관 신청자를 추가·수정·삭제하고 참석 현황을 관리합니다.</p>
+        <h1>${session.isMaster === true ? "전체영화 신청자 관리" : `${esc(session.venue || screenings[0].venue)} 신청자 관리`}</h1>
+        <p>${session.isMaster === true ? "마스타스탭이 모든 영화 신청자를 추가·수정·삭제하고 참석 현황을 관리합니다." : `${esc(session.staffName)} 담당자가 자신의 상영관 신청자를 추가·수정·삭제하고 참석 현황을 관리합니다.`}</p>
       </div>
       <div class="cta-row">
         <button class="btn btn-primary" type="button" data-action="staff-add-reservation">신청자 추가</button>
@@ -1452,7 +1455,7 @@ function renderStaff(preselectedId = "") {
       </div>
     </section>
     <section class="card staff-password-card screen-only">
-      <div><h2>스태프 비밀번호 변경</h2><p>현재 담당 상영관의 모든 회차에 같은 새 비밀번호가 적용됩니다.</p></div>
+      <div><h2>스태프 비밀번호 변경</h2><p>${session.isMaster === true ? "마스타스탭 전체영화 비밀번호가 변경됩니다." : "현재 담당 상영관의 모든 회차에 같은 새 비밀번호가 적용됩니다."}</p></div>
       <form id="staffPinChangeForm" class="staff-pin-form">
         <label class="label" for="currentStaffPin">현재 비밀번호</label><input class="input" id="currentStaffPin" name="currentPin" type="password" inputmode="numeric" required />
         <label class="label" for="newStaffPin">새 비밀번호</label><input class="input" id="newStaffPin" name="newPin" type="password" inputmode="numeric" minlength="4" required />
@@ -1461,7 +1464,7 @@ function renderStaff(preselectedId = "") {
       </form>
     </section>
     <section class="stats-grid staff-stats">
-      <div class="stat-card"><span>담당 상영관</span><strong>${esc(session.venue || screenings[0].venue)}</strong><small>${screenings.length}회차</small></div>
+      <div class="stat-card"><span>${session.isMaster === true ? "담당 범위" : "담당 상영관"}</span><strong>${session.isMaster === true ? "전체영화" : esc(session.venue || screenings[0].venue)}</strong><small>${screenings.length}회차</small></div>
       <div class="stat-card"><span>신청 인원</span><strong>${totalSeats}</strong><small>취소 제외</small></div>
       <div class="stat-card"><span>참석자</span><strong>${attendedSeats}</strong><small>실제 참석</small></div>
       <div class="stat-card"><span>취소 인원</span><strong>${canceledSeats}</strong><small>취소 처리</small></div>
@@ -1513,7 +1516,8 @@ function renderStaffLogin(preselectedId = "") {
         <form id="staffLoginForm">
           <label class="label" for="staffScreeningId">담당 상영 영화</label>
           <select class="select" id="staffScreeningId" name="screeningId" required>
-            <option value="">상영관 영화를 선택하세요</option>${options}
+            <option value="">상영관 영화를 선택하세요</option>
+            <option value="__all__" ${preselectedId === "__all__" ? "selected" : ""}>전체영화 · 마스타스탭</option>${options}
           </select>
           <label class="label" for="staffPin">스태프 비밀번호</label>
           <input class="input" id="staffPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required />
@@ -1529,6 +1533,22 @@ function renderStaffLogin(preselectedId = "") {
 
 function submitStaffLogin(form) {
   const data = formDataObject(form);
+  if (data.screeningId === "__all__") {
+    if (String(data.pin || "") !== String(state.masterStaffPin || "0909")) return toast("마스타스탭 비밀번호가 맞지 않습니다.");
+    state.masterStaffPresent = true;
+    persist();
+    sessionStorage.setItem(STAFF_SESSION_KEY, JSON.stringify({
+      staffName: "마스타스탭",
+      venue: "전체영화",
+      screeningIds: state.screenings.map((item) => item.id),
+      isMaster: true,
+      loggedInAt: new Date().toISOString()
+    }));
+    window.location.hash = "#/staff";
+    render();
+    toast("마스타스탭 전체영화 신청자 관리 화면을 열었습니다.");
+    return;
+  }
   const screening = state.screenings.find((item) => item.id === data.screeningId);
   if (!screening || !screening.staffPin) return toast("이 회차에는 아직 스태프 비밀번호가 설정되지 않았습니다.");
   if (String(data.pin || "") !== String(screening.staffPin)) return toast("스태프 비밀번호가 맞지 않습니다.");
@@ -1550,12 +1570,20 @@ function submitStaffPinChange(form) {
   const session = getStaffSession();
   if (!session || !session.screeningIds?.length) return toast("스태프 로그인이 필요합니다.");
   const data = formDataObject(form);
-  const screening = state.screenings.find((item) => item.id === session.screeningIds[0]);
-  if (!screening) return toast("담당 상영관을 찾을 수 없습니다.");
-  if (String(data.currentPin || "") !== String(screening.staffPin || "")) return toast("현재 비밀번호가 맞지 않습니다.");
   const newPin = String(data.newPin || "").trim();
   if (newPin.length < 4) return toast("새 비밀번호는 4자리 이상으로 입력하세요.");
   if (newPin !== String(data.confirmPin || "").trim()) return toast("새 비밀번호 확인이 일치하지 않습니다.");
+  if (session.isMaster === true) {
+    if (String(data.currentPin || "") !== String(state.masterStaffPin || "0909")) return toast("현재 비밀번호가 맞지 않습니다.");
+    state.masterStaffPin = newPin;
+    persist();
+    form.reset();
+    toast("마스타스탭 비밀번호를 변경했습니다.");
+    return;
+  }
+  const screening = state.screenings.find((item) => item.id === session.screeningIds[0]);
+  if (!screening) return toast("담당 상영관을 찾을 수 없습니다.");
+  if (String(data.currentPin || "") !== String(screening.staffPin || "")) return toast("현재 비밀번호가 맞지 않습니다.");
   state.screenings.forEach((item) => {
     if (session.screeningIds.includes(item.id)) item.staffPin = newPin;
   });
@@ -1732,6 +1760,7 @@ function adminStaffManagement() {
   const rows = sortedScreenings();
   const activeSession = readStaffSession();
   const activeIds = new Set(activeSession?.screeningIds || []);
+  const masterPresent = Boolean(state.masterStaffPresent) || activeSession?.isMaster === true;
   if (!rows.length) return `<section class="card"><div class="empty">등록된 상영 영화가 없습니다.</div></section>`;
   return `
     <section class="card staff-admin-card">
@@ -1751,6 +1780,17 @@ function adminStaffManagement() {
             </tr>
           </thead>
           <tbody>
+            <tr class="master-staff-row">
+              <td><strong>전체영화</strong><br><span class="help">마스타스탭 · 모든 영화 신청자 목록 관리</span></td>
+              <td><span class="badge ${masterPresent ? "ok" : "muted"}">STAFF ${masterPresent ? "있음" : "없음"}</span><br><span class="help">마스타스탭</span></td>
+              <td>
+                <div class="staff-pin-admin-row">
+                  <input class="input" type="text" value="${esc(state.masterStaffPin || "0909")}" data-master-staff-pin-input placeholder="마스타스탭 비밀번호" />
+                  <button class="btn btn-outline btn-small" type="button" data-action="save-master-staff-pin">저장</button>
+                  <button class="btn btn-outline btn-small" type="button" data-action="clear-master-staff-present">없음</button>
+                </div>
+              </td>
+            </tr>
             ${rows.map((screening) => {
               const isPresent = Boolean(screening.staffPresent) || activeIds.has(screening.id);
               return `
@@ -1772,6 +1812,25 @@ function adminStaffManagement() {
       </div>
     </section>
   `;
+}
+
+function saveMasterStaffPin() {
+  const input = document.querySelector("[data-master-staff-pin-input]");
+  const pin = String(input?.value || "").trim();
+  if (!pin) return toast("마스타스탭 비밀번호를 입력하세요.");
+  state.masterStaffPin = pin;
+  persist();
+  render();
+  toast("마스타스탭 비밀번호를 저장했습니다.");
+}
+
+function clearMasterStaffPresent() {
+  state.masterStaffPresent = false;
+  const session = readStaffSession();
+  if (session?.isMaster === true) sessionStorage.removeItem(STAFF_SESSION_KEY);
+  persist();
+  render();
+  toast("마스타스탭 상태를 없음으로 변경했습니다.");
 }
 
 function saveStaffPin(screeningId) {
@@ -3362,7 +3421,10 @@ document.addEventListener("click", (event) => {
   if (action === "staff-edit-reservation") staffEditReservation(id);
   if (action === "staff-logout") {
     const session = readStaffSession();
-    if (session?.screeningIds?.length) {
+    if (session?.isMaster === true) {
+      state.masterStaffPresent = false;
+      persist();
+    } else if (session?.screeningIds?.length) {
       state.screenings.forEach((item) => { if (session.screeningIds.includes(item.id)) item.staffPresent = false; });
       persist();
     }
@@ -3375,6 +3437,8 @@ document.addEventListener("click", (event) => {
   if (action === "edit-screening") { selectedScreeningId = id; window.location.hash = "#/admin/screenings"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
   if (action === "cancel-edit") { selectedScreeningId = null; render(); }
   if (action === "delete-screening") deleteScreening(id);
+  if (action === "save-master-staff-pin") saveMasterStaffPin();
+  if (action === "clear-master-staff-present") clearMasterStaffPresent();
   if (action === "save-staff-pin") saveStaffPin(id);
   if (action === "clear-staff-present") clearStaffPresent(id);
   if (action === "set-reservation-status") setReservationStatus(id, button.dataset.status);
@@ -3395,7 +3459,7 @@ document.addEventListener("click", (event) => {
   if (action === "export-json") exportJson();
   if (action === "reset-demo") {
     if (!confirm("데모 데이터로 초기화할까요? 현재 입력된 정보가 사라집니다.")) return;
-    state = normalizeState({ screenings: cloneData(seedScreenings), reservations: cloneData(seedReservations), donations: [], sponsorClicks: 0, lastUpdated: new Date().toISOString() });
+    state = normalizeState({ screenings: cloneData(seedScreenings), reservations: cloneData(seedReservations), donations: [], sponsorClicks: 0, masterStaffPin: "0909", masterStaffPresent: false, lastUpdated: new Date().toISOString() });
     selectedScreeningId = null;
     persist();
     render();
