@@ -1622,6 +1622,7 @@ function renderAdmin(tab) {
       </div>
       <div class="cta-row">
         <button class="btn btn-outline" type="button" data-action="print">인쇄</button>
+        <a class="btn btn-outline" href="#/admin/backup">백업·연동</a>
         <button class="btn btn-danger" type="button" data-action="admin-logout">로그아웃</button>
       </div>
     </section>
@@ -1669,7 +1670,8 @@ function renderAdminLogin() {
 }
 
 function adminTabLink(tab, label, active) {
-  return `<button class="admin-tab ${tab === active ? "active" : ""}" type="button" data-action="admin-tab" data-tab="${esc(tab)}">${label}</button>`;
+  const href = `#/admin/${tab}`;
+  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="${href}" data-admin-tab="${esc(tab)}">${label}</a>`;
 }
 
 function adminOverview() {
@@ -3919,6 +3921,8 @@ function openGoogleDriveSyncSetup() {
   }
   const url = promptDriveWebhookUrl();
   if (!url) return;
+  setDriveWebhookUrl(url);
+  setGoogleDriveAutoSyncEnabled(true);
   syncGoogleDriveCore({ silent: false, prompt: false, reason: "manual-setup" });
   render();
 }
@@ -4039,6 +4043,15 @@ document.addEventListener("click", (event) => {
   if (action === "admin-tab") {
     event.preventDefault();
     const tab = button.dataset.tab || "overview";
+    const nextHash = `#/admin/${tab}`;
+    if (window.location.hash === nextHash) render();
+    else window.location.hash = nextHash;
+    return;
+  }
+  const adminTabAnchor = event.target.closest("[data-admin-tab]");
+  if (adminTabAnchor) {
+    event.preventDefault();
+    const tab = adminTabAnchor.dataset.adminTab || "overview";
     const nextHash = `#/admin/${tab}`;
     if (window.location.hash === nextHash) render();
     else window.location.hash = nextHash;
