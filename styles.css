@@ -2857,3 +2857,76 @@ tr:last-child td { border-bottom: 0; }
     justify-content: flex-start;
   }
 }
+
+/* v54: 신청자 명단 관리 칸 축소 + 상영관/영화 글자 강조 */
+.inline-admin-pin-form { display: grid; gap: 8px; }
+.admin-pin-actions { align-items: stretch; }
+.admin-pin-actions .input { max-width: 240px; }
+.reservation-table {
+  min-width: 790px !important;
+  table-layout: fixed !important;
+}
+.reservation-table th,
+.reservation-table td {
+  padding: 4px 5px !important;
+}
+.reservation-table th:nth-child(1), .reservation-table td:nth-child(1) { width: 13% !important; }
+.reservation-table th:nth-child(2), .reservation-table td:nth-child(2) { width: 20% !important; }
+.reservation-table th:nth-child(3), .reservation-table td:nth-child(3) { width: 17% !important; }
+.reservation-table th:nth-child(4), .reservation-table td:nth-child(4) { width: 10% !important; }
+.reservation-table th:nth-child(5), .reservation-table td:nth-child(5) { width: 12% !important; }
+.reservation-table th:nth-child(6), .reservation-table td:nth-child(6) { width: 5% !important; text-align: center; }
+.reservation-table th:nth-child(7), .reservation-table td:nth-child(7) { width: 9% !important; }
+.reservation-table th:nth-child(8), .reservation-table td:nth-child(8) { width: 7% !important; }
+.reservation-table th:nth-child(9), .reservation-table td:nth-child(9) { width: 7% !important; }
+.reservation-table:not(.reservation-table-sms) td:nth-child(1) strong,
+.reservation-table:not(.reservation-table-sms) td:nth-child(2) strong {
+  font-size: 12.5px !important;
+  line-height: 1.2;
+}
+.reservation-table-sms th:nth-child(1), .reservation-table-sms td:nth-child(1) { width: 4% !important; }
+.reservation-table-sms th:nth-child(2), .reservation-table-sms td:nth-child(2) { width: 12% !important; }
+.reservation-table-sms th:nth-child(3), .reservation-table-sms td:nth-child(3) { width: 19% !important; }
+.reservation-table-sms th:nth-child(4), .reservation-table-sms td:nth-child(4) { width: 16% !important; }
+.reservation-table-sms th:nth-child(5), .reservation-table-sms td:nth-child(5) { width: 9% !important; }
+.reservation-table-sms th:nth-child(6), .reservation-table-sms td:nth-child(6) { width: 12% !important; }
+.reservation-table-sms th:nth-child(7), .reservation-table-sms td:nth-child(7) { width: 5% !important; text-align: center; }
+.reservation-table-sms th:nth-child(8), .reservation-table-sms td:nth-child(8) { width: 8% !important; }
+.reservation-table-sms th:nth-child(9), .reservation-table-sms td:nth-child(9) { width: 7% !important; }
+.reservation-table-sms th:nth-child(10), .reservation-table-sms td:nth-child(10) { width: 8% !important; }
+.reservation-table-sms td:nth-child(2) strong,
+.reservation-table-sms td:nth-child(3) strong {
+  font-size: 12.5px !important;
+  line-height: 1.2;
+}
+.reservation-table .reservation-manage-compact {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 3px !important;
+  justify-items: stretch;
+}
+.reservation-table .reservation-manage-compact .btn-small {
+  width: 100%;
+  min-height: 23px !important;
+  padding: 3px 4px !important;
+  font-size: 9px !important;
+}
+@media (max-width: 760px) {
+  .reservation-table { min-width: 760px !important; }
+  .reservation-table th,
+  .reservation-table td { font-size: 10px !important; }
+}
+
+/* v55 Google Drive auto sync controls */
+.drive-sync-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+.badge.badge-ok {
+  background: rgba(36, 120, 79, .12);
+  color: var(--ok);
+  border-color: rgba(36, 120, 79, .25);
+}

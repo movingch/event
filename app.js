@@ -322,6 +322,7 @@ function normalizeState(data) {
     reservations: Array.isArray(data.reservations) ? data.reservations.map(normalizeReservation) : [],
     donations: Array.isArray(data.donations) ? data.donations : [],
     sponsorClicks: Number(data.sponsorClicks || 0),
+    adminPin: String(data.adminPin || ADMIN_PIN),
     masterStaffPin: String(data.masterStaffPin || "0909"),
     masterStaffPresent: Boolean(data.masterStaffPresent),
     lastUpdated: data.lastUpdated || new Date().toISOString()
@@ -350,10 +351,11 @@ function loadState() {
   return fresh;
 }
 
-function persist() {
+function persist(options = {}) {
   applyVenueReservationNumbering(state);
   state.lastUpdated = new Date().toISOString();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (options.autoSync !== false) queueGoogleDriveAutoSync("data-change");
 }
 
 function esc(value) {
@@ -1631,6 +1633,7 @@ function renderAdmin(tab) {
         ${adminTabLink("staff", "STAFF 관리", active)}
         ${adminTabLink("opening", "개막작관리", active)}
         ${adminTabLink("screenings", "상영관, 영화 관리", active)}
+        ${adminTabLink("backup", "백업·연동", active)}
       </aside>
       <div class="admin-panel">
         ${active === "overview" ? adminOverview() : ""}
@@ -2152,7 +2155,7 @@ function reservationTable(reservations, options = {}) {
   const colSpan = options.smsSelectMode ? 10 : 9;
   return `
     <div class="table-wrap reservation-table-wrap">
-      <table class="reservation-table">
+      <table class="reservation-table ${options.smsSelectMode ? "reservation-table-sms" : ""}">
         <thead>
           <tr>
             ${options.smsSelectMode ? `<th class="screen-only sms-check-col"><input type="checkbox" data-action="toggle-visible-reservation-checks" aria-label="현재 목록 전체 선택" /></th>` : ""}<th>상영관</th><th>영화 / 시간</th><th>신청자</th><th>예약번호</th><th>티켓/좌석</th><th>인원</th><th>신청일</th><th>메모</th><th class="screen-only">관리</th>
@@ -2248,13 +2251,12 @@ function adminStats() {
       <div class="section-title">
         <div><h2>운영용 통계 내보내기</h2><p>보고서 작성, 공유, 현장 체크인 명단 준비에 활용하세요.</p></div>
       </div>
-      <div class="cta-row">
+      <div class="cta-row export-action-row">
         <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
         <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
-        <button class="btn btn-primary" type="button" data-action="sync-drive-stats">통계 구글드라이브 저장</button>
-        <button class="btn btn-outline" type="button" data-action="sync-drive-reservations">신청자현황 구글드라이브 저장</button>
-        <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
+        <button class="btn btn-primary" type="button" data-action="drive-sync-settings">구글드라이브 연동</button>
       </div>
+      <p class="help drive-sync-inline-note">구글드라이브 연동 URL을 설정하면 자동저장이 바로 켜집니다. 마지막 저장: ${esc(formatDriveLastSyncTime())}</p>
     </section>
   `;
 }
@@ -2357,6 +2359,31 @@ function adminBackup() {
         </div>
       </div>
       <div class="grid-2">
+        <div class="card compact">
+          <h3>총관리자 비밀번호</h3>
+          <p>ADMIN 로그인에 사용하는 총관리자 비밀번호를 변경할 수 있습니다.</p>
+          <form id="adminPinChangeForm" class="inline-admin-pin-form">
+            <label class="label" for="adminNewPin">새 총관리자 비밀번호</label>
+            <div class="form-actions admin-pin-actions">
+              <input class="input" id="adminNewPin" name="adminPin" type="password" inputmode="numeric" autocomplete="new-password" value="${esc(state.adminPin || ADMIN_PIN)}" placeholder="새 비밀번호" required />
+              <button class="btn btn-dark" type="submit">비밀번호 저장</button>
+            </div>
+            <span class="help">저장 후 다음 ADMIN 로그인부터 변경된 비밀번호가 적용됩니다.</span>
+          </form>
+        </div>
+        <div class="card compact">
+          <h3>구글드라이브 자동저장</h3>
+          <p>구글드라이브 연동 URL을 설정하면 자동저장이 바로 켜집니다. 데이터 변경 시 자동 저장하고, 관리자 화면이 열려 있으면 1분마다 한 번 더 저장합니다.</p>
+          <div class="drive-sync-status">
+            <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">${isGoogleDriveAutoSyncEnabled() ? "자동저장 ON" : "연동 URL 필요"}</span>
+            <span class="muted">마지막 저장: ${esc(formatDriveLastSyncTime())}</span>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" type="button" data-action="drive-sync-settings">구글드라이브 연동</button>
+            <button class="btn btn-outline" type="button" data-action="sync-drive-all">지금 저장 확인</button>
+          </div>
+          <span class="help">수동 저장은 엑셀저장만 사용하고, 구글드라이브 연동은 자동저장 방식으로 작동합니다.</span>
+        </div>
         <div class="card compact">
           <h3>백업 다운로드</h3>
           <p>상영 회차, 신청자, 참석 체크, 후원 클릭 수를 하나의 JSON 파일로 저장합니다.</p>
@@ -3235,13 +3262,24 @@ function submitBooking(form) {
 
 function submitAdminLogin(form) {
   const pin = new FormData(form).get("pin");
-  if (pin === ADMIN_PIN) {
+  if (pin === String(state.adminPin || ADMIN_PIN)) {
     sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
     toast("관리자 대시보드에 로그인했습니다.");
     render();
   } else {
     toast("PIN이 맞지 않습니다.");
   }
+}
+
+function submitAdminPinChange(form) {
+  const pin = String(new FormData(form).get("adminPin") || "").trim();
+  if (!pin) return toast("새 총관리자 비밀번호를 입력해 주세요.");
+  state.adminPin = pin;
+  persist();
+  form.reset();
+  const field = document.getElementById("adminNewPin");
+  if (field) field.value = pin;
+  toast("총관리자 비밀번호를 저장했습니다.");
 }
 
 function submitScreening(form) {
@@ -3576,6 +3614,9 @@ function exportStats() {
 }
 
 const DRIVE_WEBHOOK_STORAGE_KEY = "munae9DriveWebhookUrl";
+const DRIVE_AUTO_SYNC_STORAGE_KEY = "munae9DriveAutoSyncEnabled";
+const DRIVE_LAST_SYNC_STORAGE_KEY = "munae9DriveLastSyncAt";
+let driveAutoSyncTimer = null;
 
 function getDriveWebhookUrl() {
   return localStorage.getItem(DRIVE_WEBHOOK_STORAGE_KEY) || "";
@@ -3585,7 +3626,38 @@ function setDriveWebhookUrl(url) {
   if (url) localStorage.setItem(DRIVE_WEBHOOK_STORAGE_KEY, url);
 }
 
-async function syncRowsToGoogleDrive(type) {
+function isGoogleDriveAutoSyncEnabled() {
+  return localStorage.getItem(DRIVE_AUTO_SYNC_STORAGE_KEY) === "true";
+}
+
+function setGoogleDriveAutoSyncEnabled(enabled) {
+  localStorage.setItem(DRIVE_AUTO_SYNC_STORAGE_KEY, enabled ? "true" : "false");
+}
+
+function formatDriveLastSyncTime() {
+  const value = localStorage.getItem(DRIVE_LAST_SYNC_STORAGE_KEY);
+  if (!value) return "아직 없음";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function setDriveLastSyncNow() {
+  localStorage.setItem(DRIVE_LAST_SYNC_STORAGE_KEY, new Date().toISOString());
+}
+
+function promptDriveWebhookUrl() {
+  const current = getDriveWebhookUrl();
+  const url = prompt("구글 Apps Script 웹앱 URL을 입력해 주세요.\n/exec 로 끝나는 주소를 넣으면 구글드라이브 자동저장이 바로 켜집니다.", current);
+  if (!url) return "";
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  setDriveWebhookUrl(trimmed);
+  setGoogleDriveAutoSyncEnabled(true);
+  return trimmed;
+}
+
+async function syncRowsToGoogleDrive(type, options = {}) {
   const labels = {
     reservations: "신청자현황",
     stats: "통계",
@@ -3597,21 +3669,25 @@ async function syncRowsToGoogleDrive(type) {
     screenings: buildScreeningRows
   };
   const builder = rowsByType[type];
-  if (!builder) return toast("구글드라이브 저장 항목을 찾을 수 없습니다.");
-  let url = getDriveWebhookUrl();
-  if (!url) {
-    url = prompt("구글 Apps Script 웹앱 URL을 입력해 주세요.\n관리자 구글드라이브의 스프레드시트로 신청자현황과 통계를 저장합니다.");
-    if (!url) return;
-    setDriveWebhookUrl(url.trim());
+  if (!builder) {
+    if (!options.silent) toast("구글드라이브 저장 항목을 찾을 수 없습니다.");
+    return false;
   }
+  let url = getDriveWebhookUrl();
+  if (!url && options.prompt !== false) url = promptDriveWebhookUrl();
+  if (!url) {
+    if (!options.silent) toast("구글드라이브 연동 URL을 먼저 설정해 주세요.");
+    return false;
+  }
+  const rows = builder();
   const payload = {
     festival: "제9회 머내마을영화제",
     type,
     title: labels[type] || type,
     filename: `munae9_${type}_${todayFile()}.csv`,
     generatedAt: new Date().toISOString(),
-    rows: builder(),
-    csv: rowsToCsv(builder()).replace(/^\ufeff/, "")
+    rows,
+    csv: rowsToCsv(rows).replace(/^\ufeff/, "")
   };
   try {
     await fetch(url, {
@@ -3620,16 +3696,88 @@ async function syncRowsToGoogleDrive(type) {
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(payload)
     });
-    toast(`${labels[type]}을 구글드라이브 저장 요청으로 보냈습니다.`);
+    if (!options.silent) toast(`${labels[type]}을 구글드라이브 저장 요청으로 보냈습니다.`);
+    return true;
   } catch (error) {
     console.error(error);
-    toast("구글드라이브 저장 요청에 실패했습니다. Apps Script URL을 확인해 주세요.");
+    if (!options.silent) toast("구글드라이브 저장 요청에 실패했습니다. Apps Script URL을 확인해 주세요.");
+    return false;
   }
+}
+
+async function syncGoogleDriveCore(options = {}) {
+  const silent = options.silent === true;
+  const prompt = options.prompt !== false;
+  const url = getDriveWebhookUrl() || (prompt ? promptDriveWebhookUrl() : "");
+  if (!url) {
+    if (!silent) toast("구글드라이브 연동 URL을 먼저 설정해 주세요.");
+    return false;
+  }
+  const reservationsOk = await syncRowsToGoogleDrive("reservations", { silent: true, prompt: false });
+  const statsOk = await syncRowsToGoogleDrive("stats", { silent: true, prompt: false });
+  if (reservationsOk && statsOk) {
+    setDriveLastSyncNow();
+    if (!silent) {
+      toast("신청자현황과 통계를 구글드라이브 저장 요청으로 보냈습니다.");
+      window.setTimeout(render, 0);
+    }
+    return true;
+  }
+  if (!silent) toast("구글드라이브 저장 요청에 실패했습니다. Apps Script URL을 확인해 주세요.");
+  return false;
+}
+
+function queueGoogleDriveAutoSync(reason = "data-change") {
+  if (!isGoogleDriveAutoSyncEnabled()) return;
+  if (!getDriveWebhookUrl()) return;
+  window.clearTimeout(driveAutoSyncTimer);
+  driveAutoSyncTimer = window.setTimeout(() => {
+    syncGoogleDriveCore({ silent: true, prompt: false, reason });
+  }, 2500);
+}
+
+function openGoogleDriveSyncSetup() {
+  const existing = getDriveWebhookUrl();
+  const message = [
+    "구글드라이브 연동은 Google Apps Script 웹앱 URL을 연결하는 기능입니다.",
+    "",
+    "1. 구글시트에서 Apps Script를 만들고 웹앱으로 배포합니다.",
+    "2. 배포 후 /exec 로 끝나는 웹앱 URL을 복사합니다.",
+    "3. 여기에서 URL을 붙여넣으면 자동저장이 바로 켜집니다.",
+    "",
+    "연동 후에는 신청, 수정, 삭제, 참석, 취소 같은 데이터 변경 시 자동 저장되고, 관리자 화면이 열려 있으면 1분마다 한 번 더 저장됩니다.",
+    "",
+    existing ? "현재 URL이 설정되어 있습니다. 변경하려면 새 URL을 입력하세요." : "아직 URL이 없습니다. 웹앱 URL을 입력하세요."
+  ].join("\n");
+  const url = prompt(message, existing);
+  if (url === null) return;
+  const trimmed = url.trim();
+  if (!trimmed) return toast("구글드라이브 연동 URL이 입력되지 않았습니다.");
+  setDriveWebhookUrl(trimmed);
+  setGoogleDriveAutoSyncEnabled(true);
+  toast("구글드라이브 연동 URL을 저장했고 자동저장을 켰습니다.");
+  syncGoogleDriveCore({ silent: false, prompt: false });
+  render();
+}
+
+function toggleGoogleDriveAutoSync() {
+  const next = !isGoogleDriveAutoSyncEnabled();
+  if (next && !getDriveWebhookUrl()) {
+    const url = promptDriveWebhookUrl();
+    if (!url) return;
+  }
+  setGoogleDriveAutoSyncEnabled(next);
+  toast(next ? "구글드라이브 자동저장을 켰습니다." : "구글드라이브 자동저장을 껐습니다.");
+  if (next) syncGoogleDriveCore({ silent: false, prompt: false });
+  render();
 }
 
 function resetGoogleDriveWebhookUrl() {
   localStorage.removeItem(DRIVE_WEBHOOK_STORAGE_KEY);
-  toast("구글드라이브 연동 URL을 초기화했습니다.");
+  localStorage.removeItem(DRIVE_LAST_SYNC_STORAGE_KEY);
+  setGoogleDriveAutoSyncEnabled(false);
+  toast("구글드라이브 연동 URL을 초기화했습니다. 자동저장도 꺼졌습니다.");
+  render();
 }
 
 function exportJson() {
@@ -3769,11 +3917,15 @@ document.addEventListener("click", (event) => {
   if (action === "sync-drive-reservations") syncRowsToGoogleDrive("reservations");
   if (action === "sync-drive-stats") syncRowsToGoogleDrive("stats");
   if (action === "sync-drive-screenings") syncRowsToGoogleDrive("screenings");
+  if (action === "sync-drive-all") syncGoogleDriveCore({ silent: false, prompt: true });
+  if (action === "drive-sync-settings") openGoogleDriveSyncSetup();
+  if (action === "set-drive-webhook") { const url = promptDriveWebhookUrl(); if (url) syncGoogleDriveCore({ silent: false, prompt: false }); render(); }
+  if (action === "toggle-drive-autosync") toggleGoogleDriveAutoSync();
   if (action === "reset-drive-webhook") resetGoogleDriveWebhookUrl();
   if (action === "export-json") exportJson();
   if (action === "reset-demo") {
     if (!confirm("데모 데이터로 초기화할까요? 현재 입력된 정보가 사라집니다.")) return;
-    state = normalizeState({ screenings: cloneData(seedScreenings), reservations: cloneData(seedReservations), donations: [], sponsorClicks: 0, masterStaffPin: "0909", masterStaffPresent: false, lastUpdated: new Date().toISOString() });
+    state = normalizeState({ screenings: cloneData(seedScreenings), reservations: cloneData(seedReservations), donations: [], sponsorClicks: 0, adminPin: String(state.adminPin || ADMIN_PIN), masterStaffPin: "0909", masterStaffPresent: false, lastUpdated: new Date().toISOString() });
     selectedScreeningId = null;
     persist();
     render();
@@ -3794,6 +3946,7 @@ document.addEventListener("submit", (event) => {
   if (form.id === "bookingForm") submitBooking(form);
   if (form.id === "donationForm") submitDonation(form);
   if (form.id === "adminLoginForm") submitAdminLogin(form);
+  if (form.id === "adminPinChangeForm") submitAdminPinChange(form);
   if (form.id === "staffLoginForm") submitStaffLogin(form);
   if (form.id === "staffPinChangeForm") submitStaffPinChange(form);
   if (form.id === "bulkSmsNoticeForm") submitBulkNoticeSms(form);
@@ -3828,3 +3981,11 @@ window.addEventListener("hashchange", () => {
 });
 
 render();
+
+
+window.setInterval(() => {
+  if (!isAdminAuthed()) return;
+  if (!isGoogleDriveAutoSyncEnabled()) return;
+  if (!getDriveWebhookUrl()) return;
+  syncGoogleDriveCore({ silent: true, prompt: false, reason: "interval" });
+}, 60000);
