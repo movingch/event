@@ -106,6 +106,7 @@ function buildMessage(body) {
   const reservationId = safeText(body.reservationNumber || body.reservationId, 60) || '현장 확인';
   const movieTitle = safeText(body.movieTitle, 80) || '상영작';
   const people = safeText(body.people, 30) || '1명';
+  const seatPeople = safeText(body.seatPeople, 80) || people;
   const dateTime = safeText(body.dateTime, 80) || '일시 미정';
   const venue = safeText(body.venue, 80) || '상영관 미정';
 
@@ -113,7 +114,7 @@ function buildMessage(body) {
     `${name} 님 예약이 완료되었습니다.`,
     `예약번호: ${reservationId}`,
     `영화명: ${movieTitle}`,
-    `신청인원: ${people}`,
+    `좌석/인원: ${seatPeople}`,
     `일시: ${dateTime}`,
     `장소: ${venue}`,
     '상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요.'

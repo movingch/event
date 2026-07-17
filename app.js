@@ -2099,7 +2099,7 @@ function adminReservations() {
           <p>상영관을 기준으로 신청자 명단을 확인하고, 현장 참석과 신청 정보를 관리할 수 있습니다.</p>
         </div>
         <div class="cta-row">
-          <button class="btn btn-primary" type="button" data-action="toggle-bulk-sms">예약문자전송하기</button>
+          <button class="btn btn-primary" type="button" data-action="toggle-bulk-sms">문자전송하기</button>
           <button class="btn btn-dark" type="button" data-action="print">인쇄용 명단</button>
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 CSV</button>
         </div>
@@ -2120,7 +2120,8 @@ function adminReservations() {
           </div>
           <div class="bulk-sms-actions">
             <button class="btn btn-outline btn-small" type="button" data-action="select-visible-reservations">현재 목록 전체선택</button>
-            <button class="btn btn-outline btn-small" type="button" data-action="clear-bulk-sms-selection">선택해제</button>
+            <button class="btn btn-outline btn-small" type="button" data-action="deselect-visible-reservations">현재 목록 전체해제</button>
+            <button class="btn btn-outline btn-small" type="button" data-action="clear-bulk-sms-selection">전체해제</button>
             <button class="btn btn-dark btn-small" type="button" data-action="bulk-reservation-sms">예약관련문자 보내기</button>
             <button class="btn btn-primary btn-small" type="button" data-action="open-bulk-notice-sms">별도안내문자 보내기</button>
           </div>
@@ -2680,6 +2681,12 @@ function selectVisibleReservationsForSms() {
   toast("현재 보이는 신청자를 선택했습니다.");
 }
 
+function deselectVisibleReservationsForSms() {
+  visibleReservationIdsForSms().forEach((id) => selectedReservationSmsIds.delete(id));
+  updateReservationTable();
+  toast("현재 보이는 신청자의 문자 선택을 해제했습니다.");
+}
+
 function clearBulkSmsSelection() {
   selectedReservationSmsIds = new Set();
   updateReservationTable();
@@ -2823,6 +2830,10 @@ function reservationSmsPeople(reservation) {
   return `${Math.max(1, Number(reservation.seats || 1))}명`;
 }
 
+function reservationSmsSeatPeople(reservation, screening) {
+  return `${reservationSeatLabel(reservation, screening)} / ${reservationSmsPeople(reservation)}`;
+}
+
 function reservationConfirmationMessage(reservation, screening, status) {
   const statusLabel = status || reservation.status || "확정";
   const movieTitle = cleanMovieTitle(screening?.title);
@@ -2833,7 +2844,7 @@ function reservationConfirmationMessage(reservation, screening, status) {
     `${reservation.name} 님 ${statusText}`,
     `예약번호: ${reservationDisplayNumber(reservation, screening)}`,
     `영화명: ${movieTitle}`,
-    `신청인원: ${reservationSmsPeople(reservation)}`,
+    `좌석/인원: ${reservationSmsSeatPeople(reservation, screening)}`,
     `일시: ${time}`,
     `장소: ${venue}`,
     "상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요."
@@ -2852,6 +2863,7 @@ function reservationSmsPayload(reservation, screening) {
     phone: normalizePhoneForSms(reservation.phone),
     movieTitle: cleanMovieTitle(screening?.title),
     people: reservationSmsPeople(reservation),
+    seatPeople: reservationSmsSeatPeople(reservation, screening),
     dateTime: formatSmsDateTime(screening?.startTime),
     venue: screening?.venue || "상영관 미정"
   };
@@ -3643,6 +3655,7 @@ document.addEventListener("click", (event) => {
   }
   if (action === "toggle-bulk-sms") setBulkSmsMode(!reservationSmsSelectMode);
   if (action === "select-visible-reservations") selectVisibleReservationsForSms();
+  if (action === "deselect-visible-reservations") deselectVisibleReservationsForSms();
   if (action === "clear-bulk-sms-selection") clearBulkSmsSelection();
   if (action === "bulk-reservation-sms") bulkSendReservationSms();
   if (action === "open-bulk-notice-sms") openBulkNoticeSmsModal();
