@@ -2569,3 +2569,130 @@ tr:last-child td { border-bottom: 0; }
     font-size: 12px;
   }
 }
+
+/* v44: 포스터 안 영상 위치를 위쪽으로 이동 + 진행상황 2단 구성 */
+.opening-poster-video {
+  place-items: start center;
+  padding: clamp(22px, 5.2vw, 74px) clamp(14px, 3vw, 30px) clamp(62px, 7vw, 92px);
+  box-sizing: border-box;
+}
+.opening-poster-video-player {
+  width: min(82%, 560px);
+  margin-top: 0;
+}
+@media (max-width: 640px) {
+  .opening-poster-video {
+    padding-top: 24px;
+    padding-bottom: 62px;
+  }
+  .opening-poster-video-player {
+    width: 92%;
+  }
+}
+
+.festival-progress-split {
+  display: grid;
+  grid-template-columns: minmax(0, .96fr) minmax(0, 1.04fr);
+  gap: 16px;
+  align-items: stretch;
+}
+.festival-progress-donation-panel,
+.festival-progress-chart-panel {
+  min-width: 0;
+  border-radius: 24px;
+  border: 1px solid rgba(111,100,88,.14);
+  background: rgba(255,255,255,.66);
+  padding: clamp(16px, 2.2vw, 22px);
+}
+.festival-progress-donation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(190,65,49,.13), transparent 34%),
+    rgba(255,255,255,.7);
+}
+.donation-panel-kicker {
+  width: fit-content;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(190,65,49,.11);
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: -0.035em;
+}
+.festival-progress-donation-panel h3 {
+  margin: 0;
+  font-size: clamp(22px, 3vw, 34px);
+  line-height: 1.08;
+  letter-spacing: -0.075em;
+}
+.festival-progress-donation-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.58;
+  font-weight: 700;
+}
+.festival-progress-metrics.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: auto;
+}
+.festival-progress-metrics.compact .festival-progress-metric {
+  padding: 12px;
+}
+.festival-progress-metrics.compact .festival-progress-metric strong {
+  font-size: clamp(25px, 3.2vw, 38px);
+}
+.donation-panel-btn {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.festival-progress-chart-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.chart-panel-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid rgba(111,100,88,.13);
+  padding-bottom: 10px;
+}
+.chart-panel-heading strong {
+  font-size: 18px;
+  font-weight: 950;
+  letter-spacing: -0.05em;
+}
+.chart-panel-heading span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.festival-progress-chart-panel .festival-progress-chart {
+  gap: 12px;
+}
+.festival-progress-chart-panel .festival-progress-row {
+  grid-template-columns: minmax(130px, .9fr) minmax(140px, 1.35fr) minmax(68px, auto);
+}
+@media (max-width: 980px) {
+  .festival-progress-split {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .festival-progress-metrics.compact {
+    grid-template-columns: 1fr;
+  }
+  .festival-progress-chart-panel .festival-progress-row {
+    grid-template-columns: 1fr;
+  }
+  .chart-panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

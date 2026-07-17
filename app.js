@@ -983,42 +983,49 @@ function renderFestivalProgressWidget() {
   const maxApplicants = Math.max(1, ...rows.map((row) => row.applicants));
   const visibleRows = rows.slice().sort((a, b) => b.applicants - a.applicants || a.label.localeCompare(b.label)).slice(0, 8);
   const overallRate = totalCapacity ? Math.min(100, Math.round((totalApplicants / totalCapacity) * 100)) : 0;
+  const chartMarkup = visibleRows.map((row) => {
+    const width = Math.max(4, Math.round((row.applicants / maxApplicants) * 100));
+    const rate = row.capacity ? Math.round((row.applicants / row.capacity) * 100) : 0;
+    return `
+      <div class="festival-progress-row">
+        <div class="festival-progress-name">${esc(row.label)}</div>
+        <div class="festival-progress-track"><span style="width:${width}%"></span></div>
+        <div class="festival-progress-count"><strong>${row.applicants}</strong><small>${row.capacity ? `/${row.capacity}명 · ${rate}%` : "명"}</small></div>
+      </div>
+    `;
+  }).join("");
   return `
     <article class="card festival-progress-card" aria-label="영화제 진행 상황">
       <div class="section-title compact-title">
         <div>
           <h2>영화제 진행 상황</h2>
-          <p>현재 신청 흐름과 영화제까지 남은 시간을 한눈에 확인합니다.</p>
+          <p>후원 안내와 현재 신청 흐름을 두 칸으로 나누어 확인합니다.</p>
         </div>
         <span class="d-day-badge">${esc(festivalDdayLabel(opening))}</span>
       </div>
 
-      <div class="festival-progress-metrics">
-        <div class="festival-progress-metric"><span>상영 영화 수</span><strong>${screenings.length}</strong><small>개 상영</small></div>
-        <div class="festival-progress-metric"><span>전체 신청자 수</span><strong>${totalApplicants}</strong><small>${totalApplications}건 접수</small></div>
-        <div class="festival-progress-metric"><span>전체 신청률</span><strong>${overallRate}%</strong><small>정원 ${totalCapacity}명 기준</small></div>
-      </div>
-
-      <div class="festival-progress-chart" aria-label="영화별 신청자 수 그래프">
-        ${visibleRows.map((row) => {
-          const width = Math.max(4, Math.round((row.applicants / maxApplicants) * 100));
-          const rate = row.capacity ? Math.round((row.applicants / row.capacity) * 100) : 0;
-          return `
-            <div class="festival-progress-row">
-              <div class="festival-progress-name">${esc(row.label)}</div>
-              <div class="festival-progress-track"><span style="width:${width}%"></span></div>
-              <div class="festival-progress-count"><strong>${row.applicants}</strong><small>${row.capacity ? `/${row.capacity}명 · ${rate}%` : "명"}</small></div>
-            </div>
-          `;
-        }).join("")}
-      </div>
-
-      <div class="progress-donation-callout">
-        <div>
-          <strong>주민이 직접 만드는 영화제를 함께 지켜주세요.</strong>
+      <div class="festival-progress-split">
+        <section class="festival-progress-donation-panel" aria-label="후원 안내 요약">
+          <div class="donation-panel-kicker">주민주도영화제 후원</div>
+          <h3>주민이 직접 만드는 영화제를 함께 지켜주세요.</h3>
           <p>후원은 상영 준비, 공간 운영, 장비와 홍보물 제작, 주민 창작자와 스태프의 활동을 이어가는 힘이 됩니다.</p>
-        </div>
-        <a class="btn btn-primary" href="#/donate">후원하기</a>
+          <div class="festival-progress-metrics compact">
+            <div class="festival-progress-metric"><span>상영 영화 수</span><strong>${screenings.length}</strong><small>개 상영</small></div>
+            <div class="festival-progress-metric"><span>전체 신청자 수</span><strong>${totalApplicants}</strong><small>${totalApplications}건 접수</small></div>
+            <div class="festival-progress-metric"><span>전체 신청률</span><strong>${overallRate}%</strong><small>정원 ${totalCapacity}명 기준</small></div>
+          </div>
+          <a class="btn btn-primary donation-panel-btn" href="#/donate">후원하기</a>
+        </section>
+
+        <section class="festival-progress-chart-panel" aria-label="상영관 영화별 신청 현황">
+          <div class="chart-panel-heading">
+            <strong>상영관 영화별 신청 현황</strong>
+            <span>신청자 수 기준</span>
+          </div>
+          <div class="festival-progress-chart" aria-label="영화별 신청자 수 그래프">
+            ${chartMarkup}
+          </div>
+        </section>
       </div>
     </article>
   `;
