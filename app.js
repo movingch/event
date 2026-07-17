@@ -1696,7 +1696,6 @@ function adminOverview() {
           <p>영화별 신청, 참석, 취소 인원을 함께 확인하세요.</p>
         </div>
         <button class="btn btn-outline" type="button" data-action="export-stats">통계 엑셀저장</button>
-        <button class="btn btn-outline" type="button" data-action="sync-drive-stats">구글드라이브 저장</button>
       </div>
       ${screeningTable(sortedScreenings(), { compact: false })}
     </section>
@@ -1980,7 +1979,6 @@ function adminOpening() {
           <button class="btn btn-dark" type="submit">개막작 설정 저장</button>
           <button class="btn btn-outline" type="button" data-action="view-roster" data-id="${esc(opening.id)}">개막작 명단·참석</button>
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
-          <button class="btn btn-outline" type="button" data-action="sync-drive-reservations">구글드라이브 저장</button>
         </div>
       </form>
     </section>
@@ -2254,9 +2252,7 @@ function adminStats() {
       <div class="cta-row export-action-row">
         <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
         <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
-        <button class="btn btn-primary" type="button" data-action="drive-sync-settings">구글드라이브 연동</button>
       </div>
-      <p class="help drive-sync-inline-note">구글드라이브 연동 URL을 설정하면 자동저장이 바로 켜집니다. 마지막 저장: ${esc(formatDriveLastSyncTime())}</p>
     </section>
   `;
 }
@@ -2379,10 +2375,11 @@ function adminBackup() {
             <span class="muted">마지막 저장: ${esc(formatDriveLastSyncTime())}</span>
           </div>
           <div class="form-actions">
+            <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
+            <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
             <button class="btn btn-primary" type="button" data-action="drive-sync-settings">구글드라이브 연동</button>
-            <button class="btn btn-outline" type="button" data-action="sync-drive-all">지금 저장 확인</button>
           </div>
-          <span class="help">수동 저장은 엑셀저장만 사용하고, 구글드라이브 연동은 자동저장 방식으로 작동합니다.</span>
+          <span class="help">구글드라이브 연동은 URL 설정 즉시 자동저장이 켜지고, 데이터 변경 시와 관리자 화면 1분 주기로 자동 저장됩니다. 수동 저장은 엑셀저장만 사용합니다.</span>
         </div>
         <div class="card compact">
           <h3>백업 다운로드</h3>
@@ -3776,6 +3773,22 @@ function promptDriveWebhookUrl() {
   return trimmed;
 }
 
+
+function encodeGoogleDrivePayload(payload) {
+  return `payload=${encodeURIComponent(JSON.stringify(payload))}`;
+}
+
+async function postGoogleDrivePayload(url, payload) {
+  // Apps Script 웹앱은 브라우저 CORS 응답을 제대로 돌려주지 않으므로 no-cors로 보냅니다.
+  // application/x-www-form-urlencoded 형식으로 보내면 e.parameter.payload와 e.postData.contents 양쪽에서 안정적으로 읽을 수 있습니다.
+  return fetch(url, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body: encodeGoogleDrivePayload(payload)
+  });
+}
+
 async function syncRowsToGoogleDrive(type, options = {}) {
   const labels = {
     reservations: "신청자현황",
@@ -3809,12 +3822,7 @@ async function syncRowsToGoogleDrive(type, options = {}) {
     csv: rowsToCsv(rows).replace(/^\ufeff/, "")
   };
   try {
-    await fetch(url, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
-    });
+    await postGoogleDrivePayload(url, payload);
     if (!options.silent) toast(`${labels[type]}을 구글드라이브 저장 요청으로 보냈습니다.`);
     return true;
   } catch (error) {
@@ -3834,12 +3842,7 @@ async function syncGoogleDriveCore(options = {}) {
   }
   const payload = buildGoogleDrivePayload(options.reason || "auto");
   try {
-    await fetch(url, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
-    });
+    await postGoogleDrivePayload(url, payload);
     setDriveLastSyncNow();
     if (!silent) {
       toast("신청자현황, 통계, 상영관영화를 구글시트 저장 요청으로 보냈습니다.");
@@ -4040,10 +4043,10 @@ document.addEventListener("click", (event) => {
   if (action === "export-reservations") exportReservations();
   if (action === "export-screenings") exportScreenings();
   if (action === "export-stats") exportStats();
-  if (action === "sync-drive-reservations") syncRowsToGoogleDrive("reservations");
-  if (action === "sync-drive-stats") syncRowsToGoogleDrive("stats");
-  if (action === "sync-drive-screenings") syncRowsToGoogleDrive("screenings");
-  if (action === "sync-drive-all") syncGoogleDriveCore({ silent: false, prompt: true });
+  if (action === "sync-drive-reservations") syncGoogleDriveCore({ silent: false, prompt: true, reason: "manual-reservations" });
+  if (action === "sync-drive-stats") syncGoogleDriveCore({ silent: false, prompt: true, reason: "manual-stats" });
+  if (action === "sync-drive-screenings") syncGoogleDriveCore({ silent: false, prompt: true, reason: "manual-screenings" });
+  if (action === "sync-drive-all") syncGoogleDriveCore({ silent: false, prompt: true, reason: "manual-all" });
   if (action === "drive-sync-settings") openGoogleDriveSyncSetup();
   if (action === "set-drive-webhook") { const url = promptDriveWebhookUrl(); if (url) syncGoogleDriveCore({ silent: false, prompt: false }); render(); }
   if (action === "toggle-drive-autosync") toggleGoogleDriveAutoSync();

@@ -14,3 +14,7 @@
 - site.webmanifest
 
 ZIP 파일 자체나 v57_min_upload 폴더 자체를 올리지 말고, 폴더 안의 파일/폴더를 전체 선택해서 올리세요.
+
+
+## v59 확인
+Apps Script는 반드시 GOOGLE_APPS_SCRIPT_CODE_v59.gs로 교체하고 새 버전 배포를 해야 데이터가 들어갑니다.
