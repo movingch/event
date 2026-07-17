@@ -891,7 +891,7 @@ function appHeader() {
         <a href="#/apply">영화 신청</a>
         <a href="#/donate">후원하기</a>
         <a href="#/staff" class="staff-link utility-link">STAFF</a>
-        <a href="#/admin" class="primary-link admin-link utility-link">ADMIN</a>
+        <a href="/admin.html?v=72#/admin" class="primary-link admin-link utility-link" data-admin-entry="true">ADMIN</a>
       </nav>
     </header>
   `;
@@ -2429,7 +2429,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=70">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=72">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -2473,7 +2473,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=70">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=72">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -4133,6 +4133,20 @@ function todayFile() {
   return new Date().toISOString().slice(0, 10).replaceAll("-", "");
 }
 
+
+function openAdminEntryHard(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  try {
+    window.location.href = "/admin.html?v=72#/admin";
+  } catch (error) {
+    window.location.hash = "#/admin";
+    render();
+  }
+}
+
 function goAdminTab(tab) {
   if (!isAdminAuthed()) {
     window.location.hash = "#/admin";
@@ -4144,6 +4158,21 @@ function goAdminTab(tab) {
   if (window.location.hash === nextHash) render();
   else window.location.hash = nextHash;
 }
+
+
+document.addEventListener("click", (event) => {
+  const adminEntry = event.target.closest?.("[data-admin-entry], .admin-link");
+  if (adminEntry) {
+    openAdminEntryHard(event);
+  }
+}, true);
+
+document.addEventListener("touchend", (event) => {
+  const adminEntry = event.target.closest?.("[data-admin-entry], .admin-link");
+  if (adminEntry) {
+    openAdminEntryHard(event);
+  }
+}, { capture: true, passive: false });
 
 document.addEventListener("click", (event) => {
   const row = event.target.closest("[data-reservation-row]");
