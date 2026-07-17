@@ -628,6 +628,31 @@ function renderVideoPlayer(screening, label = "개막식 소개영상") {
   `;
 }
 
+function renderOpeningPosterVideo(screening, poster) {
+  const videoUrl = openingVideoUrl(screening);
+  const primaryEmbed = youtubeEmbedAutoplayUrl(videoUrl || openingVideoEmbed(screening)) || OPENING_VIDEO_EMBED;
+  const noCookieEmbed = youtubeNoCookieEmbedUrl(videoUrl || openingVideoEmbed(screening)) || primaryEmbed;
+  return `
+    <figure class="opening-poster-video" aria-label="개막식 영화 얼굴 포스터 안 소개영상">
+      <img class="opening-poster-video-bg" src="${esc(poster)}" alt="개막식 영화 얼굴 포스터" loading="eager" />
+      <div class="opening-poster-video-shade" aria-hidden="true"></div>
+      <div class="opening-poster-video-player" data-video-wrapper data-primary-src="${esc(primaryEmbed)}" data-alt-src="${esc(noCookieEmbed)}">
+        <iframe
+          width="1496"
+          height="672"
+          src="${esc(primaryEmbed)}"
+          title="[얼굴] 메인 예고편"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allowfullscreen
+          loading="eager"></iframe>
+      </div>
+      <figcaption>개막식 영화 &lt;얼굴&gt; · 박정민 배우 참석</figcaption>
+    </figure>
+  `;
+}
+
 function openingPosterSrc(screening = getOpeningScreening()) {
   return screening?.posterSrc || OPENING_POSTER_SRC;
 }
@@ -1003,7 +1028,6 @@ function renderOpeningHome(opening) {
   const phase = openingPhaseInfo(opening);
   const stats = openingStats(opening);
   const poster = openingPosterSrc(opening);
-  const videoUrl = openingVideoUrl(opening);
   const regularPreview = sortedScreenings().filter((screening) => !isOpeningScreening(screening));
   const openingDateLine = `${formatDateTime(opening.startTime)} · ${opening.venue}`;
   return `
@@ -1029,25 +1053,13 @@ function renderOpeningHome(opening) {
         </div>
         <p class="opening-home-note">${esc(EARLYBIRD_MESSAGE)} · 전체 잔여 ${stats.remainingTotal}석</p>
       </div>
-    </section>
-
-    <section class="opening-media-grid" id="opening-video">
-      <article class="card opening-media-card opening-video-poster-card" aria-label="개막식 소개영상과 포스터">
-        <div class="opening-video-poster-grid">
-          ${renderVideoPlayer(opening, "개막식 소개영상")}
-          <figure class="opening-poster-mini">
-            <img src="${esc(poster)}" alt="개막식 영화 얼굴 포스터" loading="eager" />
-          </figure>
-        </div>
-      </article>
-
-      ${renderFestivalProgressWidget()}
+      ${renderOpeningPosterVideo(opening, poster)}
     </section>
 
     <section class="section">
       <div class="section-title">
         <div>
-          <h2>영화관람신청하기</h2>
+          <h2>전체 영화관람 신청하기</h2>
           <p>개막식 이후에도 9월 13일까지 마을 곳곳에서 상영이 이어집니다.</p>
         </div>
         <a class="chip-link" href="#/apply">전체 보기</a>
@@ -1056,9 +1068,12 @@ function renderOpeningHome(opening) {
         ${regularPreview.map(screeningCard).join("")}
       </div>
     </section>
+
+    <section class="opening-progress-section">
+      ${renderFestivalProgressWidget()}
+    </section>
   `;
 }
-
 
 function openingInlineCard() {
   const opening = getOpeningScreening();
