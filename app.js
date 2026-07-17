@@ -1008,12 +1008,9 @@ function renderFestivalProgressWidget() {
         <section class="festival-progress-donation-panel" aria-label="후원 안내 요약">
           <div class="donation-panel-kicker">주민주도영화제 후원</div>
           <h3>주민이 직접 만드는 영화제를 함께 지켜주세요.</h3>
+          <p>머내마을영화제는 우리 동네 주민들이 직접 감독, 기획, 제작, 상영까지 함께 만들어가는 순수 주민주도영화제입니다.</p>
           <p>후원은 상영 준비, 공간 운영, 장비와 홍보물 제작, 주민 창작자와 스태프의 활동을 이어가는 힘이 됩니다.</p>
-          <div class="festival-progress-metrics compact">
-            <div class="festival-progress-metric"><span>상영 영화 수</span><strong>${screenings.length}</strong><small>개 상영</small></div>
-            <div class="festival-progress-metric"><span>전체 신청자 수</span><strong>${totalApplicants}</strong><small>${totalApplications}건 접수</small></div>
-            <div class="festival-progress-metric"><span>전체 신청률</span><strong>${overallRate}%</strong><small>정원 ${totalCapacity}명 기준</small></div>
-          </div>
+          <p>이 귀한 일에 작은 후원의 손길을 보태주세요.</p>
           <a class="btn btn-primary donation-panel-btn" href="#/donate">후원하기</a>
         </section>
 
