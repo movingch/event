@@ -3779,52 +3779,20 @@ function encodeGoogleDrivePayload(payload) {
 }
 
 async function postGoogleDrivePayload(url, payload) {
-  // v62: Apps Script에서 raw body가 0으로 들어오는 환경을 피하기 위해
-  // hidden form POST 방식으로 payload 필드를 전송합니다.
-  // Apps Script는 e.parameter.payload로 안정적으로 읽습니다.
-  const encoded = encodeGoogleDrivePayload(payload);
-  return new Promise((resolve) => {
-    const iframeName = `drive_sync_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const iframe = document.createElement("iframe");
-    iframe.name = iframeName;
-    iframe.style.display = "none";
-
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = url;
-    form.target = iframeName;
-    form.enctype = "application/x-www-form-urlencoded";
-    form.style.display = "none";
-
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = "payload";
-    input.value = encoded;
-    form.appendChild(input);
-
-    const cleanup = () => {
-      window.setTimeout(() => {
-        if (form.parentNode) form.parentNode.removeChild(form);
-        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      }, 500);
-    };
-
-    iframe.addEventListener("load", () => {
-      cleanup();
-      resolve({ ok: true, transport: "form-post" });
-    }, { once: true });
-
-    document.body.appendChild(iframe);
-    document.body.appendChild(form);
-    form.submit();
-
-    // 일부 모바일 브라우저는 iframe load 이벤트를 늦게 보내거나 차단하므로
-    // 요청은 보낸 것으로 처리하고 화면 흐름을 막지 않습니다.
-    window.setTimeout(() => {
-      cleanup();
-      resolve({ ok: true, transport: "form-post-timeout" });
-    }, 3500);
+  // v63: 브라우저에서 Apps Script로 직접 보내면 본문이 비는 사례가 있어
+  // 같은 도메인의 Vercel API가 Apps Script로 전달하는 서버 프록시 방식을 기본으로 사용합니다.
+  // 이 방식은 응답과 건수도 확인할 수 있어 운영 중 원인 파악이 훨씬 쉽습니다.
+  const response = await fetch("/api/google-drive-sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ webhookUrl: url, payload })
   });
+  let data = null;
+  try { data = await response.json(); } catch (error) {}
+  if (!response.ok || !data?.ok) {
+    throw new Error(data?.message || "구글드라이브 저장 요청에 실패했습니다.");
+  }
+  return data;
 }
 
 async function syncRowsToGoogleDrive(type, options = {}) {
@@ -3870,6 +3838,19 @@ async function syncRowsToGoogleDrive(type, options = {}) {
   }
 }
 
+function googleDrivePayloadCounts(payload) {
+  return {
+    applicants: Array.isArray(payload?.applicants) ? payload.applicants.length : 0,
+    stats: Array.isArray(payload?.stats) ? payload.stats.length : 0,
+    screenings: Array.isArray(payload?.screenings) ? payload.screenings.length : 0
+  };
+}
+
+function googleDriveCountsLabel(payload) {
+  const counts = googleDrivePayloadCounts(payload);
+  return `신청자 ${counts.applicants}명 · 통계 ${counts.stats}건 · 상영정보 ${counts.screenings}건`;
+}
+
 async function syncGoogleDriveCore(options = {}) {
   const silent = options.silent === true;
   const prompt = options.prompt !== false;
@@ -3879,11 +3860,17 @@ async function syncGoogleDriveCore(options = {}) {
     return false;
   }
   const payload = buildGoogleDrivePayload(options.reason || "auto");
+  const counts = googleDrivePayloadCounts(payload);
+  if (!silent && counts.applicants === 0) {
+    const ok = confirm(`현재 이 브라우저에서 전송할 신청자가 0명입니다.\n통계 ${counts.stats}건, 상영정보 ${counts.screenings}건만 구글시트로 보낼까요?\n\n신청자 명단이 화면에 보이는 브라우저에서 연동해야 신청자현황이 저장됩니다.`);
+    if (!ok) return false;
+  }
   try {
-    await postGoogleDrivePayload(url, payload);
+    const result = await postGoogleDrivePayload(url, payload);
     setDriveLastSyncNow();
     if (!silent) {
-      toast("신청자현황, 통계, 상영관영화를 구글시트 저장 요청으로 보냈습니다.");
+      const sent = result?.counts || counts;
+      toast(`구글시트 저장 요청 완료: 신청자 ${sent.applicantsCount ?? sent.applicants}명 · 통계 ${sent.statsCount ?? sent.stats}건 · 상영정보 ${sent.screeningsCount ?? sent.screenings}건`);
       window.setTimeout(render, 0);
     }
     return true;
@@ -3916,7 +3903,11 @@ function openGoogleDriveSyncSetup() {
     "",
     existing ? "현재 URL이 설정되어 있습니다. 변경하려면 새 URL을 입력하세요." : "아직 URL이 없습니다. 웹앱 URL을 입력하세요."
   ].join("\n");
-  const url = prompt(message, existing);
+  const previewPayload = buildGoogleDrivePayload("preview");
+  const previewMessage = `${message}
+
+현재 전송 예정 데이터: ${googleDriveCountsLabel(previewPayload)}`;
+  const url = prompt(previewMessage, existing);
   if (url === null) return;
   const trimmed = url.trim();
   if (!trimmed) return toast("구글드라이브 연동 URL이 입력되지 않았습니다.");
