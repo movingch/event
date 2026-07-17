@@ -21,7 +21,7 @@
 <main>
   <div class="top">
     <div><h1>백업·구글시트 연동</h1><p>관리자 메뉴 버튼이 작동하지 않아도 이 별도 페이지에서 바로 저장합니다.</p></div>
-    <a class="btn" href="/?v=70#/admin">관리자 화면</a>
+    <a class="btn" href="/?v=69#/admin">관리자 화면</a>
   </div>
 
   <section class="card">
@@ -61,7 +61,6 @@
 const STORAGE_KEY = 'munaeFilmFest9.webapp.v1';
 const URL_KEY = 'munae9DriveWebhookUrl';
 const LAST_KEY = 'munae9DriveLastSyncAt';
-const AUTO_KEY = 'munae9DriveAutoSyncEnabled';
 const FESTIVAL = '제9회 머내마을영화제';
 function $(id){return document.getElementById(id)}
 function esc(v){return String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;')}
@@ -82,8 +81,8 @@ function buildPayload(){const state=readState(); return {festival:FESTIVAL,mode:
 function toCsv(rows){if(!rows.length)return ''; const headers=Object.keys(rows[0]); const cell=v=>'"'+String(v??'').replaceAll('"','""')+'"'; return '\ufeff'+[headers.map(cell).join(','),...rows.map(r=>headers.map(h=>cell(r[h])).join(','))].join('\n')}
 function download(name,text,type){const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function refresh(){const payload=buildPayload(); $('applicantsCount').textContent=payload.applicants.length; $('statsCount').textContent=payload.stats.length; $('screeningsCount').textContent=payload.screenings.length; $('webhookUrl').value=localStorage.getItem(URL_KEY)||''; const raw=readState(); $('storageHelp').innerHTML = payload.applicants.length ? '<span class="ok">신청자 데이터가 이 브라우저에 있습니다.</span>' : '<span class="warn">신청자 데이터가 0명입니다. 실제 신청자 명단이 보이는 같은 브라우저에서 열어야 합니다.</span>'; $('preview').innerHTML='<table><thead><tr><th>예약번호</th><th>신청자</th><th>영화</th><th>인원</th></tr></thead><tbody>'+payload.applicants.slice(0,10).map(r=>`<tr><td>${esc(r.reservationNumber)}</td><td>${esc(r.name)}</td><td>${esc(r.movieTitle)}</td><td>${esc(r.count)}</td></tr>`).join('')+'</tbody></table>'}
-async function sync(){const url=$('webhookUrl').value.trim(); if(!url || !/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(url)){log('Apps Script /exec URL을 정확히 입력해 주세요.'); return} const payload=buildPayload(); if(payload.applicants.length===0 && !confirm('신청자 0명으로 보입니다. 그래도 구글시트에 저장할까요?'))return; localStorage.setItem(URL_KEY,url); localStorage.setItem(AUTO_KEY,'true'); log('저장 요청 중...\n전송 예정: 신청자 '+payload.applicants.length+'명, 통계 '+payload.stats.length+'건, 상영정보 '+payload.screenings.length+'건'); try{const res=await fetch('/api/google-drive-sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({webhookUrl:url,payload})}); const data=await res.json().catch(()=>({})); if(!res.ok||data.ok===false) throw new Error(data.message||('HTTP '+res.status)); localStorage.setItem(LAST_KEY,new Date().toISOString()); log('완료되었습니다.\n전송: 신청자 '+payload.applicants.length+'명, 통계 '+payload.stats.length+'건, 상영정보 '+payload.screenings.length+'건\n\n응답:\n'+JSON.stringify(data,null,2)); refresh()}catch(e){log('실패했습니다.\n'+(e.message||String(e))+'\n\nURL과 Apps Script 새 버전 배포 상태를 확인해 주세요.')}}
-$('syncBtn').onclick=sync; $('jsonBtn').onclick=()=>download('munae9_backup_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(readState(),null,2),'application/json;charset=utf-8'); $('appCsvBtn').onclick=()=>download('munae9_applicants.csv',toCsv(buildPayload().applicants),'text/csv;charset=utf-8'); $('statsCsvBtn').onclick=()=>download('munae9_stats.csv',toCsv(buildPayload().stats),'text/csv;charset=utf-8'); $('refreshBtn').onclick=refresh; $('clearUrlBtn').onclick=()=>{localStorage.removeItem(URL_KEY);localStorage.setItem(AUTO_KEY,'false');refresh();log('URL을 초기화했습니다. 자동 동기화도 꺼졌습니다.')}; refresh();
+async function sync(){const url=$('webhookUrl').value.trim(); if(!url || !/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(url)){log('Apps Script /exec URL을 정확히 입력해 주세요.'); return} const payload=buildPayload(); if(payload.applicants.length===0 && !confirm('신청자 0명으로 보입니다. 그래도 구글시트에 저장할까요?'))return; localStorage.setItem(URL_KEY,url); log('저장 요청 중...\n전송 예정: 신청자 '+payload.applicants.length+'명, 통계 '+payload.stats.length+'건, 상영정보 '+payload.screenings.length+'건'); try{const res=await fetch('/api/google-drive-sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({webhookUrl:url,payload})}); const data=await res.json().catch(()=>({})); if(!res.ok||data.ok===false) throw new Error(data.message||('HTTP '+res.status)); localStorage.setItem(LAST_KEY,new Date().toISOString()); log('완료되었습니다.\n전송: 신청자 '+payload.applicants.length+'명, 통계 '+payload.stats.length+'건, 상영정보 '+payload.screenings.length+'건\n\n응답:\n'+JSON.stringify(data,null,2)); refresh()}catch(e){log('실패했습니다.\n'+(e.message||String(e))+'\n\nURL과 Apps Script 새 버전 배포 상태를 확인해 주세요.')}}
+$('syncBtn').onclick=sync; $('jsonBtn').onclick=()=>download('munae9_backup_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(readState(),null,2),'application/json;charset=utf-8'); $('appCsvBtn').onclick=()=>download('munae9_applicants.csv',toCsv(buildPayload().applicants),'text/csv;charset=utf-8'); $('statsCsvBtn').onclick=()=>download('munae9_stats.csv',toCsv(buildPayload().stats),'text/csv;charset=utf-8'); $('refreshBtn').onclick=refresh; $('clearUrlBtn').onclick=()=>{localStorage.removeItem(URL_KEY);refresh();log('URL을 초기화했습니다.')}; refresh();
 </script>
 </body>
 </html>

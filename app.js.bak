@@ -891,6 +891,7 @@ function appHeader() {
         <a href="#/apply">영화 신청</a>
         <a href="#/donate">후원하기</a>
         <a href="#/staff" class="staff-link utility-link">STAFF</a>
+        <a href="/backup.html?v=69" class="primary-link admin-link utility-link">백업 바로가기</a>
         <a href="#/admin" class="primary-link admin-link utility-link">ADMIN</a>
       </nav>
     </header>
@@ -2381,7 +2382,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=70">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=69">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -2425,7 +2426,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=70">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=69">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -3311,20 +3312,13 @@ function submitBooking(form) {
 }
 
 function submitAdminLogin(form) {
-  const pin = String(new FormData(form).get("pin") || "").trim();
-  const currentPin = String(state.adminPin || ADMIN_PIN);
-  // 운영 중 비밀번호 저장값이 꼬인 경우에도 기본 관리자 PIN 0909로는 반드시 로그인되게 합니다.
-  if (pin === currentPin || pin === String(ADMIN_PIN)) {
-    if (!state.adminPin) {
-      state.adminPin = String(ADMIN_PIN);
-      persist({ autoSync: false });
-    }
+  const pin = new FormData(form).get("pin");
+  if (pin === String(state.adminPin || ADMIN_PIN)) {
     sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
     toast("관리자 대시보드에 로그인했습니다.");
-    if (!window.location.hash.startsWith("#/admin")) window.location.hash = "#/admin";
-    else render();
+    render();
   } else {
-    toast("PIN이 맞지 않습니다. 임시 관리자 비밀번호 0909도 사용할 수 있습니다.");
+    toast("PIN이 맞지 않습니다.");
   }
 }
 
@@ -3799,17 +3793,11 @@ function getDriveWebhookUrl() {
 }
 
 function setDriveWebhookUrl(url) {
-  const trimmed = String(url || "").trim();
-  if (trimmed) {
-    localStorage.setItem(DRIVE_WEBHOOK_STORAGE_KEY, trimmed);
-    localStorage.setItem(DRIVE_AUTO_SYNC_STORAGE_KEY, "true");
-  }
+  if (url) localStorage.setItem(DRIVE_WEBHOOK_STORAGE_KEY, url);
 }
 
 function isGoogleDriveAutoSyncEnabled() {
-  const flag = localStorage.getItem(DRIVE_AUTO_SYNC_STORAGE_KEY);
-  if (flag === "false") return false;
-  return flag === "true" || Boolean(getDriveWebhookUrl());
+  return localStorage.getItem(DRIVE_AUTO_SYNC_STORAGE_KEY) === "true";
 }
 
 function setGoogleDriveAutoSyncEnabled(enabled) {
