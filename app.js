@@ -996,14 +996,6 @@ function renderFestivalProgressWidget() {
   }).join("");
   return `
     <article class="card festival-progress-card" aria-label="영화제 진행 상황">
-      <div class="section-title compact-title">
-        <div>
-          <h2>영화제 진행 상황</h2>
-          <p>후원 안내와 현재 신청 흐름을 두 칸으로 나누어 확인합니다.</p>
-        </div>
-        <span class="d-day-badge">${esc(festivalDdayLabel(opening))}</span>
-      </div>
-
       <div class="festival-progress-split">
         <section class="festival-progress-donation-panel" aria-label="후원 안내 요약">
           <div class="donation-panel-kicker">주민주도영화제 후원</div>
@@ -1014,10 +1006,13 @@ function renderFestivalProgressWidget() {
           <a class="btn btn-primary donation-panel-btn" href="#/donate">후원하기</a>
         </section>
 
-        <section class="festival-progress-chart-panel" aria-label="상영관 영화별 신청 현황">
-          <div class="chart-panel-heading">
-            <strong>상영관 영화별 신청 현황</strong>
-            <span>신청자 수 기준</span>
+        <section class="festival-progress-chart-panel" aria-label="영화제 진행 상황과 상영관 영화별 신청 현황">
+          <div class="chart-panel-heading progress-heading-right">
+            <div>
+              <h2>영화제 진행 상황</h2>
+              <strong>상영관 영화별 신청 현황</strong>
+            </div>
+            <span class="d-day-badge">${esc(festivalDdayLabel(opening))}</span>
           </div>
           <div class="festival-progress-chart" aria-label="영화별 신청자 수 그래프">
             ${chartMarkup}
