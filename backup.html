@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>머내마을영화제 백업·구글시트 연동</title>
+  <style>
+    :root{--bg:#f8f1e8;--ink:#1e1a17;--muted:#796f66;--brand:#b33f2f;--line:#e4d7c7;--card:#fffaf4;--dark:#1d1915}
+    *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+    main{max-width:920px;margin:0 auto;padding:18px 14px 80px} .top{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap}
+    h1{font-size:28px;margin:0 0 4px} p{margin:0;color:var(--muted);font-size:16px}.card{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:18px;margin:14px 0;box-shadow:0 10px 28px rgba(70,46,20,.06)}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.metric{border:1px solid var(--line);border-radius:18px;padding:14px;background:#fff}.metric b{display:block;font-size:28px;margin-top:4px}.metric span{color:var(--muted);font-weight:700}
+    label{display:block;font-weight:800;margin:0 0 8px} input{width:100%;border:1px solid var(--line);border-radius:16px;padding:14px;font-size:15px;background:#fff;color:var(--ink)}
+    .actions{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.btn{appearance:none;border:1px solid var(--line);border-radius:999px;padding:14px 12px;font-size:16px;font-weight:900;background:#fff;color:var(--ink);text-align:center;text-decoration:none;cursor:pointer}.btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}.btn.dark{background:var(--dark);color:#fff;border-color:var(--dark)}
+    .log{white-space:pre-wrap;background:#211d19;color:#fff;border-radius:18px;padding:14px;min-height:120px;font-size:14px;overflow:auto}.help{font-size:14px;color:var(--muted);margin-top:8px}.warn{color:#a73125;font-weight:800}.ok{color:#207a3d;font-weight:800}
+    table{width:100%;border-collapse:collapse;font-size:14px;background:#fff;border-radius:16px;overflow:hidden}td,th{border:1px solid var(--line);padding:8px;text-align:left}th{background:#f1e7db}
+    @media(max-width:720px){main{padding:14px 10px 72px}h1{font-size:24px}.card{border-radius:18px;padding:14px}.grid,.actions{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.btn{font-size:13px;padding:12px 6px;white-space:normal}input{font-size:13px}.metric{padding:10px}.metric b{font-size:22px}.metric span{font-size:12px}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div><h1>백업·구글시트 연동</h1><p>관리자 메뉴 버튼이 작동하지 않아도 이 별도 페이지에서 바로 저장합니다.</p></div>
+    <a class="btn" href="/?v=69#/admin">관리자 화면</a>
+  </div>
+
+  <section class="card">
+    <div class="grid">
+      <div class="metric"><span>신청자</span><b id="applicantsCount">0</b></div>
+      <div class="metric"><span>통계</span><b id="statsCount">0</b></div>
+      <div class="metric"><span>상영정보</span><b id="screeningsCount">0</b></div>
+    </div>
+    <p class="help" id="storageHelp"></p>
+  </section>
+
+  <section class="card">
+    <label for="webhookUrl">Google Apps Script 웹앱 URL</label>
+    <input id="webhookUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" />
+    <p class="help">반드시 <b>/exec</b>로 끝나는 URL을 넣어주세요. 한 번 저장하면 같은 브라우저에 기억됩니다.</p>
+    <div class="actions">
+      <button class="btn primary" id="syncBtn" type="button">구글시트 저장</button>
+      <button class="btn dark" id="jsonBtn" type="button">JSON 백업</button>
+      <button class="btn" id="appCsvBtn" type="button">신청자 엑셀</button>
+      <button class="btn" id="statsCsvBtn" type="button">통계 엑셀</button>
+      <button class="btn" id="refreshBtn" type="button">새로고침</button>
+      <button class="btn" id="clearUrlBtn" type="button">URL 초기화</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>처리 결과</h2>
+    <div class="log" id="log">대기 중입니다.</div>
+  </section>
+
+  <section class="card">
+    <h2>현재 데이터 미리보기</h2>
+    <div id="preview"></div>
+  </section>
+</main>
+<script>
+const STORAGE_KEY = 'munaeFilmFest9.webapp.v1';
+const URL_KEY = 'munae9DriveWebhookUrl';
+const LAST_KEY = 'munae9DriveLastSyncAt';
+const FESTIVAL = '제9회 머내마을영화제';
+function $(id){return document.getElementById(id)}
+function esc(v){return String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;')}
+function log(msg){$('log').textContent = msg}
+function readState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){return {}}}
+function dt(v){if(!v)return ''; const d=new Date(v); if(Number.isNaN(d.getTime()))return String(v); return new Intl.DateTimeFormat('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(d)}
+function dateOnly(v){if(!v)return ''; const d=new Date(v); if(Number.isNaN(d.getTime()))return String(v).slice(0,10); return d.toISOString().slice(0,10)}
+function timeOnly(v){if(!v)return ''; const d=new Date(v); if(Number.isNaN(d.getTime()))return ''; return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+function findScreening(state,id){return (state.screenings||[]).find(s=>s.id===id)||{}}
+function reservationNumber(r){return r.reservationNumber || r.code || r.id || ''}
+function buildApplicants(state){return (state.reservations||[]).map(r=>{const s=findScreening(state,r.screeningId); const seats=Number(r.seats||1); const attended=r.attended===true; return {
+  movieTitle:s.title||r.movieTitle||'', venue:s.venue||'', screeningDate:dateOnly(s.startTime), screeningTime:timeOnly(s.startTime), reservationNumber:reservationNumber(r), name:r.name||'', phone:r.phone||'', email:r.email||'', seat:r.seatAssignment||'', count:seats, attendedCount:attended?Number(r.attendedSeats||seats):0, attendanceStatus:attended?'참석':'미참석', ticketType:r.ticketType||'', donorName:r.donorName||'', smsConsent:r.smsConsent===false?'N':'Y', smsStatus:r.smsStatus||'', smsSentAt:dt(r.smsSentAt), createdAt:dt(r.createdAt), memo:r.note||''
+}})}
+function statFor(state,s){const rs=(state.reservations||[]).filter(r=>r.screeningId===s.id); const appCount=rs.length; const appSeats=rs.reduce((a,r)=>a+Number(r.seats||1),0); const attended=rs.reduce((a,r)=>a+(r.attended?Number(r.attendedSeats||r.seats||1):0),0); const canceled=rs.filter(r=>r.attended===false && (r.status==='취소'||r.cancelled||r.canceled)).length; const cap=Number(s.capacity||0); return {movieTitle:s.title||'',venue:s.venue||'',screeningTime:dt(s.startTime),capacity:cap,applicationCount:appCount,applicantCount:appSeats,openingApplicantCount:s.isOpening?appSeats:0,generalApplicantCount:s.isOpening?0:appSeats,attendedCount:attended,canceledCount:canceled,canceledSeats:0,remainingSeats:Math.max(0,cap-appSeats),applicationRate:cap?Math.round(appSeats/cap*100)+'%':'',attendanceRate:appSeats?Math.round(attended/appSeats*100)+'%':'',status:cap&&appSeats>cap?'정원초과':'정상',ticketingPhase:s.isOpening?'개막작':'일반'}}
+function buildStats(state){return (state.screenings||[]).map(s=>statFor(state,s))}
+function buildScreenings(state){return (state.screenings||[]).map(s=>{const st=statFor(state,s); return {...st, screeningId:s.id||'', startTime:s.startTime||'', endTime:s.endTime||'', isOpening:s.isOpening?'Y':'N', gvHost:s.gvHost||'', moderator:s.moderator||'', staff:s.staff||'', staffPhone:s.staffPhone||'', notes:s.notes||''}})}
+function buildPayload(){const state=readState(); return {festival:FESTIVAL,mode:'manual-backup-page',generatedAt:new Date().toISOString(),applicants:buildApplicants(state),stats:buildStats(state),screenings:buildScreenings(state),rawCounts:{reservations:(state.reservations||[]).length,screenings:(state.screenings||[]).length}}}
+function toCsv(rows){if(!rows.length)return ''; const headers=Object.keys(rows[0]); const cell=v=>'"'+String(v??'').replaceAll('"','""')+'"'; return '\ufeff'+[headers.map(cell).join(','),...rows.map(r=>headers.map(h=>cell(r[h])).join(','))].join('\n')}
+function download(name,text,type){const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function refresh(){const payload=buildPayload(); $('applicantsCount').textContent=payload.applicants.length; $('statsCount').textContent=payload.stats.length; $('screeningsCount').textContent=payload.screenings.length; $('webhookUrl').value=localStorage.getItem(URL_KEY)||''; const raw=readState(); $('storageHelp').innerHTML = payload.applicants.length ? '<span class="ok">신청자 데이터가 이 브라우저에 있습니다.</span>' : '<span class="warn">신청자 데이터가 0명입니다. 실제 신청자 명단이 보이는 같은 브라우저에서 열어야 합니다.</span>'; $('preview').innerHTML='<table><thead><tr><th>예약번호</th><th>신청자</th><th>영화</th><th>인원</th></tr></thead><tbody>'+payload.applicants.slice(0,10).map(r=>`<tr><td>${esc(r.reservationNumber)}</td><td>${esc(r.name)}</td><td>${esc(r.movieTitle)}</td><td>${esc(r.count)}</td></tr>`).join('')+'</tbody></table>'}
+async function sync(){const url=$('webhookUrl').value.trim(); if(!url || !/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(url)){log('Apps Script /exec URL을 정확히 입력해 주세요.'); return} const payload=buildPayload(); if(payload.applicants.length===0 && !confirm('신청자 0명으로 보입니다. 그래도 구글시트에 저장할까요?'))return; localStorage.setItem(URL_KEY,url); log('저장 요청 중...\n전송 예정: 신청자 '+payload.applicants.length+'명, 통계 '+payload.stats.length+'건, 상영정보 '+payload.screenings.length+'건'); try{const res=await fetch('/api/google-drive-sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({webhookUrl:url,payload})}); const data=await res.json().catch(()=>({})); if(!res.ok||data.ok===false) throw new Error(data.message||('HTTP '+res.status)); localStorage.setItem(LAST_KEY,new Date().toISOString()); log('완료되었습니다.\n전송: 신청자 '+payload.applicants.length+'명, 통계 '+payload.stats.length+'건, 상영정보 '+payload.screenings.length+'건\n\n응답:\n'+JSON.stringify(data,null,2)); refresh()}catch(e){log('실패했습니다.\n'+(e.message||String(e))+'\n\nURL과 Apps Script 새 버전 배포 상태를 확인해 주세요.')}}
+$('syncBtn').onclick=sync; $('jsonBtn').onclick=()=>download('munae9_backup_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(readState(),null,2),'application/json;charset=utf-8'); $('appCsvBtn').onclick=()=>download('munae9_applicants.csv',toCsv(buildPayload().applicants),'text/csv;charset=utf-8'); $('statsCsvBtn').onclick=()=>download('munae9_stats.csv',toCsv(buildPayload().stats),'text/csv;charset=utf-8'); $('refreshBtn').onclick=refresh; $('clearUrlBtn').onclick=()=>{localStorage.removeItem(URL_KEY);refresh();log('URL을 초기화했습니다.')}; refresh();
+</script>
+</body>
+</html>

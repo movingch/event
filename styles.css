@@ -3084,3 +3084,30 @@ tr:last-child td { border-bottom: 0; }
     padding-right: 4px;
   }
 }
+
+/* v68: always-visible backup/sync panel so users do not depend on admin tab navigation */
+.admin-backup-fixed-panel {
+  border: 2px solid rgba(179,63,47,.32);
+  background: linear-gradient(135deg, rgba(179,63,47,.08), rgba(255,250,242,.98));
+}
+.admin-backup-fixed-title { margin-bottom: 12px; }
+.admin-backup-fixed-form { display: grid; gap: 10px; }
+.admin-backup-fixed-actions {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.admin-backup-fixed-actions .btn { width: 100%; min-width: 0; white-space: normal; justify-content: center; text-align: center; }
+@media (max-width: 760px) {
+  .admin-backup-fixed-panel { padding: 14px; }
+  .admin-backup-fixed-title { gap: 8px; }
+  .admin-backup-fixed-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .admin-backup-fixed-actions .btn {
+    min-height: 44px;
+    padding: 9px 6px;
+    font-size: 12.5px;
+    line-height: 1.18;
+  }
+}

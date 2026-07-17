@@ -891,6 +891,7 @@ function appHeader() {
         <a href="#/apply">영화 신청</a>
         <a href="#/donate">후원하기</a>
         <a href="#/staff" class="staff-link utility-link">STAFF</a>
+        <a href="/backup.html?v=69" class="primary-link admin-link utility-link">백업 바로가기</a>
         <a href="#/admin" class="primary-link admin-link utility-link">ADMIN</a>
       </nav>
     </header>
@@ -1626,6 +1627,7 @@ function renderAdmin(tab) {
         <button class="btn btn-danger" type="button" data-action="admin-logout">로그아웃</button>
       </div>
     </section>
+    ${adminBackupAlwaysOnPanel(active)}
     <section class="admin-layout">
       <aside class="admin-sidebar" aria-label="관리자 메뉴">
         ${adminTabLink("overview", "운영요약", active)}
@@ -1672,7 +1674,7 @@ function renderAdminLogin() {
 function adminTabLink(tab, label, active) {
   const href = `#/admin/${tab}`;
   const labelEsc = esc(label);
-  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="${href}" data-admin-tab="${esc(tab)}" onclick="window.location.hash='${href}'; return false;">${labelEsc}</a>`;
+  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="${href}" data-admin-tab="${esc(tab)}">${labelEsc}</a>`;
 }
 
 function adminOverview() {
@@ -1682,10 +1684,10 @@ function adminOverview() {
     <section class="card admin-backup-emergency-card">
       <div class="section-title">
         <div>
-          <h2>백업·연동 바로가기</h2>
-          <p>메뉴 버튼이 반응하지 않을 때도 이 버튼으로 백업·연동 화면을 바로 엽니다.</p>
+          <h2>백업·연동 안내</h2>
+          <p>이제 백업·연동 기능은 화면 상단의 고정 패널에서 바로 실행됩니다. 메뉴 이동 없이 사용할 수 있습니다.</p>
         </div>
-        <a class="btn btn-primary" href="#/admin/backup" onclick="window.location.hash='#/admin/backup'; return false;">백업·연동 열기</a>
+        <span class="badge badge-ok">상단 고정</span>
       </div>
     </section>
     <section class="metric-grid">
@@ -2357,6 +2359,36 @@ function statsTable(rows, headers) {
   `;
 }
 
+
+function adminBackupAlwaysOnPanel(activeTab = "overview") {
+  const payload = buildGoogleDrivePayload("preview");
+  const counts = googleDriveCountsLabel(payload);
+  return `
+    <section class="card admin-backup-fixed-panel" id="adminBackupFixedPanel">
+      <div class="section-title admin-backup-fixed-title">
+        <div>
+          <h2>백업·연동 즉시 실행 패널</h2>
+          <p>메뉴 버튼을 누르지 않아도 이 자리에서 바로 구글시트 연동과 엑셀 저장을 실행합니다. 별도 페이지도 사용할 수 있습니다.</p>
+        </div>
+        <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">${isGoogleDriveAutoSyncEnabled() ? "자동저장 ON" : "URL 필요"}</span>
+      </div>
+      <form id="driveSyncQuickForm" class="drive-sync-form admin-backup-fixed-form">
+        <label class="label" for="driveWebhookUrlQuick">Google Apps Script 웹앱 URL</label>
+        <input class="input" id="driveWebhookUrlQuick" name="driveWebhookUrl" type="url" value="${esc(getDriveWebhookUrl())}" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" />
+        <span class="help">현재 전송 예정: ${esc(counts)} · 마지막 저장: ${esc(formatDriveLastSyncTime())}</span>
+        <div class="form-actions admin-backup-fixed-actions">
+          <button class="btn btn-primary" type="submit">구글시트 연동 실행</button>
+          <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
+          <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
+          <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
+          <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
+          <a class="btn btn-dark" href="/backup.html?v=69">별도 백업페이지 열기</a>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
 function adminBackup() {
   return `
     <section class="card">
@@ -2394,6 +2426,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
+          <a class="btn btn-dark" href="/backup.html?v=69">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -4163,7 +4196,7 @@ document.addEventListener("submit", (event) => {
   if (form.id === "donationForm") submitDonation(form);
   if (form.id === "adminLoginForm") submitAdminLogin(form);
   if (form.id === "adminPinChangeForm") submitAdminPinChange(form);
-  if (form.id === "driveSyncForm") submitDriveSyncForm(form);
+  if (form.id === "driveSyncForm" || form.id === "driveSyncQuickForm") submitDriveSyncForm(form);
   if (form.id === "staffLoginForm") submitStaffLogin(form);
   if (form.id === "staffPinChangeForm") submitStaffPinChange(form);
   if (form.id === "bulkSmsNoticeForm") submitBulkNoticeSms(form);
