@@ -2930,3 +2930,12 @@ tr:last-child td { border-bottom: 0; }
   color: var(--ok);
   border-color: rgba(36, 120, 79, .25);
 }
+
+.drive-sync-form {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+.drive-sync-form .input {
+  width: 100%;
+}

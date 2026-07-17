@@ -2368,18 +2368,27 @@ function adminBackup() {
           </form>
         </div>
         <div class="card compact">
-          <h3>구글드라이브 자동저장</h3>
-          <p>구글드라이브 연동 URL을 설정하면 자동저장이 바로 켜집니다. 데이터 변경 시 자동 저장하고, 관리자 화면이 열려 있으면 1분마다 한 번 더 저장합니다.</p>
+          <h3>구글드라이브 자동연동</h3>
+          <p>Apps Script 웹앱 URL을 입력하고 저장하면 자동저장이 바로 켜집니다. 팝업창 없이 이 화면에서 바로 설정합니다.</p>
           <div class="drive-sync-status">
             <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">${isGoogleDriveAutoSyncEnabled() ? "자동저장 ON" : "연동 URL 필요"}</span>
             <span class="muted">마지막 저장: ${esc(formatDriveLastSyncTime())}</span>
           </div>
+          <form id="driveSyncForm" class="drive-sync-form">
+            <label class="label" for="driveWebhookUrl">Google Apps Script 웹앱 URL</label>
+            <input class="input" id="driveWebhookUrl" name="driveWebhookUrl" type="url" value="${esc(getDriveWebhookUrl())}" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" />
+            <span class="help">현재 전송 예정: ${esc(googleDriveCountsLabel(buildGoogleDrivePayload("preview")))} · /exec 로 끝나는 URL을 넣어주세요.</span>
+            <div class="form-actions">
+              <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
+              <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
+              <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
+            </div>
+          </form>
           <div class="form-actions">
             <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
             <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
-            <button class="btn btn-primary" type="button" data-action="drive-sync-settings">구글드라이브 연동</button>
           </div>
-          <span class="help">구글드라이브 연동은 URL 설정 즉시 자동저장이 켜지고, 데이터 변경 시와 관리자 화면 1분 주기로 자동 저장됩니다. 수동 저장은 엑셀저장만 사용합니다.</span>
+          <span class="help">구글드라이브는 수동 저장 버튼이 아니라 자동연동 방식입니다. URL 저장 후 데이터 변경 시와 관리자 화면 1분 주기로 저장됩니다.</span>
         </div>
         <div class="card compact">
           <h3>백업 다운로드</h3>
@@ -3891,30 +3900,49 @@ function queueGoogleDriveAutoSync(reason = "data-change") {
 }
 
 function openGoogleDriveSyncSetup() {
-  const existing = getDriveWebhookUrl();
-  const message = [
-    "구글드라이브 연동은 Google Apps Script 웹앱 URL을 연결하는 기능입니다.",
-    "",
-    "1. 구글시트에서 Apps Script를 만들고 웹앱으로 배포합니다.",
-    "2. 배포 후 /exec 로 끝나는 웹앱 URL을 복사합니다.",
-    "3. 여기에서 URL을 붙여넣으면 자동저장이 바로 켜집니다.",
-    "",
-    "연동 후에는 신청, 수정, 삭제, 참석, 취소 같은 데이터 변경 시 자동 저장되고, 관리자 화면이 열려 있으면 1분마다 한 번 더 저장됩니다.",
-    "",
-    existing ? "현재 URL이 설정되어 있습니다. 변경하려면 새 URL을 입력하세요." : "아직 URL이 없습니다. 웹앱 URL을 입력하세요."
-  ].join("\n");
-  const previewPayload = buildGoogleDrivePayload("preview");
-  const previewMessage = `${message}
+  const inlineInput = document.getElementById("driveWebhookUrl");
+  const inlineUrl = String(inlineInput?.value || "").trim();
+  if (inlineInput && inlineUrl) {
+    const previewPayload = buildGoogleDrivePayload("manual-setup");
+    const ok = confirm(`현재 입력된 URL로 구글드라이브 자동연동을 시작합니다.
 
-현재 전송 예정 데이터: ${googleDriveCountsLabel(previewPayload)}`;
-  const url = prompt(previewMessage, existing);
-  if (url === null) return;
-  const trimmed = url.trim();
-  if (!trimmed) return toast("구글드라이브 연동 URL이 입력되지 않았습니다.");
-  setDriveWebhookUrl(trimmed);
+전송 예정: ${googleDriveCountsLabel(previewPayload)}
+
+계속할까요?`);
+    if (!ok) return;
+    setDriveWebhookUrl(inlineUrl);
+    setGoogleDriveAutoSyncEnabled(true);
+    toast("구글드라이브 연동 URL을 저장했고 자동저장을 켰습니다.");
+    syncGoogleDriveCore({ silent: false, prompt: false, reason: "manual-setup" });
+    render();
+    return;
+  }
+  const url = promptDriveWebhookUrl();
+  if (!url) return;
+  syncGoogleDriveCore({ silent: false, prompt: false, reason: "manual-setup" });
+  render();
+}
+
+
+function submitDriveSyncForm(form) {
+  const input = form.querySelector('[name="driveWebhookUrl"]');
+  const url = String(input?.value || "").trim();
+  if (!url) return toast("구글드라이브 연동 URL을 입력해 주세요.");
+  if (!url.includes("script.google.com") || !url.includes("/exec")) {
+    const ok = confirm("입력한 주소가 Apps Script /exec 주소처럼 보이지 않습니다. 그래도 저장할까요?");
+    if (!ok) return;
+  }
+  const previewPayload = buildGoogleDrivePayload("manual-setup");
+  const ok = confirm(`구글드라이브 자동연동을 시작합니다.
+
+전송 예정: ${googleDriveCountsLabel(previewPayload)}
+
+이 URL로 저장 테스트를 진행할까요?`);
+  if (!ok) return;
+  setDriveWebhookUrl(url);
   setGoogleDriveAutoSyncEnabled(true);
   toast("구글드라이브 연동 URL을 저장했고 자동저장을 켰습니다.");
-  syncGoogleDriveCore({ silent: false, prompt: false });
+  syncGoogleDriveCore({ silent: false, prompt: false, reason: "manual-setup" });
   render();
 }
 
@@ -4105,6 +4133,7 @@ document.addEventListener("submit", (event) => {
   if (form.id === "donationForm") submitDonation(form);
   if (form.id === "adminLoginForm") submitAdminLogin(form);
   if (form.id === "adminPinChangeForm") submitAdminPinChange(form);
+  if (form.id === "driveSyncForm") submitDriveSyncForm(form);
   if (form.id === "staffLoginForm") submitStaffLogin(form);
   if (form.id === "staffPinChangeForm") submitStaffPinChange(form);
   if (form.id === "bulkSmsNoticeForm") submitBulkNoticeSms(form);
