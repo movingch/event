@@ -1607,8 +1607,56 @@ function renderNotFound() {
   `;
 }
 
+function safeSessionGet(key) {
+  try { return sessionStorage.getItem(key); } catch (error) { return null; }
+}
+
+function safeLocalGet(key) {
+  try { return localStorage.getItem(key); } catch (error) { return null; }
+}
+
+function safeSessionSet(key, value) {
+  try { sessionStorage.setItem(key, value); } catch (error) {}
+}
+
+function safeLocalSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (error) {}
+}
+
+function safeSessionRemove(key) {
+  try { sessionStorage.removeItem(key); } catch (error) {}
+}
+
+function safeLocalRemove(key) {
+  try { localStorage.removeItem(key); } catch (error) {}
+}
+
+function setAdminAuthenticated() {
+  safeSessionSet(ADMIN_SESSION_KEY, "true");
+  safeLocalSet(ADMIN_SESSION_KEY, "true");
+}
+
+function clearAdminAuthenticated() {
+  safeSessionRemove(ADMIN_SESSION_KEY);
+  safeLocalRemove(ADMIN_SESSION_KEY);
+}
+
 function isAdminAuthed() {
-  return sessionStorage.getItem(ADMIN_SESSION_KEY) === "true";
+  return safeSessionGet(ADMIN_SESSION_KEY) === "true" || safeLocalGet(ADMIN_SESSION_KEY) === "true";
+}
+
+function openAdminDashboard(tab = "overview") {
+  setAdminAuthenticated();
+  const safeTab = ["overview", "opening", "screenings", "reservations", "stats", "staff", "backup"].includes(tab) ? tab : "overview";
+  const nextHash = safeTab === "overview" ? "#/admin" : `#/admin/${safeTab}`;
+  if (window.location.hash !== nextHash) window.location.hash = nextHash;
+  render();
+  setTimeout(() => {
+    const app = document.getElementById("app");
+    if (app && isAdminAuthed() && !app.querySelector(".admin-layout")) {
+      render();
+    }
+  }, 0);
 }
 
 function renderAdmin(tab) {
@@ -1661,7 +1709,7 @@ function renderAdminLogin() {
           <label class="label" for="adminPin">관리자 PIN</label>
           <input class="input" id="adminPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required />
           <div class="form-actions">
-            <button class="btn btn-dark" type="submit">대시보드 열기</button>
+            <button class="btn btn-dark" type="submit" data-action="admin-login-direct">대시보드 열기</button>
             <a class="btn btn-outline" href="#/">첫 화면</a>
           </div>
         </form>
@@ -2651,6 +2699,18 @@ function closeModals() {
 }
 
 function hydrateRoute(route, sub) {
+  if (route === "admin" && !isAdminAuthed()) {
+    const form = document.getElementById("adminLoginForm");
+    const pin = document.getElementById("adminPin");
+    if (pin) setTimeout(() => pin.focus(), 0);
+    if (form && !form.dataset.boundDirectLogin) {
+      form.dataset.boundDirectLogin = "true";
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        submitAdminLogin(form);
+      });
+    }
+  }
   if (route === "apply") {
     updateScreeningList();
     ["searchInput", "venueFilter", "dateFilter", "seatFilter"].forEach((id) => {
@@ -3319,10 +3379,8 @@ function submitAdminLogin(form) {
       state.adminPin = String(ADMIN_PIN);
       persist({ autoSync: false });
     }
-    sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
     toast("관리자 대시보드에 로그인했습니다.");
-    if (!window.location.hash.startsWith("#/admin")) window.location.hash = "#/admin";
-    else render();
+    openAdminDashboard("overview");
   } else {
     toast("PIN이 맞지 않습니다. 임시 관리자 비밀번호 0909도 사용할 수 있습니다.");
   }
@@ -4104,6 +4162,12 @@ document.addEventListener("click", (event) => {
   if (!button) return;
   const action = button.dataset.action;
   const id = button.dataset.id;
+  if (action === "admin-login-direct") {
+    event.preventDefault();
+    const form = button.closest("form");
+    if (form) submitAdminLogin(form);
+    return;
+  }
   if (action === "donate") handleDonate();
   if (action === "copy-donation-account") {
     copyTextToClipboard(DONATION_ACCOUNT_NUMBER);
@@ -4123,7 +4187,7 @@ document.addEventListener("click", (event) => {
   if (action === "book") openBooking(id);
   if (action === "close-modal") closeModals();
   if (action === "view-roster") openRoster(id);
-  if (action === "admin-logout") { sessionStorage.removeItem(ADMIN_SESSION_KEY); selectedScreeningId = null; render(); toast("로그아웃했습니다."); }
+  if (action === "admin-logout") { clearAdminAuthenticated(); selectedScreeningId = null; render(); toast("로그아웃했습니다."); }
   if (action === "staff-add-reservation") staffAddReservation();
   if (action === "staff-edit-reservation") staffEditReservation(id);
   if (action === "staff-logout") {
