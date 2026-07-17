@@ -415,6 +415,28 @@ function formatDateOnly(value) {
   return new Intl.DateTimeFormat("ko-KR", { month: "2-digit", day: "2-digit", weekday: "short" }).format(date);
 }
 
+function formatDatePart(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "").split(/[T ]/)[0] || String(value || "");
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
+  return `${month}월 ${day}일 (${weekday})`;
+}
+
+function formatTimePart(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    const match = String(value || "").match(/(?:T|\s)(\d{1,2}:\d{2})/);
+    return match ? match[1] : "";
+  }
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
 function toLocalInputValue(value) {
   if (!value) return "";
   return value.slice(0, 16);
@@ -2360,8 +2382,13 @@ function statsTable(rows, headers) {
 
 
 function adminBackupAlwaysOnPanel(activeTab = "overview") {
-  const payload = buildGoogleDrivePayload("preview");
-  const counts = googleDriveCountsLabel(payload);
+  let counts = "신청자 0명 · 통계 0건 · 상영정보 0건";
+  try {
+    const payload = buildGoogleDrivePayload("preview");
+    counts = googleDriveCountsLabel(payload);
+  } catch (error) {
+    console.warn("backup preview failed", error);
+  }
   return `
     <section class="card admin-backup-fixed-panel" id="adminBackupFixedPanel">
       <div class="section-title admin-backup-fixed-title">
@@ -2381,7 +2408,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=70">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=74">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -2425,7 +2452,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=70">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=74">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
