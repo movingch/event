@@ -10,6 +10,7 @@ const DONATION_TRANSFER_URL = "https://aq.gy/f/2hekV";
 const LAST_DONATION_SESSION_KEY = "munae-last-donation-id";
 const STORAGE_KEY = "munaeFilmFest9.webapp.v1";
 const ADMIN_SESSION_KEY = "munaeFilmFest9.admin";
+const MASTER_ADMIN_PIN = "0400";
 const STAFF_SESSION_KEY = "munaeFilmFest9.staff";
 const STAFF_PIN_MIGRATION_KEY = "munaeFilmFest9.staffPin0909.v14";
 const ADMIN_PIN = "0909";
@@ -1171,7 +1172,9 @@ function appHeader() {
 
 function render() {
   const hash = window.location.hash.replace(/^#\/?/, "");
-  const [route = "", sub = ""] = hash.split("/");
+  const [rawRoute = "", rawSub = ""] = hash.split("/");
+  const route = (!rawRoute && isMasterAdminPath()) ? "admin" : rawRoute;
+  const sub = (!rawRoute && isMasterAdminPath()) ? "overview" : rawSub;
   const app = document.getElementById("app");
   let view = "";
   if (!route) view = renderHome();
@@ -1880,18 +1883,42 @@ function renderNotFound() {
   `;
 }
 
+function adminLoginRole() {
+  return sessionStorage.getItem(ADMIN_SESSION_KEY) || "";
+}
+
+function isMasterAdminPath() {
+  return window.location.pathname.replace(/\/+$/, "") === "/admin";
+}
+
+function isMasterAdminAuthed() {
+  return adminLoginRole() === "master";
+}
+
 function isAdminAuthed() {
-  return sessionStorage.getItem(ADMIN_SESSION_KEY) === "true";
+  return ["general", "master", "true"].includes(adminLoginRole());
+}
+
+function adminMode() {
+  return isMasterAdminAuthed() ? "master" : "general";
+}
+
+function allowedAdminTabsForMode(mode = adminMode()) {
+  const common = ["overview", "reservations", "stats", "staff", "opening", "screenings"];
+  return mode === "master" ? [...common, "survey", "backup"] : common;
 }
 
 function renderAdmin(tab) {
+  if (isMasterAdminPath() && !isMasterAdminAuthed()) return renderAdminLogin();
   if (!isAdminAuthed()) return renderAdminLogin();
-  const active = ["overview", "opening", "screenings", "reservations", "stats", "staff", "survey", "backup"].includes(tab) ? tab : "overview";
+  const mode = adminMode();
+  const allowedTabs = allowedAdminTabsForMode(mode);
+  const active = allowedTabs.includes(tab) ? tab : "overview";
   return `
     <section class="section-title">
       <div>
-        <h1>관리자 대시보드</h1>
-        <p>상영관 관리, 신청자 명단, 정원 초과 여부, 실제 참석 현황, 통계와 백업을 관리합니다.</p>
+        <h1>${mode === "master" ? "마스타관리자 대시보드" : "관리자 대시보드"}</h1>
+        <p>${mode === "master" ? "모든 메뉴와 백업·연동, 만족도조사를 포함해 전체 운영을 관리합니다." : "신청자 명단, 상영관, 참석 현황과 통계를 관리합니다."}</p>
       </div>
       <div class="cta-row admin-top-actions">
         ${adminTopReportActions(active)}
@@ -1905,8 +1932,8 @@ function renderAdmin(tab) {
         ${adminTabLink("staff", "STAFF 관리", active)}
         ${adminTabLink("opening", "개막작관리", active)}
         ${adminTabLink("screenings", "상영관, 영화 관리", active)}
-        ${adminTabLink("survey", "만족도조사", active)}
-        ${adminTabLink("backup", "백업·연동", active)}
+        ${mode === "master" ? adminTabLink("survey", "만족도조사", active) : ""}
+        ${mode === "master" ? adminTabLink("backup", "백업·연동", active) : ""}
       </aside>
       <div class="admin-panel">
         ${active === "overview" ? adminOverview() : ""}
@@ -1923,18 +1950,21 @@ function renderAdmin(tab) {
 }
 
 function renderAdminLogin() {
+  const master = isMasterAdminPath();
+  const showTempNotice = !master && String(state.adminPin || ADMIN_PIN) === String(ADMIN_PIN);
   return `
     <section class="admin-login">
       <div class="login-card">
-        <div class="eyebrow" style="background:rgba(179,63,47,.1);color:var(--brand-dark);">운영자 전용</div>
-        <h1>관리자 로그인</h1>
-        <p>임시 비밀번호는 <strong>0909</strong>입니다. 앱 제작이 완료되면 변경될 예정입니다. 스탭 비번도 <strong>0909</strong>입니다.</p>
+        <div class="eyebrow" style="background:rgba(179,63,47,.1);color:var(--brand-dark);">${master ? "마스타관리자 전용" : "운영자 전용"}</div>
+        <h1>${master ? "마스타관리자 로그인" : "관리자 로그인"}</h1>
+        ${showTempNotice ? `<p>임시 비밀번호는 <strong>0909</strong>입니다. 비밀번호를 새로 저장하면 이 안내문은 사라집니다. 스탭 비번도 <strong>0909</strong>입니다.</p>` : ""}
+        ${master ? `<p>마스타관리자는 모든 메뉴와 백업·연동, 만족도조사 설정을 관리합니다.</p>` : ""}
         <form id="adminLoginForm">
-          <label class="label" for="adminPin">관리자 PIN</label>
+          <label class="label" for="adminPin">${master ? "마스타관리자 PIN" : "관리자 PIN"}</label>
           <input class="input" id="adminPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required />
           <div class="form-actions">
             <button class="btn btn-dark" type="submit">대시보드 열기</button>
-            <a class="btn btn-outline" href="#/">첫 화면</a>
+            <a class="btn btn-outline" href="/">첫 화면</a>
           </div>
         </form>
       </div>
@@ -2764,7 +2794,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=94">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=96">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3088,7 +3118,7 @@ function adminBackup() {
           <h3>총관리자 비밀번호</h3>
           <p>ADMIN 로그인에 사용하는 총관리자 비밀번호를 변경할 수 있습니다.</p>
           <form id="adminPinChangeForm" class="inline-admin-pin-form">
-            <label class="label" for="adminNewPin">새 총관리자 비밀번호</label>
+            <label class="label" for="adminNewPin">새 일반관리자 비밀번호</label>
             <div class="form-actions admin-pin-actions">
               <input class="input" id="adminNewPin" name="adminPin" type="password" inputmode="numeric" autocomplete="new-password" value="${esc(state.adminPin || ADMIN_PIN)}" placeholder="새 비밀번호" required />
               <button class="btn btn-dark" type="submit">비밀번호 저장</button>
@@ -3111,7 +3141,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=94">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=96">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -4017,31 +4047,42 @@ function submitBooking(form) {
 
 function submitAdminLogin(form) {
   const pin = String(new FormData(form).get("pin") || "").trim();
+  const master = isMasterAdminPath();
+  if (master) {
+    if (pin === MASTER_ADMIN_PIN) {
+      sessionStorage.setItem(ADMIN_SESSION_KEY, "master");
+      toast("마스타관리자로 로그인했습니다.");
+      if (!window.location.hash.startsWith("#/admin")) window.location.hash = "#/admin";
+      else render();
+    } else {
+      toast("마스타관리자 PIN이 맞지 않습니다.");
+    }
+    return;
+  }
   const currentPin = String(state.adminPin || ADMIN_PIN);
-  // 운영 중 비밀번호 저장값이 꼬인 경우에도 기본 관리자 PIN 0909로는 반드시 로그인되게 합니다.
-  if (pin === currentPin || pin === String(ADMIN_PIN)) {
+  if (pin === currentPin) {
     if (!state.adminPin) {
       state.adminPin = String(ADMIN_PIN);
       persist({ autoSync: false });
     }
-    sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
+    sessionStorage.setItem(ADMIN_SESSION_KEY, "general");
     toast("관리자 대시보드에 로그인했습니다.");
     if (!window.location.hash.startsWith("#/admin")) window.location.hash = "#/admin";
     else render();
   } else {
-    toast("PIN이 맞지 않습니다. 임시 관리자 비밀번호 0909도 사용할 수 있습니다.");
+    toast("관리자 PIN이 맞지 않습니다.");
   }
 }
 
 function submitAdminPinChange(form) {
   const pin = String(new FormData(form).get("adminPin") || "").trim();
-  if (!pin) return toast("새 총관리자 비밀번호를 입력해 주세요.");
+  if (!pin) return toast("새 일반관리자 비밀번호를 입력해 주세요.");
   state.adminPin = pin;
   persist();
   form.reset();
   const field = document.getElementById("adminNewPin");
   if (field) field.value = pin;
-  toast("총관리자 비밀번호를 저장했습니다.");
+  toast("일반관리자 비밀번호를 저장했습니다.");
 }
 
 function submitScreening(form) {
@@ -5028,9 +5069,18 @@ async function pullGoogleDriveCore(options = {}) {
   }
 }
 
-function bootstrapGoogleSheetSource() {
+function bootstrapGoogleSheetSource(options = {}) {
+  if (!getDriveWebhookUrl()) return Promise.resolve(false);
+  return pullGoogleDriveCore({ silent: options.silent !== false, render: options.render !== false });
+}
+
+function pullGoogleSheetIfStale(maxAgeMs = 15000) {
   if (!getDriveWebhookUrl()) return;
-  pullGoogleDriveCore({ silent: true, render: true });
+  const last = localStorage.getItem(DRIVE_LAST_PULL_STORAGE_KEY);
+  const lastTime = last ? new Date(last).getTime() : 0;
+  if (!lastTime || Date.now() - lastTime > maxAgeMs) {
+    pullGoogleDriveCore({ silent: true, render: true });
+  }
 }
 
 function queueGoogleDriveAutoSync(reason = "data-change") {
@@ -5167,7 +5217,7 @@ function goAdminTab(tab) {
     render();
     return;
   }
-  const safeTab = ["overview", "opening", "screenings", "reservations", "stats", "staff", "survey", "backup"].includes(tab) ? tab : "overview";
+  const safeTab = allowedAdminTabsForMode(adminMode()).includes(tab) ? tab : "overview";
   const nextHash = `#/admin/${safeTab}`;
   if (window.location.hash === nextHash) render();
   else window.location.hash = nextHash;
@@ -5334,13 +5384,19 @@ window.addEventListener("hashchange", () => {
   render();
 });
 
-bootstrapGoogleSheetSource();
 render();
+bootstrapGoogleSheetSource({ silent: true, render: true });
 
 window.addEventListener("focus", () => {
-  const last = localStorage.getItem(DRIVE_LAST_PULL_STORAGE_KEY);
-  const lastTime = last ? new Date(last).getTime() : 0;
-  if (Date.now() - lastTime > 30000) pullGoogleDriveCore({ silent: true, render: true });
+  pullGoogleSheetIfStale(15000);
+});
+
+window.addEventListener("pageshow", () => {
+  pullGoogleSheetIfStale(1000);
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) pullGoogleSheetIfStale(1000);
 });
 
 window.setInterval(() => {
