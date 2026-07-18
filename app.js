@@ -2801,7 +2801,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=100">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=102">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3160,7 +3160,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글시트 백업 실행</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=100">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=102">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -4856,8 +4856,8 @@ function queueSupabaseAutoSync(reason = "data-change") {
   window.clearTimeout(supabaseAutoSyncTimer);
   supabaseAutoSyncTimer = window.setTimeout(async () => {
     const ok = await postSupabaseState(reason);
-    // Supabase 환경변수가 아직 없으면 기존 구글시트 자동 백업으로 보조합니다.
-    if (!ok && !supabaseConfigured) queueGoogleDriveAutoSync(reason);
+    // v102: Supabase 원본 저장 실패 시 구글시트를 원본/대체 저장소로 사용하지 않습니다.
+    if (!ok && !supabaseConfigured) console.warn("Supabase 저장 실패: 구글시트 대체 저장은 비활성화되었습니다.");
   }, 700);
 }
 
@@ -4939,7 +4939,7 @@ async function postGoogleDrivePayload(url, payload) {
   let data = null;
   try { data = await response.json(); } catch (error) {}
   if (!response.ok || !data?.ok) {
-    throw new Error(data?.message || "구글드라이브 저장 요청에 실패했습니다.");
+    throw new Error(data?.message || "구글시트 백업 요청에 실패했습니다.");
   }
   return data;
 }
@@ -4957,7 +4957,7 @@ async function syncRowsToGoogleDrive(type, options = {}) {
   };
   const builder = rowsByType[type];
   if (!builder) {
-    if (!options.silent) toast("구글드라이브 저장 항목을 찾을 수 없습니다.");
+    if (!options.silent) toast("구글시트 백업 항목을 찾을 수 없습니다.");
     return false;
   }
   let url = getDriveWebhookUrl();
@@ -4978,11 +4978,11 @@ async function syncRowsToGoogleDrive(type, options = {}) {
   };
   try {
     await postGoogleDrivePayload(url, payload);
-    if (!options.silent) toast(`${labels[type]}을 구글드라이브 저장 요청으로 보냈습니다.`);
+    if (!options.silent) toast(`${labels[type]}을 구글시트 백업 요청으로 보냈습니다.`);
     return true;
   } catch (error) {
     console.error(error);
-    if (!options.silent) toast("구글드라이브 저장 요청에 실패했습니다. Apps Script URL을 확인해 주세요.");
+    if (!options.silent) toast("구글시트 백업 요청에 실패했습니다. Apps Script URL을 확인해 주세요.");
     return false;
   }
 }
@@ -5034,265 +5034,45 @@ async function syncGoogleDriveCore(options = {}) {
     return true;
   } catch (error) {
     console.error(error);
-    if (!silent) toast("구글드라이브 저장 요청에 실패했습니다. Apps Script URL을 확인해 주세요.");
+    if (!silent) toast("구글시트 백업 요청에 실패했습니다. Apps Script URL을 확인해 주세요.");
     return false;
   }
 }
 
 
+// v102: 구글시트는 Supabase 원본의 백업 대상입니다.
+// 아래 구글시트 읽기/강제 불러오기 기능은 운영 중 데이터 충돌을 막기 위해 완전히 비활성화합니다.
 async function readGoogleDriveData(url) {
-  const response = await fetch("/api/google-drive-sync", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ webhookUrl: url, action: "read", cacheBust: Date.now() }),
-    cache: "no-store"
-  });
-  let data = null;
-  try { data = await response.json(); } catch (error) {}
-  if (!response.ok || !data?.ok) throw new Error(data?.message || "구글시트 데이터를 불러오지 못했습니다.");
-  return data.data || {};
-}
-
-function parseDriveNumber(value, fallback = 0) {
-  const n = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function parseDriveBool(value) {
-  const text = String(value ?? "").trim().toLowerCase();
-  return text === "true" || text === "on" || text === "동의" || text === "예" || text === "yes" || text === "필수";
-}
-
-function normalizeDriveDatePart(value) {
-  if (!value) return "";
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    const y = value.getFullYear();
-    const m = String(value.getMonth() + 1).padStart(2, "0");
-    const d = String(value.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-  const text = String(value || "").trim();
-  const iso = text.match(/(20\d{2})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/);
-  if (iso) return `${iso[1]}-${String(iso[2]).padStart(2, "0")}-${String(iso[3]).padStart(2, "0")}`;
-  const md = text.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
-  if (md) return `2026-${String(md[1]).padStart(2, "0")}-${String(md[2]).padStart(2, "0")}`;
-  const parsed = new Date(text);
-  if (!Number.isNaN(parsed.getTime())) return normalizeDriveDatePart(parsed);
-  return text.split(/[T ]/)[0] || "";
-}
-
-function normalizeDriveTimePart(value) {
-  if (!value) return "";
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
-  }
-  const text = String(value || "").trim();
-  const match = text.match(/(\d{1,2}):(\d{2})/);
-  if (match) return `${String(match[1]).padStart(2, "0")}:${match[2]}`;
-  return "";
-}
-
-function combineDriveDateTime(dateValue, timeValue, fallback = "") {
-  if (String(dateValue || "").includes("T")) return String(dateValue || "");
-  const date = normalizeDriveDatePart(dateValue);
-  const time = normalizeDriveTimePart(timeValue) || "00:00";
-  if (!date) return fallback || "";
-  return `${date}T${time}`;
+  console.warn("구글시트 읽기는 비활성화되었습니다. 운영 원본은 Supabase입니다.");
+  return null;
 }
 
 function driveReservationKey(reservation = {}) {
-  return String(reservation.reservationNumber || reservation.id || `${reservation.name || ""}-${reservation.phone || ""}-${reservation.createdAt || ""}`).trim();
-}
-
-function findScreeningForDriveApplicant(applicant, screenings) {
-  const movie = String(applicant.movieTitle || applicant["영화명"] || "").trim();
-  const venue = String(applicant.venue || applicant["상영관"] || "").trim();
-  const date = normalizeDriveDatePart(applicant.screeningDate || applicant["상영일"] || "");
-  const time = normalizeDriveTimePart(applicant.screeningTime || applicant["상영시간"] || "");
-  return screenings.find((s) => {
-    const sameMovie = !movie || String(s.title || "").trim() === movie;
-    const sameVenue = !venue || String(s.venue || "").trim() === venue;
-    const sameDate = !date || normalizeDriveDatePart(s.startTime) === date;
-    const sameTime = !time || normalizeDriveTimePart(s.startTime) === time;
-    return sameMovie && sameVenue && sameDate && sameTime;
-  }) || screenings.find((s) => String(s.title || "").trim() === movie && String(s.venue || "").trim() === venue)
-    || screenings.find((s) => String(s.title || "").trim() === movie)
-    || screenings[0];
+  return [
+    reservation.id || "",
+    reservation.number || reservation.reservationNo || "",
+    reservation.name || "",
+    normalizePhone(reservation.phone || reservation.contact || ""),
+    reservation.screeningId || reservation.screeningTitle || reservation.movie || ""
+  ].join("|");
 }
 
 function driveDataToState(driveData = {}) {
-  const data = driveData.data || driveData;
-  const previousById = new Map((state.screenings || []).map((s) => [s.id, s]));
-  const rawScreenings = Array.isArray(data.screenings) ? data.screenings : [];
-  const screenings = rawScreenings.length ? rawScreenings.map((item, index) => {
-    const id = String(item.screeningId || item["회차ID"] || item.id || `scr-sync-${index + 1}`).trim();
-    const previous = previousById.get(id) || {};
-    const startTime = item.startTime || combineDriveDateTime(item.screeningDate || item["상영일"], item.screeningTime || item["상영시간"], previous.startTime);
-    const endTime = item.endTime || previous.endTime || (startTime ? new Date(new Date(startTime).getTime() + 90 * 60000).toISOString().slice(0, 16) : "");
-    return normalizeScreening({
-      ...previous,
-      id,
-      title: item.movieTitle || item["영화명"] || item.title || previous.title || "영화명 미입력",
-      venue: item.venue || item["상영관"] || previous.venue || "상영관 미입력",
-      startTime,
-      endTime,
-      capacity: parseDriveNumber(item.capacity || item["정원"], previous.capacity || 0),
-      status: item.status || item["상태"] || previous.status || "신청 가능",
-      isOpening: String(item.opening || item["개막작"] || "").includes("개막") || previous.isOpening === true || id === OPENING_FILM_ID,
-      gvHost: item.gvHost || item["GV"] || previous.gvHost || "",
-      moderator: item.moderator || item["모더레이터"] || previous.moderator || "",
-      staff: item.staff || item["담당STAFF"] || item["담당스태프"] || previous.staff || "",
-      staffPhone: item.staffPhone || item["연락처"] || previous.staffPhone || "",
-      staffPin: previous.staffPin || "0909",
-      notes: item.notes || item["기타"] || previous.notes || ""
-    });
-  }) : state.screenings;
-
-  const rawApplicants = Array.isArray(data.applicants) ? data.applicants : [];
-  const reservations = rawApplicants.map((item, index) => {
-    const screening = findScreeningForDriveApplicant(item, screenings);
-    const status = String(item.attendanceStatus || item["참석여부"] || "신청").trim();
-    const attended = status === "참석";
-    const number = String(item.reservationNumber || item["예약번호"] || `SYNC-${String(index + 1).padStart(4, "0")}`).trim();
-    const seats = Math.max(1, parseDriveNumber(item.count || item["신청인원"] || item.seats || item["인원"], 1));
-    const attendedSeats = attended ? Math.max(1, parseDriveNumber(item.attendedCount || item["참석인원"], seats)) : 0;
-    return normalizeReservation({
-      id: `rsv-${number.replace(/[^a-zA-Z0-9가-힣_-]/g, "-")}`,
-      reservationNumber: number,
-      screeningId: screening?.id || item.screeningId || "",
-      name: item.name || item["신청자"] || "",
-      phone: item.phone || item["연락처"] || "",
-      email: item.email || item["이메일"] || "",
-      seats,
-      status: "확정",
-      attendanceStatus: status === "참석" || status === "미참석" ? status : "신청",
-      attended,
-      attendedSeats,
-      attendedAt: attended ? (item.attendedAt || item["참석처리일"] || item.updatedAt || "") : "",
-      donorName: item.donorName || item["후원자명/입금자명"] || "",
-      smsConsent: String(item.smsConsent || item["문자수신"] || "동의") !== "미동의",
-      smsStatus: item.smsStatus || item["문자상태"] || "미발송",
-      smsSentAt: item.smsSentAt || item["문자발송일"] || "",
-      smsRequestId: item.smsRequestId || item["문자요청ID"] || "",
-      createdAt: item.createdAt || item["신청일시"] || new Date().toISOString(),
-      note: item.memo || item["메모"] || ""
-    });
-  });
-
-  const settingsRow = Array.isArray(data.survey?.settings) ? data.survey.settings.find((row) => String(row.festival || row["구분"] || "").includes("머내마을영화제")) : null;
-  const surveySettings = settingsRow ? {
-    enabled: String(settingsRow.enabled || settingsRow["만족도조사"] || "OFF") === "ON",
-    autoSmsEnabled: String(settingsRow.autoSmsEnabled || settingsRow["자동문자"] || "OFF") === "ON",
-    sendDelayMinutes: parseDriveNumber(settingsRow.sendDelayMinutes || settingsRow["발송지연분"], 5),
-    responseDeadlineDays: parseDriveNumber(settingsRow.responseDeadlineDays || settingsRow["응답마감일"], 7),
-    preventDuplicate: String(settingsRow.preventDuplicate || settingsRow["중복방지"] || "ON") !== "OFF",
-    smsTemplate: settingsRow.smsTemplate || settingsRow["문자내용/회차정보"] || defaultSurveySettings().smsTemplate
-  } : state.surveySettings;
-
-  const surveyResponses = Array.isArray(data.survey?.responses) ? data.survey.responses.map((r) => ({
-    token: r.token || r["설문토큰"] || "",
-    submittedAt: r.submittedAt || r["응답시각"] || "",
-    reservationNumber: r.reservationNumber || r["예약번호"] || "",
-    name: r.name || r["이름"] || "",
-    phone: r.phone || r["연락처"] || "",
-    movieTitle: r.movieTitle || r["영화명"] || "",
-    screeningTime: r.screeningTime || r["상영일시"] || "",
-    venue: r.venue || r["장소"] || "",
-    overallRating: r.overallRating || r["전체만족도"] || "",
-    venueRating: r.venueRating || r["상영환경"] || "",
-    guideRating: r.guideRating || r["진행안내"] || "",
-    returnIntent: r.returnIntent || r["재참여의향"] || "",
-    goodComment: r.goodComment || r["좋았던점"] || "",
-    improveComment: r.improveComment || r["개선의견"] || "",
-    status: r.status || r["응답상태"] || "응답완료",
-    answers: {
-      "q-overall": r.overallRating || r["전체만족도"] || "",
-      "q-venue": r.venueRating || r["상영환경"] || "",
-      "q-guide": r.guideRating || r["진행안내"] || "",
-      "q-return": r.returnIntent || r["재참여의향"] || "",
-      "q-good": r.goodComment || r["좋았던점"] || "",
-      "q-improve": r.improveComment || r["개선의견"] || ""
-    }
-  })) : state.surveyResponses;
-
-  const surveyDispatches = Array.isArray(data.survey?.dispatches) ? data.survey.dispatches.map((d) => ({
-    sentAt: d.sentAt || d["발송시각"] || "",
-    reservationNumber: d.reservationNumber || d["예약번호"] || "",
-    token: d.token || d["설문토큰"] || "",
-    name: d.name || d["이름"] || "",
-    phone: d.phone || d["연락처"] || "",
-    movieTitle: d.movieTitle || d["영화명"] || "",
-    screeningTime: d.screeningTime || d["상영일시"] || "",
-    venue: d.venue || d["장소"] || "",
-    status: d.status || d["발송상태"] || "",
-    link: d.link || d["설문링크"] || "",
-    error: d.error || d["오류메시지"] || ""
-  })) : state.surveyDispatches;
-
-  return normalizeState({
-    ...state,
-    screenings,
-    reservations,
-    surveySettings,
-    surveyQuestions: state.surveyQuestions,
-    surveyResponses,
-    surveyDispatches,
-    lastUpdated: data.generatedAt || new Date().toISOString()
-  });
-}
-
-function hasUsefulDriveData(data = {}) {
-  const source = data.data || data;
-  return Array.isArray(source.applicants) || Array.isArray(source.screenings) || Array.isArray(source.survey?.responses);
+  // 과거 구글시트 원본 모드 호환 함수입니다. v102부터 화면 데이터에는 적용하지 않습니다.
+  return normalizeState({});
 }
 
 async function pullGoogleDriveCore(options = {}) {
-  if (googleSheetPulling) return false;
-  const silent = options.silent === true;
-  const url = getDriveWebhookUrl();
-  if (!url) return false;
-  googleSheetPulling = true;
-  try {
-    const data = await readGoogleDriveData(url);
-    if (!hasUsefulDriveData(data)) {
-      googleSheetLastError = "구글시트에 읽을 수 있는 데이터가 없습니다.";
-      return false;
-    }
-    const nextState = driveDataToState(data);
-    state = nextState;
-    googleSheetSourceLoaded = true;
-    googleSheetInitialReady = true;
-    googleSheetLastError = "";
-    setDriveLastPullNow();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    if (!silent) toast("구글시트 최신 데이터를 불러왔습니다.");
-    if (options.render !== false) render();
-    return true;
-  } catch (error) {
-    console.warn("구글시트 데이터 불러오기 실패", error);
-    googleSheetLastError = String(error?.message || error || "구글시트 데이터 불러오기 실패");
-    if (!silent) toast("구글시트 데이터 불러오기에 실패했습니다. Apps Script v98 배포와 기본 구글시트 URL을 확인해 주세요.");
-    return false;
-  } finally {
-    googleSheetPulling = false;
-  }
+  if (!options.silent) toast("구글시트는 백업용입니다. 데이터 불러오기는 Supabase 원본을 사용합니다.");
+  return false;
 }
 
 async function bootstrapGoogleSheetSource(options = {}) {
-  if (!getDriveWebhookUrl()) return false;
-  const first = await pullGoogleDriveCore({ silent: options.silent !== false, render: options.render === true });
-  if (first) return true;
-  await new Promise((resolve) => setTimeout(resolve, 600));
-  return pullGoogleDriveCore({ silent: true, render: options.render === true });
+  return false;
 }
 
 function pullGoogleSheetIfStale(maxAgeMs = 15000) {
-  if (!getDriveWebhookUrl()) return;
-  const last = localStorage.getItem(DRIVE_LAST_PULL_STORAGE_KEY);
-  const lastTime = last ? new Date(last).getTime() : 0;
-  if (!lastTime || Date.now() - lastTime > maxAgeMs) {
-    pullGoogleDriveCore({ silent: true, render: true });
-  }
+  return false;
 }
 
 function queueGoogleDriveAutoSync(reason = "data-change") {
@@ -5359,7 +5139,7 @@ function toggleGoogleDriveAutoSync() {
     if (!url) return;
   }
   setGoogleDriveAutoSyncEnabled(next);
-  toast(next ? "구글드라이브 자동저장을 켰습니다." : "구글드라이브 자동저장을 껐습니다.");
+  toast(next ? "구글시트 자동백업을 켰습니다." : "구글시트 자동백업을 껐습니다.");
   if (next) syncGoogleDriveCore({ silent: false, prompt: false });
   render();
 }
