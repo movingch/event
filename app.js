@@ -2649,6 +2649,119 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
 }
 
 
+
+function surveyTestReservationOptions() {
+  const reservations = (state.reservations || []).slice().sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  return reservations.map((reservation) => {
+    const screening = state.screenings.find((item) => item.id === reservation.screeningId) || {};
+    const label = `${reservation.name || "이름 없음"} · ${cleanMovieTitle(screening.title || "상영작")} · ${screening.venue || "상영관"} · ${reservation.phone || "연락처 없음"}`;
+    return `<option value="${esc(reservation.id)}">${esc(label)}</option>`;
+  }).join("");
+}
+
+function surveyTestPanelHtml() {
+  const hasReservations = Array.isArray(state.reservations) && state.reservations.length > 0;
+  if (!hasReservations) {
+    return `<div class="notice-box"><strong>테스트할 신청자가 아직 없습니다.</strong><br>영화 신청을 테스트로 1건 등록한 뒤, 관리자에서 이 화면을 다시 열어 주세요.</div>`;
+  }
+  const settings = state.surveySettings || defaultSurveySettings();
+  return `
+    <div class="survey-test-panel">
+      <label>
+        <span class="label">테스트할 신청자</span>
+        <select class="input" id="surveyTestReservationId">${surveyTestReservationOptions()}</select>
+      </label>
+      <label>
+        <span class="label">테스트 문자 받을 휴대폰</span>
+        <input class="input" id="surveyTestPhone" type="tel" placeholder="비워두면 선택한 신청자 연락처로 발송" />
+      </label>
+      <div class="survey-test-actions">
+        <button class="btn btn-outline" type="button" data-action="create-survey-test-link">테스트 링크 열기</button>
+        <button class="btn btn-dark" type="button" data-action="send-survey-test-sms">테스트 문자 보내기</button>
+      </div>
+      <p class="help">테스트 링크/문자를 만들면 먼저 구글시트의 만족도_문자발송기록에 테스트 대상이 저장됩니다. 설문 사용이 ${surveySettingLabel(settings.enabled)}이면 링크가 열리지 않으므로, 테스트 전에는 만족도조사 사용을 ON으로 저장해 주세요.</p>
+    </div>`;
+}
+
+function createSurveyTestDispatch(reservation, screening, phoneOverride = "") {
+  const now = new Date().toISOString();
+  const phone = String(phoneOverride || reservation.phone || "").trim();
+  const dispatch = {
+    id: `sd-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    reservationId: `test-${reservation.id}-${Date.now()}`,
+    screeningId: screening?.id || reservation.screeningId || "",
+    reservationNumber: `${reservationDisplayNumber(reservation, screening)}-TEST`,
+    token: surveyToken(),
+    name: `${reservation.name || "테스트"} TEST`,
+    phone,
+    movieTitle: screening?.title || "",
+    venue: screening?.venue || "",
+    screeningTime: screening?.startTime || "",
+    status: "테스트링크",
+    sentAt: "",
+    error: "",
+    link: "",
+    createdAt: now
+  };
+  dispatch.link = surveyLinkForDispatch(dispatch);
+  state.surveyDispatches.push(dispatch);
+  return dispatch;
+}
+
+async function createSurveyTestLink({ sendSms = false } = {}) {
+  const reservationId = document.getElementById("surveyTestReservationId")?.value || "";
+  const phoneOverride = document.getElementById("surveyTestPhone")?.value || "";
+  const reservation = state.reservations.find((item) => item.id === reservationId);
+  if (!reservation) { toast("테스트할 신청자를 선택해 주세요."); return; }
+  const screening = state.screenings.find((item) => item.id === reservation.screeningId);
+  if (!screening) { toast("선택한 신청자의 상영 정보를 찾을 수 없습니다."); return; }
+  if (!state.surveySettings?.enabled) { toast("먼저 만족도조사 사용을 ON으로 저장해 주세요."); return; }
+  if (!getDriveWebhookUrl()) { toast("구글시트 연동 URL을 먼저 설정해 주세요."); return; }
+
+  const dispatch = createSurveyTestDispatch(reservation, screening, phoneOverride);
+  dispatch.status = sendSms ? "테스트발송준비" : "테스트링크";
+  persist({ autoSync: false });
+  const synced = await syncGoogleDriveCore({ silent: false, prompt: false, reason: "survey-test" });
+  if (!synced) {
+    toast("테스트 정보를 구글시트에 저장하지 못했습니다. 연동 URL을 확인해 주세요.");
+    return;
+  }
+  copyTextToClipboard(dispatch.link);
+
+  if (!sendSms) {
+    window.open(dispatch.link, "_blank", "noopener");
+    toast("테스트 설문 링크를 만들고 복사했습니다. 새 창에서 설문을 확인해 주세요.");
+    return;
+  }
+
+  const phone = normalizePhoneForSms(dispatch.phone);
+  if (!phone || phone.length < 10) { toast("테스트 문자를 받을 휴대폰 번호를 확인해 주세요."); return; }
+  const tempReservation = { ...reservation, name: dispatch.name, phone, attended: true, smsConsent: true };
+  const message = `[테스트] ${fillSurveySmsTemplate(state.surveySettings.smsTemplate, tempReservation, screening, dispatch.link)}`;
+  dispatch.status = "테스트발송중";
+  persist({ autoSync: false });
+  try {
+    const response = await fetch(SMS_API_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "notice", phone, message })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok === false) throw new Error(result.error || `HTTP ${response.status}`);
+    Object.assign(dispatch, { status: "테스트발송완료", sentAt: new Date().toISOString(), requestId: result.requestId || "", error: "" });
+    persist({ autoSync: false });
+    await syncGoogleDriveCore({ silent: true, prompt: false, reason: "survey-test-sent" });
+    toast("테스트 만족도조사 문자를 발송했습니다. 링크도 복사했습니다.");
+    render();
+  } catch (error) {
+    Object.assign(dispatch, { status: "테스트발송실패", error: String(error?.message || error).slice(0, 120) });
+    persist({ autoSync: false });
+    await syncGoogleDriveCore({ silent: true, prompt: false, reason: "survey-test-failed" });
+    toast("테스트 문자 발송에 실패했습니다. 문자 설정을 확인해 주세요.");
+    render();
+  }
+}
+
 function adminSurvey() {
   const settings = state.surveySettings || defaultSurveySettings();
   const questions = state.surveyQuestions || defaultSurveyQuestions();
@@ -2670,6 +2783,17 @@ function adminSurvey() {
         <div class="metric-card"><div class="metric-label">응답수</div><div class="metric-value">${stats.responses}</div><div class="metric-note">평균 만족도 ${stats.average}</div></div>
         <div class="metric-card"><div class="metric-label">문자 발송</div><div class="metric-value">${stats.sent}</div><div class="metric-note">기록 ${stats.dispatches}건</div></div>
       </section>
+    </section>
+
+    <section class="card survey-test-card">
+      <div class="section-title">
+        <div>
+          <h3>만족도조사 테스트</h3>
+          <p>운영 전에 설문 링크가 열리는지, 문자 발송과 구글시트 기록이 되는지 확인합니다. 테스트 기록은 실제 응답과 구분되도록 이름 뒤에 TEST가 붙습니다.</p>
+        </div>
+        <span class="badge ${settings.enabled ? "badge-ok" : ""}">테스트 전 설문 ${surveySettingLabel(settings.enabled)}</span>
+      </div>
+      ${surveyTestPanelHtml()}
     </section>
 
     <section class="card">
@@ -4746,6 +4870,8 @@ document.addEventListener("click", (event) => {
     visibleReservationIdsForSms().forEach((reservationId) => checked ? selectedReservationSmsIds.add(reservationId) : selectedReservationSmsIds.delete(reservationId));
     updateReservationTable();
   }
+  if (action === "create-survey-test-link") createSurveyTestLink({ sendSms: false });
+  if (action === "send-survey-test-sms") createSurveyTestLink({ sendSms: true });
   if (action === "print") window.print();
   if (action === "print-admin-report") printAdminReport();
   if (action === "edit-screening") { selectedScreeningId = id; window.location.hash = "#/admin/screenings"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
