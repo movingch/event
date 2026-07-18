@@ -1,3 +1,7 @@
+const DEFAULT_GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwc18Y1SArlzYkXfnw1so5SsFKUMg3v9-RgJagkvgihNgEqRuS-eJtM7fKpMfgqrnyE/exec';
+
+function env(name) { return String(process.env[name] || '').trim(); }
+
 function json(res, status, data) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -14,11 +18,11 @@ module.exports = async function handler(req, res) {
     for await (const chunk of req) chunks.push(chunk);
     const raw = Buffer.concat(chunks).toString('utf8');
     const body = raw ? JSON.parse(raw) : {};
-    const webhookUrl = String(body.webhookUrl || '').trim();
+    const webhookUrl = String(body.webhookUrl || env('GOOGLE_APPS_SCRIPT_URL') || DEFAULT_GOOGLE_APPS_SCRIPT_URL || '').trim();
     const payload = body.payload || body;
 
-    if (!webhookUrl || !/^https:\/\/script\.google\.com\/macros\/s\//.test(webhookUrl)) {
-      return json(res, 400, { ok: false, message: '유효한 Apps Script /exec URL이 아닙니다.' });
+    if (!webhookUrl || !/^https:\/\/script\.google\.com\/macros\/s\//.test(webhookUrl) || !webhookUrl.includes('/exec')) {
+      return json(res, 400, { ok: false, message: '유효한 Apps Script /exec URL이 아닙니다.', configured: Boolean(webhookUrl) });
     }
 
     if (body.action === 'read' || payload.action === 'read') {
@@ -50,7 +54,10 @@ module.exports = async function handler(req, res) {
 
     const upstream = await fetch(webhookUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Accept': 'application/json, text/plain, */*'
+      },
       body: JSON.stringify(payload),
       redirect: 'follow'
     });
@@ -65,6 +72,16 @@ module.exports = async function handler(req, res) {
         message: 'Apps Script 저장 요청이 실패했습니다.',
         status: upstream.status,
         responseText: text.slice(0, 500),
+        counts: { applicantsCount, statsCount, screeningsCount }
+      });
+    }
+
+    if (upstreamJson && upstreamJson.ok === false) {
+      return json(res, 502, {
+        ok: false,
+        message: upstreamJson.message || 'Apps Script가 저장 실패를 반환했습니다.',
+        status: upstream.status,
+        responseText: text.slice(0, 1000),
         counts: { applicantsCount, statsCount, screeningsCount }
       });
     }

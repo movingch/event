@@ -73,8 +73,13 @@ async function backupToGoogleSheet(googlePayload, webhookUrl) {
   const text = await upstream.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch (error) { data = text.slice(0, 500); }
-  if (!upstream.ok || (data && typeof data === 'object' && data.ok === false)) return { ok: false, status: upstream.status, data };
-  return { ok: true, data };
+  const counts = {
+    applicantsCount: Array.isArray(googlePayload.applicants) ? googlePayload.applicants.length : 0,
+    statsCount: Array.isArray(googlePayload.stats) ? googlePayload.stats.length : 0,
+    screeningsCount: Array.isArray(googlePayload.screenings) ? googlePayload.screenings.length : 0
+  };
+  if (!upstream.ok || (data && typeof data === 'object' && data.ok === false)) return { ok: false, status: upstream.status, data, counts };
+  return { ok: true, data, counts };
 }
 
 module.exports = async function handler(req, res) {

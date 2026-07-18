@@ -2803,7 +2803,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=105">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=106">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3262,6 +3262,7 @@ function adminBackup() {
           <div class="drive-sync-status">
             <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">항상 자동백업</span>
             <span class="muted">마지막 백업: ${esc(formatDriveLastSyncTime())}</span>
+            <span class="muted">최근 결과: ${esc(formatGoogleBackupStatus())}</span>
           </div>
           <form id="driveSyncForm" class="drive-sync-form">
             <label class="label" for="driveWebhookUrl">Google Apps Script 웹앱 URL</label>
@@ -3269,9 +3270,10 @@ function adminBackup() {
             <span class="help">백업 예정: ${esc(googleDriveCountsLabel(buildGoogleDrivePayload("preview")))} · /exec 로 끝나는 Apps Script URL을 넣어주세요.</span>
             <div class="form-actions">
               <button class="btn btn-primary" type="submit">구글시트 백업 실행</button>
+              <button class="btn btn-dark" type="button" data-action="force-google-backup-from-supabase">Supabase 최신 데이터를 구글시트로 강제 백업</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=105">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=106">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -4804,6 +4806,8 @@ let supabaseLastError = "";
 let supabaseLastPullAt = 0;
 let supabaseLastPushAt = 0;
 let supabaseAutoSyncTimer = null;
+let googleBackupRetryTimers = [];
+let googleBackupLastStatus = null;
 
 function stateHasOperationalData(data = {}) {
   return Boolean(
@@ -4856,19 +4860,23 @@ async function postSupabaseState(reason = "auto") {
     // v103: Supabase 저장 후 구글시트 백업이 서버 환경변수 문제 등으로 건너뛰거나 실패하면
     // 브라우저에서 같은 payload를 한 번 더 직접 백업 요청합니다. 구글시트는 원본이 아니라 백업 대상입니다.
     const backup = data?.googleBackup || {};
-    if (googlePayload && (!backup || backup.skipped || backup.ok === false)) {
+    if (googlePayload && backup && backup.ok) {
+      rememberGoogleBackupResult(true, { counts: backup.counts || googleDrivePayloadCounts(googlePayload), message: "서버 백업 성공" });
+    } else if (googlePayload && (!backup || backup.skipped || backup.ok === false)) {
+      rememberGoogleBackupResult(false, { message: backup?.reason || backup?.data?.message || "서버 백업 실패 또는 건너뜀", counts: googleDrivePayloadCounts(googlePayload) });
       try {
         const backupUrl = typeof getDriveWebhookUrl === "function" ? getDriveWebhookUrl() : "";
         if (backupUrl) {
-          await postGoogleDrivePayload(backupUrl, googlePayload);
-          setDriveLastSyncNow();
+          const retryResult = await postGoogleDrivePayload(backupUrl, googlePayload);
+          rememberGoogleBackupResult(true, { counts: retryResult?.counts || googleDrivePayloadCounts(googlePayload), message: "브라우저 재시도 성공" });
         }
       } catch (backupError) {
+        rememberGoogleBackupResult(false, { message: String(backupError?.message || backupError), counts: googleDrivePayloadCounts(googlePayload) });
         console.warn("구글시트 백업 재시도 실패", backupError);
+        queueGoogleSheetBackupRetries(reason);
       }
-    } else if (googlePayload && backup && backup.ok) {
-      setDriveLastSyncNow();
     }
+    queueGoogleSheetBackupRetries(reason);
     return true;
   } catch (error) {
     console.warn("Supabase 저장 실패", error);
@@ -5083,6 +5091,63 @@ function encodeGoogleDrivePayload(payload) {
   return JSON.stringify(payload);
 }
 
+
+function formatGoogleBackupStatus() {
+  const value = googleBackupLastStatus;
+  if (!value) return "아직 없음";
+  const time = value.at ? new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value.at)) : "";
+  const counts = value.counts || {};
+  const countText = `신청자 ${counts.applicantsCount ?? counts.applicants ?? 0}명 · 통계 ${counts.statsCount ?? counts.stats ?? 0}건 · 상영정보 ${counts.screeningsCount ?? counts.screenings ?? 0}건`;
+  if (value.ok) return `성공 ${time} · ${countText}`;
+  return `실패 ${time} · ${value.message || "구글시트 백업 실패"}`;
+}
+
+function rememberGoogleBackupResult(ok, detail = {}) {
+  googleBackupLastStatus = {
+    ok: Boolean(ok),
+    at: new Date().toISOString(),
+    message: detail.message || detail.error || "",
+    counts: detail.counts || detail
+  };
+  if (ok) setDriveLastSyncNow();
+}
+
+function clearGoogleBackupRetries() {
+  googleBackupRetryTimers.forEach((timer) => window.clearTimeout(timer));
+  googleBackupRetryTimers = [];
+}
+
+function queueGoogleSheetBackupRetries(reason = "data-change") {
+  if (!getDriveWebhookUrl()) return;
+  clearGoogleBackupRetries();
+  [2500, 15000, 60000].forEach((delay, index) => {
+    const timer = window.setTimeout(async () => {
+      const ok = await syncGoogleDriveCore({ silent: true, prompt: false, reason: `${reason}-retry-${index + 1}`, allowZeroApplicants: false });
+      if (ok) clearGoogleBackupRetries();
+    }, delay);
+    googleBackupRetryTimers.push(timer);
+  });
+}
+
+async function forceBackupSupabaseToGoogleSheet() {
+  const button = document.querySelector('[data-action="force-google-backup-from-supabase"]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Supabase 원본 백업 중...";
+  }
+  try {
+    await pullSupabaseCore({ render: false });
+    const ok = await syncGoogleDriveCore({ silent: false, prompt: false, reason: "manual-supabase-to-google", allowZeroApplicants: false });
+    if (ok) toast("Supabase 최신 원본을 구글시트로 강제 백업했습니다.");
+    return ok;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Supabase 최신 데이터를 구글시트로 강제 백업";
+    }
+  }
+}
+
 async function postGoogleDrivePayload(url, payload) {
   // v63: 브라우저에서 Apps Script로 직접 보내면 본문이 비는 사례가 있어
   // 같은 도메인의 Vercel API가 Apps Script로 전달하는 서버 프록시 방식을 기본으로 사용합니다.
@@ -5096,7 +5161,7 @@ async function postGoogleDrivePayload(url, payload) {
   let data = null;
   try { data = await response.json(); } catch (error) {}
   if (!response.ok || !data?.ok) {
-    throw new Error(data?.message || "구글시트 백업 요청에 실패했습니다.");
+    throw new Error(data?.message || data?.responseText || "구글시트 백업 요청에 실패했습니다.");
   }
   return data;
 }
@@ -5172,26 +5237,29 @@ async function syncGoogleDriveCore(options = {}) {
   // 자동연동 중 새 브라우저나 캐시가 비어 있는 기기가 실제 구글시트 신청자현황을
   // 0명/샘플데이터로 덮어쓰지 않도록, 신청자 0명 상태의 조용한 자동 저장은 차단합니다.
   // 실제로 전체 명단을 비우고 싶을 때는 관리자 화면에서 수동 저장을 실행하면 확인창을 거칩니다.
-  if (silent && counts.applicants === 0) {
+  const allowZeroApplicants = options.allowZeroApplicants === true;
+  if (silent && counts.applicants === 0 && !allowZeroApplicants) {
     console.warn("구글시트 자동저장 건너뜀: 이 브라우저의 신청자 데이터가 0명입니다.");
+    rememberGoogleBackupResult(false, { message: "신청자 0명 자동백업 차단", counts });
     return false;
   }
-  if (!silent && counts.applicants === 0) {
+  if (!silent && counts.applicants === 0 && !allowZeroApplicants) {
     const ok = confirm(`현재 이 브라우저에서 전송할 신청자가 0명입니다.\n통계 ${counts.stats}건, 상영정보 ${counts.screenings}건만 구글시트로 보낼까요?\n\n신청자 명단이 화면에 보이는 브라우저에서 연동해야 신청자현황이 저장됩니다.`);
     if (!ok) return false;
   }
   try {
     const result = await postGoogleDrivePayload(url, payload);
-    setDriveLastSyncNow();
+    const sent = result?.counts || counts;
+    rememberGoogleBackupResult(true, { counts: sent, message: result?.message || "구글시트 백업 성공" });
     if (!silent) {
-      const sent = result?.counts || counts;
       toast(`구글시트 저장 요청 완료: 신청자 ${sent.applicantsCount ?? sent.applicants}명 · 통계 ${sent.statsCount ?? sent.stats}건 · 상영정보 ${sent.screeningsCount ?? sent.screenings}건`);
       window.setTimeout(render, 0);
     }
     return true;
   } catch (error) {
     console.error(error);
-    if (!silent) toast("구글시트 백업 요청에 실패했습니다. Apps Script URL을 확인해 주세요.");
+    rememberGoogleBackupResult(false, { message: String(error?.message || error), counts });
+    if (!silent) toast(`구글시트 백업 실패: ${String(error?.message || error).slice(0, 80)}`);
     return false;
   }
 }
@@ -5473,6 +5541,7 @@ document.addEventListener("click", (event) => {
   if (action === "toggle-drive-autosync") toggleGoogleDriveAutoSync();
   if (action === "reset-drive-webhook") resetGoogleDriveWebhookUrl();
   if (action === "force-supabase-migration") forceMigrateCurrentBrowserToSupabase();
+  if (action === "force-google-backup-from-supabase") forceBackupSupabaseToGoogleSheet();
   if (action === "export-json") exportJson();
   if (action === "reset-demo") {
     if (!confirm("데모 데이터로 초기화할까요? 현재 입력된 정보가 사라집니다.")) return;
