@@ -58,6 +58,81 @@ async function readSupabaseState() {
   return row?.state && typeof row.state === 'object' ? row.state : {};
 }
 
+function normalizeSurveyQuestion(q, index) {
+  return {
+    id: q?.id || `q-${index + 1}`,
+    order: q?.order || index + 1,
+    type: q?.type || 'text',
+    title: q?.title || `문항 ${index + 1}`,
+    choices: q?.choices || '',
+    required: q?.required === true || q?.required === 'true' || q?.required === '필수',
+    enabled: q?.enabled === false || q?.enabled === 'false' || q?.enabled === 'OFF' ? false : true
+  };
+}
+
+function defaultSurveyQuestions() {
+  return [
+    { id: 'q-overall', order: 1, type: 'rating', title: '전체적으로 만족하셨나요?', choices: '', required: true, enabled: true },
+    { id: 'q-venue', order: 2, type: 'rating', title: '상영 장소와 환경은 만족스러웠나요?', choices: '', required: true, enabled: true },
+    { id: 'q-guide', order: 3, type: 'rating', title: '진행과 안내는 만족스러웠나요?', choices: '', required: true, enabled: true },
+    { id: 'q-return', order: 4, type: 'rating', title: '다음에도 참여하고 싶으신가요?', choices: '', required: true, enabled: true },
+    { id: 'q-good', order: 5, type: 'text', title: '좋았던 점을 적어 주세요.', choices: '', required: false, enabled: true },
+    { id: 'q-improve', order: 6, type: 'text', title: '개선하면 좋을 점을 적어 주세요.', choices: '', required: false, enabled: true }
+  ];
+}
+
+function findSurveyDispatchByToken(state, token) {
+  const t = normalizeValue(token);
+  if (!t) return null;
+  return (Array.isArray(state.surveyDispatches) ? state.surveyDispatches : []).find((dispatch) => normalizeValue(dispatch.token) === t) || null;
+}
+
+function findSurveyResponseByToken(state, token) {
+  const t = normalizeValue(token);
+  if (!t) return null;
+  return (Array.isArray(state.surveyResponses) ? state.surveyResponses : []).find((response) => normalizeValue(response.token) === t) || null;
+}
+
+function supabaseSurveyLookupPayload(state, token) {
+  const dispatch = findSurveyDispatchByToken(state, token);
+  if (!dispatch) return { ok: false, message: '설문 대상 정보를 찾지 못했습니다. 관리자에서 테스트 링크를 다시 만들어 주세요.' };
+  const existing = findSurveyResponseByToken(state, token);
+  const settings = state.surveySettings || {};
+  if (settings.enabled === false || settings.enabled === 'false' || settings.enabled === 'OFF') {
+    return { ok: false, message: '현재 만족도조사가 비활성화되어 있습니다.' };
+  }
+  const questions = (Array.isArray(state.surveyQuestions) && state.surveyQuestions.length ? state.surveyQuestions : defaultSurveyQuestions())
+    .map(normalizeSurveyQuestion)
+    .filter((q) => q.enabled !== false)
+    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+  return {
+    ok: true,
+    source: 'supabase',
+    alreadySubmitted: Boolean(existing),
+    participant: {
+      id: dispatch.id || '',
+      token: dispatch.token || token,
+      reservationId: dispatch.reservationId || '',
+      reservationNumber: dispatch.reservationNumber || '',
+      screeningId: dispatch.screeningId || '',
+      name: dispatch.name || '관객',
+      phone: dispatch.phone || '',
+      movieTitle: dispatch.movieTitle || '상영작',
+      venue: dispatch.venue || '상영관',
+      screeningTime: dispatch.screeningTime || '',
+      type: dispatch.type || '',
+      test: dispatch.test === true || String(dispatch.reservationId || '').startsWith('test-') || String(dispatch.name || '').includes('TEST')
+    },
+    questions
+  };
+}
+
+async function fallbackSurveyLookupFromSupabase(token) {
+  if (!supabaseConfig().configured) return null;
+  const state = await readSupabaseState();
+  return supabaseSurveyLookupPayload(state, token);
+}
+
 async function writeSupabaseState(state) {
   return supabaseFetch('festival_state', {
     method: 'POST',
@@ -164,37 +239,54 @@ module.exports = async function handler(req, res) {
       const query = req.query || {};
       const webhookUrl = decodeWebhook(query.webhookUrl || query.w);
       const token = String(query.token || query.t || '').trim();
-      if (!/^https:\/\/script\.google\.com\/macros\/s\//.test(webhookUrl) || !webhookUrl.endsWith('/exec')) {
-        return sendJson(res, 400, { ok: false, message: '설문 연동 URL을 확인할 수 없습니다.' });
-      }
+      const validWebhook = /^https:\/\/script\.google\.com\/macros\/s\//.test(webhookUrl) && webhookUrl.endsWith('/exec');
       if (!token) return sendJson(res, 400, { ok: false, message: '설문 토큰이 없습니다.' });
-      const url = `${webhookUrl}?action=surveyLookup&token=${encodeURIComponent(token)}`;
-      const response = await fetch(url, { method: 'GET' });
-      const data = await response.json().catch(() => ({}));
-      return sendJson(res, response.ok ? 200 : response.status || 500, data);
+      let data = validWebhook ? null : { ok: false, message: '구글 설문 연동 URL이 없어 Supabase 원본에서 조회합니다.' };
+      let upstreamStatus = validWebhook ? 200 : 404;
+      if (validWebhook) {
+        const url = `${webhookUrl}?action=surveyLookup&token=${encodeURIComponent(token)}`;
+        try {
+          const response = await fetch(url, { method: 'GET' });
+          upstreamStatus = response.status || 500;
+          data = await response.json().catch(() => ({}));
+          if (response.ok && data && data.ok !== false && data.participant) return sendJson(res, 200, data);
+        } catch (lookupError) {
+          data = { ok: false, message: lookupError && lookupError.message ? lookupError.message : String(lookupError) };
+        }
+      }
+      try {
+        const fallback = await fallbackSurveyLookupFromSupabase(token);
+        if (fallback) return sendJson(res, fallback.ok ? 200 : 404, { ...fallback, googleLookup: data || null });
+      } catch (fallbackError) {
+        return sendJson(res, 500, { ok: false, message: fallbackError && fallbackError.message ? fallbackError.message : 'Supabase 설문 조회 실패', googleLookup: data || null });
+      }
+      return sendJson(res, upstreamStatus, data || { ok: false, message: '설문 정보를 찾지 못했습니다.' });
     }
 
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       const webhookUrl = decodeWebhook(body.webhookUrl || body.w);
-      if (!/^https:\/\/script\.google\.com\/macros\/s\//.test(webhookUrl) || !webhookUrl.endsWith('/exec')) {
-        return sendJson(res, 400, { ok: false, message: '설문 연동 URL을 확인할 수 없습니다.' });
-      }
+      const validWebhook = /^https:\/\/script\.google\.com\/macros\/s\//.test(webhookUrl) && webhookUrl.endsWith('/exec');
       const surveyResponse = body.response || {};
       const payload = { type: 'survey-response', response: surveyResponse };
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
-      const data = await response.json().catch(() => ({}));
+      let response = { ok: false, status: 502 };
+      let data = { ok: false, message: validWebhook ? '구글시트 전송 전' : '구글 설문 연동 URL이 없어 Supabase에만 저장합니다.' };
+      if (validWebhook) {
+        response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+        data = await response.json().catch(() => ({}));
+      }
       let supabaseUpdate = { skipped: true };
       try {
         supabaseUpdate = await appendSurveyResponseToSupabase(surveyResponse);
       } catch (supabaseError) {
         supabaseUpdate = { ok: false, message: supabaseError && supabaseError.message ? supabaseError.message : String(supabaseError) };
       }
-      return sendJson(res, response.ok ? 200 : response.status || 500, { ...(data || {}), supabaseUpdate });
+      const finalOk = (response.ok && data?.ok !== false) || supabaseUpdate?.ok === true;
+      return sendJson(res, finalOk ? 200 : response.status || 500, { ok: finalOk, ...(data || {}), supabaseUpdate, googleSubmitOk: response.ok && data?.ok !== false });
     }
 
     return sendJson(res, 405, { ok: false, message: 'GET 또는 POST만 허용됩니다.' });

@@ -2812,10 +2812,28 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
 
 
 
+function getSurveyScreeningForReservation(reservation) {
+  if (!reservation) return null;
+  const byId = (state.screenings || []).find((item) => String(item.id || "") === String(reservation.screeningId || ""));
+  if (byId) return byId;
+  const reservationTitle = cleanMovieTitle(reservation.movieTitle || reservation.screeningTitle || reservation.title || "");
+  if (reservationTitle) {
+    const byTitle = (state.screenings || []).find((item) => cleanMovieTitle(item.title || "") === reservationTitle);
+    if (byTitle) return byTitle;
+  }
+  return {
+    id: reservation.screeningId || `unknown-${reservation.id || Date.now()}`,
+    title: reservation.movieTitle || reservation.screeningTitle || reservation.title || "상영작",
+    venue: reservation.venue || reservation.screeningVenue || "상영관",
+    startTime: reservation.screeningTime || reservation.dateTime || reservation.startTime || "",
+    endTime: reservation.endTime || ""
+  };
+}
+
 function surveyTestReservationOptions() {
   const reservations = (state.reservations || []).slice().sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   return reservations.map((reservation) => {
-    const screening = state.screenings.find((item) => item.id === reservation.screeningId) || {};
+    const screening = getSurveyScreeningForReservation(reservation) || {};
     const label = `${reservation.name || "이름 없음"} · ${cleanMovieTitle(screening.title || "상영작")} · ${screening.venue || "상영관"} · ${reservation.phone || "연락처 없음"}`;
     return `<option value="${esc(reservation.id)}">${esc(label)}</option>`;
   }).join("");
@@ -2841,7 +2859,7 @@ function surveyTestPanelHtml() {
         <button class="btn btn-outline" type="button" data-action="create-survey-test-link">테스트 링크 열기</button>
         <button class="btn btn-dark" type="button" data-action="send-survey-test-sms">테스트 문자 보내기</button>
       </div>
-      <p class="help">테스트 링크/문자를 만들면 먼저 구글시트의 만족도_문자발송기록에 테스트 대상이 저장됩니다. 설문 사용이 ${surveySettingLabel(settings.enabled)}이면 링크가 열리지 않으므로, 테스트 전에는 만족도조사 사용을 ON으로 저장해 주세요.</p>
+      <p class="help">테스트 링크/문자를 만들면 Supabase 원본에 테스트 대상이 먼저 저장되고, 구글시트에는 백업됩니다. 설문 사용이 ${surveySettingLabel(settings.enabled)}이면 링크가 열리지 않으므로, 테스트 전에는 만족도조사 사용을 ON으로 저장해 주세요.</p>
     </div>`;
 }
 
@@ -2877,19 +2895,16 @@ async function createSurveyTestLink({ sendSms = false } = {}) {
   const phoneOverride = document.getElementById("surveyTestPhone")?.value || "";
   const reservation = state.reservations.find((item) => item.id === reservationId);
   if (!reservation) { toast("테스트할 신청자를 선택해 주세요."); return; }
-  const screening = state.screenings.find((item) => item.id === reservation.screeningId);
+  const screening = getSurveyScreeningForReservation(reservation);
   if (!screening) { toast("선택한 신청자의 상영 정보를 찾을 수 없습니다."); return; }
   if (!state.surveySettings?.enabled) { toast("먼저 만족도조사 사용을 ON으로 저장해 주세요."); return; }
-  if (!getDriveWebhookUrl()) { toast("구글시트 연동 URL을 먼저 설정해 주세요."); return; }
-
   const dispatch = createSurveyTestDispatch(reservation, screening, phoneOverride);
   dispatch.status = sendSms ? "테스트발송준비" : "테스트링크";
   persist({ autoSync: false });
   try { await postSupabaseState("survey-test-dispatch"); } catch (error) { console.warn("테스트 발송 기록 Supabase 저장 실패", error); }
   const synced = await syncGoogleDriveCore({ silent: false, prompt: false, reason: "survey-test" });
   if (!synced) {
-    toast("테스트 정보를 구글시트에 저장하지 못했습니다. 연동 URL을 확인해 주세요.");
-    return;
+    toast("구글시트 백업은 실패했지만 Supabase 기준 테스트 링크는 계속 진행합니다.");
   }
   copyTextToClipboard(dispatch.link);
 
