@@ -66,22 +66,83 @@ async function writeSupabaseState(state) {
   });
 }
 
+function normalizeValue(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function cleanMovieTitle(value) {
+  return String(value || '').replace(/^\s*제\s*\d+\s*회\s*/i, '').replace(/\s+/g, ' ').trim();
+}
+
+function digits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
 function responseKey(response) {
-  return String(response?.id || response?.token || response?.reservationId || '');
+  return String(response?.id || response?.token || response?.reservationId || response?.reservationNumber || '');
+}
+
+function sameMovie(a, b) {
+  const am = normalizeValue(cleanMovieTitle(a?.movieTitle || ''));
+  const bm = normalizeValue(cleanMovieTitle(b?.movieTitle || ''));
+  return Boolean(am && bm && am === bm);
+}
+
+function responseMatchesDispatch(response, dispatch) {
+  if (!response || !dispatch) return false;
+  const rt = normalizeValue(response.token);
+  const dt = normalizeValue(dispatch.token);
+  if (rt && dt && rt === dt) return true;
+  const rr = normalizeValue(response.reservationId);
+  const dr = normalizeValue(dispatch.reservationId);
+  if (rr && dr && rr === dr) return true;
+  const rn = normalizeValue(response.reservationNumber);
+  const dn = normalizeValue(dispatch.reservationNumber);
+  if (rn && dn && rn === dn) return true;
+  const rp = digits(response.phone || response.contact || '');
+  const dp = digits(dispatch.phone || '');
+  if (rp && dp && rp === dp && sameMovie(response, dispatch)) return true;
+  const rName = normalizeValue(String(response.name || '').replace(/\s*TEST\s*$/i, ''));
+  const dName = normalizeValue(String(dispatch.name || '').replace(/\s*TEST\s*$/i, ''));
+  if (rName && dName && rName === dName && sameMovie(response, dispatch)) return true;
+  return false;
 }
 
 async function appendSurveyResponseToSupabase(response) {
   if (!supabaseConfig().configured || !response || typeof response !== 'object') return { skipped: true, reason: 'NO_SUPABASE' };
   const state = await readSupabaseState();
   const list = Array.isArray(state.surveyResponses) ? state.surveyResponses : [];
-  const key = responseKey(response);
-  const enriched = { id: response.id || response.token || `survey-${Date.now()}`, ...response, createdAt: response.createdAt || response.submittedAt || new Date().toISOString(), status: response.status || '응답완료' };
+  const dispatches = Array.isArray(state.surveyDispatches) ? state.surveyDispatches : [];
+  const matchedDispatch = dispatches.find((dispatch) => responseMatchesDispatch(response, dispatch));
+  const now = new Date().toISOString();
+  const enriched = {
+    ...response,
+    id: response.id || response.token || response.reservationId || response.reservationNumber || `survey-${Date.now()}`,
+    token: response.token || matchedDispatch?.token || '',
+    reservationId: response.reservationId || matchedDispatch?.reservationId || '',
+    reservationNumber: response.reservationNumber || matchedDispatch?.reservationNumber || '',
+    screeningId: response.screeningId || matchedDispatch?.screeningId || '',
+    movieTitle: response.movieTitle || matchedDispatch?.movieTitle || '',
+    venue: response.venue || matchedDispatch?.venue || '',
+    phone: response.phone || response.contact || matchedDispatch?.phone || '',
+    name: response.name || matchedDispatch?.name || '익명',
+    createdAt: response.createdAt || response.submittedAt || now,
+    submittedAt: response.submittedAt || response.createdAt || now,
+    status: '응답완료',
+    test: response.test === true || matchedDispatch?.test === true || String(response.reservationId || matchedDispatch?.reservationId || '').startsWith('test-') || String(response.name || matchedDispatch?.name || '').includes('TEST'),
+    type: response.type || matchedDispatch?.type || (String(response.reservationId || matchedDispatch?.reservationId || '').startsWith('test-') ? 'test' : '')
+  };
+  const key = responseKey(enriched);
   const next = key ? list.filter((item) => responseKey(item) !== key) : list.slice();
   next.push(enriched);
   state.surveyResponses = next;
-  state.lastUpdated = new Date().toISOString();
+  state.surveyDispatches = dispatches.map((dispatch) => {
+    if (!responseMatchesDispatch(enriched, dispatch)) return dispatch;
+    return { ...dispatch, status: '응답완료', respondedAt: enriched.submittedAt, responseId: enriched.id };
+  });
+  state.lastUpdated = now;
   await writeSupabaseState(state);
-  return { ok: true, count: next.length };
+  return { ok: true, count: next.length, matchedDispatch: Boolean(matchedDispatch) };
 }
 
 function decodeWebhook(value) {

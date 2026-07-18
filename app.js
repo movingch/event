@@ -1936,7 +1936,7 @@ function renderAdmin(tab) {
         ${adminTabLink("overview", "운영요약", active)}
         ${adminTabLink("reservations", "신청자명단", active)}
         ${adminTabLink("stats", "상세통계", active)}
-        ${adminTabLink("surveyView", "만족도조사보기", active)}
+        ${adminTabLink("surveyView", "만족도조사현황", active)}
         ${adminTabLink("staff", "STAFF 관리", active)}
         ${adminTabLink("opening", "개막작관리", active)}
         ${adminTabLink("screenings", "상영관, 영화 관리", active)}
@@ -2860,6 +2860,8 @@ function createSurveyTestDispatch(reservation, screening, phoneOverride = "") {
     venue: screening?.venue || "",
     screeningTime: screening?.startTime || "",
     status: "테스트링크",
+    type: "test",
+    test: true,
     sentAt: "",
     error: "",
     link: "",
@@ -2883,6 +2885,7 @@ async function createSurveyTestLink({ sendSms = false } = {}) {
   const dispatch = createSurveyTestDispatch(reservation, screening, phoneOverride);
   dispatch.status = sendSms ? "테스트발송준비" : "테스트링크";
   persist({ autoSync: false });
+  try { await postSupabaseState("survey-test-dispatch"); } catch (error) { console.warn("테스트 발송 기록 Supabase 저장 실패", error); }
   const synced = await syncGoogleDriveCore({ silent: false, prompt: false, reason: "survey-test" });
   if (!synced) {
     toast("테스트 정보를 구글시트에 저장하지 못했습니다. 연동 URL을 확인해 주세요.");
@@ -2912,12 +2915,14 @@ async function createSurveyTestLink({ sendSms = false } = {}) {
     if (!response.ok || result.ok === false) throw new Error(result.error || `HTTP ${response.status}`);
     Object.assign(dispatch, { status: "테스트발송완료", sentAt: new Date().toISOString(), requestId: result.requestId || "", error: "" });
     persist({ autoSync: false });
+    try { await postSupabaseState("survey-test-sent"); } catch (error) { console.warn("테스트 문자 발송 기록 Supabase 저장 실패", error); }
     await syncGoogleDriveCore({ silent: true, prompt: false, reason: "survey-test-sent" });
     toast("테스트 만족도조사 문자를 발송했습니다. 링크도 복사했습니다.");
     render();
   } catch (error) {
     Object.assign(dispatch, { status: "테스트발송실패", error: String(error?.message || error).slice(0, 120) });
     persist({ autoSync: false });
+    try { await postSupabaseState("survey-test-failed"); } catch (error) { console.warn("테스트 문자 실패 기록 Supabase 저장 실패", error); }
     await syncGoogleDriveCore({ silent: true, prompt: false, reason: "survey-test-failed" });
     toast("테스트 문자 발송에 실패했습니다. 문자 설정을 확인해 주세요.");
     render();
@@ -3065,9 +3070,39 @@ function surveyResponseAnswersHtml(response) {
   }).join("")}</div>`;
 }
 
+function normSurveyValue(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function surveySameMovie(a, b) {
+  const am = normSurveyValue(cleanMovieTitle(a?.movieTitle || ""));
+  const bm = normSurveyValue(cleanMovieTitle(b?.movieTitle || ""));
+  return Boolean(am && bm && am === bm);
+}
+
+function surveyResponseMatchesDispatch(response, dispatch) {
+  if (!response || !dispatch) return false;
+  const rt = normSurveyValue(response.token);
+  const dt = normSurveyValue(dispatch.token);
+  if (rt && dt && rt === dt) return true;
+  const rr = normSurveyValue(response.reservationId);
+  const dr = normSurveyValue(dispatch.reservationId);
+  if (rr && dr && rr === dr) return true;
+  const rn = normSurveyValue(response.reservationNumber);
+  const dn = normSurveyValue(dispatch.reservationNumber);
+  if (rn && dn && rn === dn) return true;
+  const rp = digits(response.phone || response.contact || "");
+  const dp = digits(dispatch.phone || "");
+  if (rp && dp && rp === dp && surveySameMovie(response, dispatch)) return true;
+  const rName = normSurveyValue(String(response.name || "").replace(/\s*TEST\s*$/i, ""));
+  const dName = normSurveyValue(String(dispatch.name || "").replace(/\s*TEST\s*$/i, ""));
+  if (rName && dName && rName === dName && surveySameMovie(response, dispatch)) return true;
+  return false;
+}
+
 function surveyResponseRow(response, index) {
   const submitted = response.submittedAt || response.createdAt || response.timestamp || "";
-  const isTest = String(response.reservationId || "").startsWith("test-") || String(response.name || "").includes("TEST") || String(response.token || "").includes("test");
+  const isTest = String(response.reservationId || "").startsWith("test-") || String(response.name || "").includes("TEST") || String(response.token || "").includes("test") || response.test === true || String(response.type || "").toLowerCase() === "test";
   const overall = surveyRatingValue(response, ["q-overall", "overallRating", "전체만족도"]);
   return `<tr>
     <td>${index + 1}</td>
@@ -3083,8 +3118,8 @@ function surveyResponseRow(response, index) {
 
 function surveyDispatchRow(dispatch, index) {
   const sentAt = dispatch.sentAt || dispatch.createdAt || "";
-  const isTest = String(dispatch.reservationId || "").startsWith("test-") || String(dispatch.name || "").includes("TEST");
-  const responded = (state.surveyResponses || []).some((r) => r.token === dispatch.token || r.reservationId === dispatch.reservationId);
+  const isTest = String(dispatch.reservationId || "").startsWith("test-") || String(dispatch.name || "").includes("TEST") || dispatch.test === true || String(dispatch.type || "").toLowerCase() === "test";
+  const responded = String(dispatch.status || "").includes("응답") || Boolean(dispatch.respondedAt) || (state.surveyResponses || []).some((r) => surveyResponseMatchesDispatch(r, dispatch));
   return `<tr>
     <td>${index + 1}</td>
     <td>${isTest ? '<span class="badge">TEST</span>' : '<span class="badge badge-ok">실제</span>'}</td>
@@ -3104,8 +3139,8 @@ function adminSurveyView() {
     <section class="card survey-view-card">
       <div class="section-title">
         <div>
-          <h2>만족도조사보기</h2>
-          <p>설문을 받은 명단, 응답 목록, 실제 응답 내용을 일반관리자도 확인할 수 있습니다. 테스트 응답도 통계에 포함됩니다.</p>
+          <h2>만족도조사현황</h2>
+          <p>설문 수신 명단, 응답 목록, 실제 응답 내용을 일반관리자도 확인할 수 있습니다. 테스트 응답도 통계에 포함됩니다.</p>
         </div>
         <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${responses.length}건</span>
       </div>
@@ -3136,6 +3171,7 @@ function deleteSurveyResponse(id) {
   if (!confirm(`${label}을 삭제할까요?\n삭제 후 Supabase와 구글시트 백업에도 반영됩니다.`)) return;
   state.surveyResponses = list.filter((r) => String(r.id || r.token || r.reservationId || r.submittedAt || r.createdAt || "") !== target);
   persist();
+  postSupabaseState("delete-survey-response").then(() => syncGoogleDriveCore({ silent: true, prompt: false, reason: "delete-survey-response" })).catch((error) => console.warn("만족도 응답 삭제 동기화 실패", error));
   render();
   toast("만족도조사 응답을 삭제했습니다.");
 }
@@ -3149,15 +3185,16 @@ function deleteSurveyDispatch(id) {
   if (!confirm(`${label}을 삭제할까요?\n발송 기록만 삭제되며, 이미 제출된 응답은 별도로 삭제해야 합니다.`)) return;
   state.surveyDispatches = list.filter((d) => String(d.id || d.token || d.reservationId || d.sentAt || d.createdAt || "") !== target);
   persist();
+  postSupabaseState("delete-survey-dispatch").then(() => syncGoogleDriveCore({ silent: true, prompt: false, reason: "delete-survey-dispatch" })).catch((error) => console.warn("만족도 발송 기록 삭제 동기화 실패", error));
   render();
   toast("만족도조사 발송 기록을 삭제했습니다.");
 }
 
 function surveyResponseStatsTable() {
   const rows = sortedScreenings().map((s) => {
-    const responses = (state.surveyResponses || []).filter((r) => r.screeningId === s.id || r.movieTitle === s.title);
+    const responses = (state.surveyResponses || []).filter((r) => r.screeningId === s.id || cleanMovieTitle(r.movieTitle || "") === cleanMovieTitle(s.title || ""));
     const attended = state.reservations.filter((r) => r.screeningId === s.id && r.attended === true).length;
-    const sent = (state.surveyDispatches || []).filter((d) => d.screeningId === s.id || d.movieTitle === s.title).length;
+    const sent = (state.surveyDispatches || []).filter((d) => d.screeningId === s.id || cleanMovieTitle(d.movieTitle || "") === cleanMovieTitle(s.title || "")).length;
     const ratings = responses.map((r) => Number(r.overallRating || r.answers?.["q-overall"] || 0)).filter((n) => n > 0);
     const avg = ratings.length ? (ratings.reduce((sum, n) => sum + n, 0) / ratings.length).toFixed(1) : "-";
     const rate = sent ? `${Math.round((responses.length / sent) * 100)}%` : "-";
