@@ -15,6 +15,7 @@ const STAFF_SESSION_KEY = "munaeFilmFest9.staff";
 const STAFF_PIN_MIGRATION_KEY = "munaeFilmFest9.staffPin0909.v14";
 const ADMIN_PIN = "0909";
 const SMS_API_ENDPOINT = "/api/send-sms";
+const SUPABASE_STATE_API_ENDPOINT = "/api/supabase-state";
 const AUTO_SEND_SMS_ON_CONFIRMED_RESERVATION = true;
 
 const FESTIVAL_START_DATE = "2026-09-09";
@@ -590,7 +591,9 @@ function persist(options = {}) {
   applyVenueReservationNumbering(state);
   state.lastUpdated = new Date().toISOString();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  if (options.autoSync !== false) queueGoogleDriveAutoSync("data-change");
+  if (options.autoSync !== false) {
+    queueSupabaseAutoSync("data-change");
+  }
 }
 
 function esc(value) {
@@ -2798,7 +2801,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=96">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=100">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3114,10 +3117,22 @@ function adminBackup() {
       <div class="section-title">
         <div>
           <h2>데이터 백업·복원</h2>
-          <p>이 시제품은 브라우저 localStorage에 데이터를 저장합니다. 운영 전후로 JSON 백업을 내려받아 보관하세요.</p>
+          <p>운영 원본은 Supabase에 저장하고, 구글시트는 현재 양식 그대로 자동 백업합니다. 최초 이전은 실제 데이터가 보이는 주 컴퓨터에서 한 번 실행하세요.</p>
         </div>
       </div>
       <div class="grid-2">
+        <div class="card compact supabase-migration-card">
+          <h3>Supabase 최초 강제 이전</h3>
+          <p>Supabase의 festival_state가 비어 있을 때, 현재 브라우저에 보이는 실제 운영 데이터를 Supabase 원본으로 한 번 옮깁니다.</p>
+          <div class="drive-sync-status">
+            <span class="badge ${supabaseConfigured ? "badge-ok" : ""}">Supabase ${supabaseConfigured ? "연결됨" : "확인 필요"}</span>
+            <span class="muted">신청자 ${(state.reservations || []).length}명 · 상영정보 ${(state.screenings || []).length}건</span>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-danger" type="button" data-action="force-supabase-migration">현재 브라우저 데이터를 Supabase로 강제 이전</button>
+          </div>
+          <span class="help">반드시 신청자 명단이 정상으로 보이는 주 컴퓨터에서만 누르세요. 실행 후 Supabase Table Editor에서 state가 {}가 아닌지 확인합니다.</span>
+        </div>
         <div class="card compact">
           <h3>총관리자 비밀번호</h3>
           <p>ADMIN 로그인에 사용하는 총관리자 비밀번호를 변경할 수 있습니다.</p>
@@ -3145,14 +3160,14 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=96">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=100">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
             <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
             <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           </div>
-          <span class="help">이 앱은 ON/OFF 없이 구글시트를 원본으로 사용합니다. 모든 브라우저와 모바일은 열릴 때 즉시 불러오고, 변경사항은 자동 저장됩니다.</span>
+          <span class="help">Supabase 저장 성공 후 현재 구글시트 구조로 자동 백업됩니다. 구글시트는 원본이 아니라 백업·출력용입니다.</span>
         </div>
         <div class="card compact">
           <h3>백업 다운로드</h3>
@@ -4665,6 +4680,187 @@ function buildGoogleDrivePayload(mode = "auto") {
   };
 }
 
+
+// v99: Supabase를 모든 브라우저/모바일의 원본 DB로 사용합니다.
+// 구글시트는 현재 구조 그대로 Supabase 저장 성공 후 자동 백업본으로 갱신합니다.
+let supabaseSourceLoaded = false;
+let supabaseConfigured = false;
+let supabasePulling = false;
+let supabasePushing = false;
+let supabaseLastError = "";
+let supabaseLastPullAt = 0;
+let supabaseLastPushAt = 0;
+let supabaseAutoSyncTimer = null;
+
+function stateHasOperationalData(data = {}) {
+  return Boolean(
+    (Array.isArray(data.reservations) && data.reservations.length > 0) ||
+    (Array.isArray(data.surveyResponses) && data.surveyResponses.length > 0) ||
+    (Array.isArray(data.surveyDispatches) && data.surveyDispatches.length > 0) ||
+    Number(data.sponsorClicks || 0) > 0
+  );
+}
+
+function hasSupabaseData(data = {}) {
+  return Boolean(data && typeof data === "object" && (
+    Array.isArray(data.screenings) ||
+    Array.isArray(data.reservations) ||
+    Array.isArray(data.surveyResponses)
+  ));
+}
+
+async function readSupabaseState() {
+  const response = await fetch(SUPABASE_STATE_API_ENDPOINT, { method: "GET", cache: "no-store" });
+  let data = null;
+  try { data = await response.json(); } catch (error) {}
+  if (!response.ok) throw new Error(data?.message || "Supabase 데이터를 불러오지 못했습니다.");
+  supabaseConfigured = Boolean(data?.configured);
+  return data || {};
+}
+
+async function postSupabaseState(reason = "auto") {
+  if (supabasePushing) return false;
+  supabasePushing = true;
+  try {
+    const googlePayload = typeof buildGoogleDrivePayload === "function" ? buildGoogleDrivePayload(`supabase-${reason}`) : null;
+    const response = await fetch(SUPABASE_STATE_API_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reason,
+        state,
+        googlePayload,
+        googleWebhookUrl: typeof getDriveWebhookUrl === "function" ? getDriveWebhookUrl() : ""
+      }),
+      cache: "no-store"
+    });
+    let data = null;
+    try { data = await response.json(); } catch (error) {}
+    if (!response.ok || !data?.ok) throw new Error(data?.message || "Supabase 저장에 실패했습니다.");
+    supabaseConfigured = true;
+    supabaseLastPushAt = Date.now();
+    supabaseLastError = "";
+    return true;
+  } catch (error) {
+    console.warn("Supabase 저장 실패", error);
+    supabaseLastError = String(error?.message || error || "Supabase 저장 실패");
+    return false;
+  } finally {
+    supabasePushing = false;
+  }
+}
+
+async function pullSupabaseCore(options = {}) {
+  if (supabasePulling || supabasePushing) return false;
+  supabasePulling = true;
+  try {
+    const result = await readSupabaseState();
+    if (!result.configured) {
+      supabaseLastError = result.message || "Supabase 환경변수가 설정되지 않았습니다.";
+      return false;
+    }
+    if (result.found && hasSupabaseData(result.data)) {
+      state = normalizeState(result.data);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      supabaseSourceLoaded = true;
+      supabaseConfigured = true;
+      supabaseLastPullAt = Date.now();
+      supabaseLastError = "";
+      if (options.render !== false) render();
+      return true;
+    }
+    // Supabase가 비어 있을 때: 현재 브라우저에 실제 운영 데이터가 있으면 최초 1회 원본으로 올립니다.
+    // 새 모바일/새 노트북처럼 0명인 기기는 절대 빈 데이터로 원본을 만들지 않습니다.
+    if (!result.found || !hasSupabaseData(result.data)) {
+      if (stateHasOperationalData(state)) {
+        const pushed = await postSupabaseState("initial-seed-from-current-browser");
+        if (pushed) {
+          supabaseSourceLoaded = true;
+          supabaseConfigured = true;
+          supabaseLastPullAt = Date.now();
+          if (options.render !== false) render();
+          return true;
+        }
+      }
+      supabaseConfigured = true;
+      supabaseLastError = "Supabase 원본 데이터가 아직 비어 있습니다. 신청자 데이터가 보이는 주 컴퓨터에서 한 번 열어 최초 저장을 완료해 주세요.";
+      return false;
+    }
+    return false;
+  } catch (error) {
+    console.warn("Supabase 불러오기 실패", error);
+    supabaseLastError = String(error?.message || error || "Supabase 불러오기 실패");
+    return false;
+  } finally {
+    supabasePulling = false;
+  }
+}
+
+async function bootstrapPrimaryDataSource(options = {}) {
+  // v100: 운영 원본은 Supabase만 사용합니다.
+  // 구글시트 강제 불러오기는 더 이상 앱 시작 시 자동 실행하지 않습니다.
+  // 기존 브라우저/구글시트 데이터를 Supabase로 옮길 때는 마스타관리자 → 백업·연동의 강제 이전 버튼을 사용합니다.
+  return pullSupabaseCore({ render: options.render === true });
+}
+
+async function forceMigrateCurrentBrowserToSupabase() {
+  if (!isMasterAdminAuthed()) {
+    toast("마스타관리자만 Supabase 강제 이전을 실행할 수 있습니다.");
+    return false;
+  }
+  const reservationCount = Array.isArray(state.reservations) ? state.reservations.length : 0;
+  const screeningCount = Array.isArray(state.screenings) ? state.screenings.length : 0;
+  const surveyCount = Array.isArray(state.surveyResponses) ? state.surveyResponses.length : 0;
+  if (!stateHasOperationalData(state)) {
+    toast("현재 브라우저에 이전할 실제 신청자/만족도 데이터가 없습니다.");
+    return false;
+  }
+  const ok = confirm(`현재 이 브라우저에 보이는 데이터를 Supabase 원본으로 강제 이전할까요?
+
+신청자 ${reservationCount}명
+상영정보 ${screeningCount}건
+만족도 응답 ${surveyCount}건
+
+실행하면 Supabase의 festival_state main 값이 현재 브라우저 데이터로 교체됩니다. 실제 데이터가 보이는 주 컴퓨터에서만 실행하세요.`);
+  if (!ok) return false;
+  const button = document.querySelector('[data-action="force-supabase-migration"]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Supabase 이전 중...";
+  }
+  const pushed = await postSupabaseState("manual-force-migration-from-current-browser");
+  if (button) {
+    button.disabled = false;
+    button.textContent = "현재 브라우저 데이터를 Supabase로 강제 이전";
+  }
+  if (pushed) {
+    supabaseSourceLoaded = true;
+    supabaseConfigured = true;
+    supabaseLastPullAt = Date.now();
+    toast(`Supabase 강제 이전 완료: 신청자 ${reservationCount}명 · 상영정보 ${screeningCount}건`);
+    render();
+    return true;
+  }
+  toast(`Supabase 강제 이전 실패: ${supabaseLastError || "환경변수 또는 테이블 설정을 확인해 주세요."}`);
+  return false;
+}
+
+function pullSupabaseIfStale(maxAgeMs = 10000) {
+  if (!supabaseConfigured && supabaseLastError) return;
+  if (!supabaseLastPullAt || Date.now() - supabaseLastPullAt > maxAgeMs) {
+    pullSupabaseCore({ render: true });
+  }
+}
+
+function queueSupabaseAutoSync(reason = "data-change") {
+  window.clearTimeout(supabaseAutoSyncTimer);
+  supabaseAutoSyncTimer = window.setTimeout(async () => {
+    const ok = await postSupabaseState(reason);
+    // Supabase 환경변수가 아직 없으면 기존 구글시트 자동 백업으로 보조합니다.
+    if (!ok && !supabaseConfigured) queueGoogleDriveAutoSync(reason);
+  }, 700);
+}
+
 const DRIVE_WEBHOOK_STORAGE_KEY = "munae9DriveWebhookUrl";
 const DRIVE_AUTO_SYNC_STORAGE_KEY = "munae9DriveAutoSyncEnabled";
 const DRIVE_LAST_SYNC_STORAGE_KEY = "munae9DriveLastSyncAt";
@@ -5338,6 +5534,7 @@ document.addEventListener("click", (event) => {
   if (action === "set-drive-webhook") { const url = promptDriveWebhookUrl(); if (url) syncGoogleDriveCore({ silent: false, prompt: false }); render(); }
   if (action === "toggle-drive-autosync") toggleGoogleDriveAutoSync();
   if (action === "reset-drive-webhook") resetGoogleDriveWebhookUrl();
+  if (action === "force-supabase-migration") forceMigrateCurrentBrowserToSupabase();
   if (action === "export-json") exportJson();
   if (action === "reset-demo") {
     if (!confirm("데모 데이터로 초기화할까요? 현재 입력된 정보가 사라집니다.")) return;
@@ -5403,7 +5600,7 @@ window.addEventListener("hashchange", () => {
 function renderGoogleSheetLoading() {
   const app = document.getElementById("app");
   if (!app) return;
-  app.innerHTML = `<main class="app-shell">${appHeader()}<section class="section"><div class="panel sync-loading-panel"><span class="eyebrow">구글시트 동기화</span><h1>최신 신청자 데이터를 불러오는 중입니다.</h1><p>모바일, 다른 노트북, 다른 브라우저에서도 같은 구글시트 원본 데이터를 먼저 불러온 뒤 화면을 표시합니다.</p></div></section></main>`;
+  app.innerHTML = `<main class="app-shell">${appHeader()}<section class="section"><div class="panel sync-loading-panel"><span class="eyebrow">Supabase 원본 동기화</span><h1>최신 신청자 데이터를 불러오는 중입니다.</h1><p>모바일, 다른 노트북, 다른 브라우저에서도 같은 Supabase 원본 데이터를 먼저 불러온 뒤 화면을 표시합니다. Supabase가 비어 있으면 마스타관리자 백업·연동에서 강제 이전을 한 번 실행하세요.</p></div></section></main>`;
 }
 
 localStorage.setItem(DRIVE_AUTO_SYNC_STORAGE_KEY, "true");
@@ -5412,32 +5609,25 @@ if (!localStorage.getItem(DRIVE_WEBHOOK_STORAGE_KEY) && DEFAULT_DRIVE_WEBHOOK_UR
 }
 
 renderGoogleSheetLoading();
-bootstrapGoogleSheetSource({ silent: true, render: false }).finally(() => {
+bootstrapPrimaryDataSource({ render: false }).finally(() => {
   googleSheetInitialReady = true;
   render();
 });
 
 window.addEventListener("focus", () => {
-  pullGoogleSheetIfStale(15000);
+  pullSupabaseIfStale(5000);
 });
 
 window.addEventListener("pageshow", () => {
-  pullGoogleSheetIfStale(1000);
+  pullSupabaseIfStale(1000);
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) pullGoogleSheetIfStale(1000);
+  if (!document.hidden) pullSupabaseIfStale(1000);
 });
 
 window.setInterval(() => {
-  if (!getDriveWebhookUrl()) return;
-  pullGoogleDriveCore({ silent: true, render: true });
-}, 60000);
-
-window.setInterval(() => {
-  if (!isAdminAuthed()) return;
-  if (!getDriveWebhookUrl()) return;
-  syncGoogleDriveCore({ silent: true, prompt: false, reason: "interval" });
-}, 60000);
+  pullSupabaseCore({ render: true });
+}, 10000);
 
 window.setInterval(() => { checkSurveyAutoSmsQueue(); }, 60000);
