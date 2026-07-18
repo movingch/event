@@ -9,7 +9,7 @@ function env(name) {
   return String(process.env[name] || '').trim();
 }
 
-const DEFAULT_GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwc18Y1SArlzYkXfnw1so5SsFKUMg3v9-RgJagkvgihNgEqRuS-eJtM7fKpMfgqrnyE/exec';
+const DEFAULT_GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxEM_kItJA7eIk8fuGzsWbupiguPKiEhtnz-bk23qFRxVHJ1aWNwOFc_0vFXLXeY6w3/exec';
 
 function supabaseConfig() {
   const url = env('SUPABASE_URL').replace(/\/$/, '');

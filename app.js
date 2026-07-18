@@ -1155,7 +1155,7 @@ function getTotals() {
 function appHeader() {
   return `
     <header class="header">
-      <a class="logo" href="/?v=114&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
+      <a class="logo" href="/?v=115&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
         <div class="logo-mark"><img src="assets/munae-horse-logo.png" alt="머내마을영화제 말 캐릭터 로고"></div>
         <div>
           <div class="logo-title">제9회 머내마을영화제</div>
@@ -1167,17 +1167,29 @@ function appHeader() {
         <a href="#/apply">영화 신청</a>
         <a href="#/donate">후원하기</a>
         <a href="#/staff" class="staff-link utility-link">STAFF</a>
-        <a href="/admin?v=114&fresh=1" class="primary-link admin-link utility-link">ADMIN</a>
+        <a href="/admin?v=115&fresh=1" class="primary-link admin-link utility-link">ADMIN</a>
       </nav>
     </header>
   `;
 }
 
+function adminHashParts() {
+  const hash = window.location.hash.replace(/^#\/?/, "");
+  const parts = hash.split("/").filter(Boolean);
+  if (!isAdminRoutePath()) return { route: parts[0] || "", sub: parts[1] || "" };
+  if (!parts.length) return { route: "admin", sub: "overview" };
+  // v115: /admin, /adminor 안에서는 #/stats 처럼 메뉴명만 있어도 관리 메뉴로 해석합니다.
+  // 과거 주소 #/admin/stats 도 그대로 호환합니다.
+  if (parts[0] === "admin" || parts[0] === "adminor") return { route: "admin", sub: parts[1] || "overview" };
+  return { route: "admin", sub: parts[0] || "overview" };
+}
+
 function render() {
   const hash = window.location.hash.replace(/^#\/?/, "");
   const [rawRoute = "", rawSub = ""] = hash.split("/");
-  const route = (!rawRoute && isAdminRoutePath()) ? "admin" : rawRoute;
-  const sub = (!rawRoute && isAdminRoutePath()) ? "overview" : rawSub;
+  const adminParts = adminHashParts();
+  const route = adminParts.route || rawRoute;
+  const sub = adminParts.route === "admin" ? adminParts.sub : rawSub;
   const app = document.getElementById("app");
   let view = "";
   if (!route) view = renderHome();
@@ -1956,15 +1968,7 @@ function renderAdmin(tab) {
         ${mode === "master" ? adminTabLink("backup", "백업·연동", active) : ""}
       </aside>
       <div class="admin-panel">
-        ${active === "overview" ? adminOverview() : ""}
-        ${active === "opening" ? adminOpening() : ""}
-        ${active === "screenings" ? adminScreenings() : ""}
-        ${active === "reservations" ? adminReservations() : ""}
-        ${active === "stats" ? adminStats() : ""}
-        ${active === "surveyView" ? adminSurveyView() : ""}
-        ${active === "staff" ? adminStaffManagement() : ""}
-        ${active === "survey" ? adminSurvey() : ""}
-        ${active === "backup" ? adminBackup() : ""}
+        ${renderAdminPanel(active)}
       </div>
     </section>
   `;
@@ -1996,7 +2000,26 @@ function renderAdminLogin() {
 function adminTabLink(tab, label, active) {
   const labelEsc = esc(label);
   const tabEsc = esc(tab);
-  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="#/admin/${tabEsc}" data-admin-tab="${tabEsc}">${labelEsc}</a>`;
+  // v115: /admin(일반)과 /adminor(마스타) 안에서는 메뉴 hash를 단순화해 라우트 꼬임을 막습니다.
+  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="#/${tabEsc}" data-admin-tab="${tabEsc}" role="button">${labelEsc}</a>`;
+}
+
+function renderAdminPanel(active) {
+  try {
+    if (active === "overview") return adminOverview();
+    if (active === "opening") return adminOpening();
+    if (active === "screenings") return adminScreenings();
+    if (active === "reservations") return adminReservations();
+    if (active === "stats") return adminStats();
+    if (active === "surveyView") return adminSurveyView();
+    if (active === "staff") return adminStaffManagement();
+    if (active === "survey") return adminSurvey();
+    if (active === "backup") return adminBackup();
+    return adminOverview();
+  } catch (error) {
+    console.error("관리자 메뉴 렌더링 오류", active, error);
+    return `<section class="card"><h2>메뉴를 여는 중 오류가 발생했습니다</h2><p>${esc(String(error?.message || error))}</p><div class="form-actions"><button class="btn btn-dark" type="button" data-action="force-refresh-admin-tab" data-tab="${esc(active)}">다시 열기</button></div></section>`;
+  }
 }
 
 function adminTopReportActions(active) {
@@ -2815,7 +2838,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=114">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=115">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3407,7 +3430,7 @@ function adminBackup() {
               <button class="btn btn-dark" type="button" data-action="force-google-backup-from-supabase">Supabase 최신 데이터를 구글시트로 강제 백업</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=114">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=115">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -4322,7 +4345,7 @@ function submitAdminLogin(form) {
     if (pin === MASTER_ADMIN_PIN) {
       sessionStorage.setItem(ADMIN_SESSION_KEY, "master");
       toast("마스타관리자로 로그인했습니다.");
-      window.location.hash = "#/admin/overview";
+      window.location.hash = "#/overview";
       render();
     } else {
       toast("마스타관리자 PIN이 맞지 않습니다.");
@@ -4337,7 +4360,7 @@ function submitAdminLogin(form) {
     }
     sessionStorage.setItem(ADMIN_SESSION_KEY, "general");
     toast("관리자 대시보드에 로그인했습니다.");
-    window.location.hash = "#/admin/overview";
+    window.location.hash = "#/overview";
     render();
   } else {
     toast("관리자 PIN이 맞지 않습니다.");
@@ -5233,7 +5256,7 @@ const DRIVE_WEBHOOK_STORAGE_KEY = "munae9DriveWebhookUrl";
 const DRIVE_AUTO_SYNC_STORAGE_KEY = "munae9DriveAutoSyncEnabled";
 const DRIVE_LAST_SYNC_STORAGE_KEY = "munae9DriveLastSyncAt";
 const DRIVE_LAST_PULL_STORAGE_KEY = "munae9DriveLastPullAt";
-const DEFAULT_DRIVE_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwc18Y1SArlzYkXfnw1so5SsFKUMg3v9-RgJagkvgihNgEqRuS-eJtM7fKpMfgqrnyE/exec";
+const DEFAULT_DRIVE_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxEM_kItJA7eIk8fuGzsWbupiguPKiEhtnz-bk23qFRxVHJ1aWNwOFc_0vFXLXeY6w3/exec";
 let driveAutoSyncTimer = null;
 let googleBackupSoonTimer = null;
 let googleBackupInFlight = false;
@@ -5341,8 +5364,7 @@ async function postSupabaseGoogleBackup(reason = "server-supabase-auto") {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      reason,
-      googleWebhookUrl: typeof getDriveWebhookUrl === "function" ? getDriveWebhookUrl() : ""
+      reason
     }),
     cache: "no-store"
   });
@@ -5388,7 +5410,7 @@ function scheduleGoogleBackupSoon(reason = "background") {
   googleBackupSoonTimer = window.setTimeout(() => {
     googleBackupSoonTimer = null;
     runGoogleBackupPipeline(reason);
-  }, 500);
+  }, 150);
   queueGoogleSheetBackupRetries(reason);
 }
 
@@ -5400,9 +5422,14 @@ async function forceBackupSupabaseToGoogleSheet() {
   }
   try {
     await pullSupabaseCore({ render: false });
-    const ok = await syncGoogleDriveCore({ silent: false, prompt: false, reason: "manual-supabase-to-google", allowZeroApplicants: false });
-    if (ok) toast("Supabase 최신 원본을 구글시트로 강제 백업했습니다.");
-    return ok;
+    const result = await postSupabaseGoogleBackup("manual-supabase-to-google");
+    toast(`Supabase 최신 원본을 구글시트로 강제 백업했습니다. 신청자 ${result?.counts?.applicantsCount ?? 0}명`);
+    window.setTimeout(render, 0);
+    return true;
+  } catch (error) {
+    rememberGoogleBackupResult(false, { message: String(error?.message || error) });
+    toast(`구글시트 강제 백업 실패: ${String(error?.message || error).slice(0, 90)}`);
+    return false;
   } finally {
     if (button) {
       button.disabled = false;
@@ -5698,7 +5725,7 @@ function todayFile() {
 
 function goAdminTab(tab) {
   if (!isAdminAuthed()) {
-    window.location.hash = "#/admin/overview";
+    window.location.hash = "#/overview";
     render();
     return;
   }
@@ -5732,7 +5759,7 @@ document.addEventListener("click", (event) => {
   const id = button.dataset.id;
   if (action === "go-home") {
     event.preventDefault();
-    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=114&fresh=1";
+    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=115&fresh=1";
     else { window.location.hash = "#/"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     return;
   }
@@ -5746,7 +5773,7 @@ document.addEventListener("click", (event) => {
     copyTextToClipboard(`${DONATION_BANK_NAME} ${DONATION_ACCOUNT_NUMBER} (${DONATION_ACCOUNT_HOLDER})\n후원금: ${DONATION_AMOUNT.toLocaleString("ko-KR")}원\n입금자명: ${depositor}`);
     toast("이체정보를 복사했습니다.");
   }
-  if (action === "admin-tab") {
+  if (action === "admin-tab" || action === "force-refresh-admin-tab") {
     event.preventDefault();
     goAdminTab(button.dataset.tab || button.dataset.adminTab || "overview");
     return;
@@ -5886,8 +5913,13 @@ function renderSupabaseLoading() {
   render();
 }
 
-if (!localStorage.getItem(DRIVE_WEBHOOK_STORAGE_KEY) && DEFAULT_DRIVE_WEBHOOK_URL) {
-  localStorage.setItem(DRIVE_WEBHOOK_STORAGE_KEY, DEFAULT_DRIVE_WEBHOOK_URL);
+{
+  const currentGoogleWebhook = localStorage.getItem(DRIVE_WEBHOOK_STORAGE_KEY) || "";
+  const knownOldGoogleWebhook = "https://script.google.com/macros/s/AKfycbwc18Y1SArlzYkXfnw1so5SsFKUMg3v9-RgJagkvgihNgEqRuS-eJtM7fKpMfgqrnyE/exec";
+  if ((!currentGoogleWebhook || currentGoogleWebhook === knownOldGoogleWebhook) && DEFAULT_DRIVE_WEBHOOK_URL) {
+    localStorage.setItem(DRIVE_WEBHOOK_STORAGE_KEY, DEFAULT_DRIVE_WEBHOOK_URL);
+    localStorage.setItem(DRIVE_AUTO_SYNC_STORAGE_KEY, "true");
+  }
 }
 
 render();
