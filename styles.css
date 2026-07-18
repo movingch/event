@@ -3213,3 +3213,290 @@ tr:last-child td { border-bottom: 0; }
 /* v79: 일반 홈 후원 안내 카드 제거 후 히어로 높이 축소 */
 .hero .hero-grid > div { max-width: 820px; }
 .hero { padding-top: clamp(24px, 4vw, 46px); padding-bottom: clamp(24px, 4vw, 46px); }
+
+/* v81: 모바일 개막작 노출 설정 적용 + ADMIN/STAFF 신청자 명단 모바일 최적화 */
+@media (max-width: 760px) {
+  .reservation-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 14px;
+  }
+  .reservation-table {
+    min-width: 560px !important;
+    table-layout: fixed !important;
+  }
+  .reservation-table th,
+  .reservation-table td {
+    padding: 5px 3px !important;
+    font-size: 10.5px !important;
+    line-height: 1.18 !important;
+    vertical-align: middle !important;
+  }
+  .reservation-table .col-reservation-no,
+  .reservation-table .col-created,
+  .reservation-table .col-note {
+    display: none !important;
+  }
+  .reservation-table .col-venue { width: 16% !important; }
+  .reservation-table .col-screening { width: 25% !important; }
+  .reservation-table .col-applicant { width: 23% !important; }
+  .reservation-table .col-seats { width: 8% !important; text-align: center !important; }
+  .reservation-table .col-manage { width: 28% !important; }
+  .reservation-table .col-venue strong,
+  .reservation-table .col-screening strong,
+  .reservation-table .applicant-name-line strong {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .reservation-table .help,
+  .reservation-table .applicant-phone,
+  .reservation-table .applicant-email {
+    font-size: 9px !important;
+    line-height: 1.15 !important;
+  }
+  .reservation-table .applicant-name-line {
+    gap: 3px !important;
+    flex-wrap: wrap !important;
+    margin-bottom: 1px !important;
+  }
+  .reservation-table .status-index {
+    min-height: 16px !important;
+    padding: 2px 4px !important;
+    font-size: 8px !important;
+  }
+  .reservation-table .reservation-manage-compact {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+    width: 100% !important;
+  }
+  .reservation-table .reservation-manage-compact .btn {
+    width: 100% !important;
+    min-height: 32px !important;
+    padding: 6px 2px !important;
+    font-size: 10px !important;
+    border-radius: 10px !important;
+  }
+  .reservation-action-row .reservation-action-buttons-large {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    justify-content: center !important;
+  }
+  .reservation-action-row .reservation-action-buttons-large .btn {
+    min-height: 42px !important;
+    font-size: 13px !important;
+    padding: 10px 6px !important;
+  }
+  .staff-screening-card,
+  .admin-panel .card {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+@media (max-width: 420px) {
+  .reservation-table {
+    min-width: 520px !important;
+  }
+  .reservation-table th,
+  .reservation-table td {
+    font-size: 10px !important;
+  }
+  .reservation-table .col-venue { width: 14% !important; }
+  .reservation-table .col-screening { width: 24% !important; }
+  .reservation-table .col-applicant { width: 24% !important; }
+  .reservation-table .col-seats { width: 8% !important; }
+  .reservation-table .col-manage { width: 30% !important; }
+}
+
+/* v82: 상태 체계 3종 통일 + 표/버튼 초압축 레이아웃 */
+.table-wrap {
+  border-radius: 12px;
+}
+table {
+  min-width: 0;
+}
+th, td {
+  padding: 7px 6px;
+  font-size: 12px;
+  line-height: 1.24;
+}
+.btn-small {
+  min-height: 28px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+.row-actions,
+.reservation-manage-compact,
+.reservation-action-buttons {
+  gap: 4px;
+}
+.reservation-table,
+.stats-table,
+.venue-stats-table {
+  width: 100%;
+  table-layout: fixed;
+}
+.reservation-table {
+  min-width: 680px;
+}
+.reservation-table th,
+.reservation-table td {
+  padding: 4px 3px !important;
+  font-size: 11px !important;
+  line-height: 1.16;
+}
+.reservation-table .help {
+  font-size: 9px !important;
+  line-height: 1.12;
+}
+.reservation-table .badge {
+  padding: 2px 5px !important;
+  font-size: 8px !important;
+}
+.reservation-table .btn-small {
+  min-height: 24px;
+  padding: 3px 5px;
+  font-size: 9px;
+  border-radius: 9px;
+}
+.reservation-table .col-venue { width: 11%; }
+.reservation-table .col-screening { width: 18%; }
+.reservation-table .col-applicant { width: 23%; }
+.reservation-table .col-reservation-no { width: 10%; }
+.reservation-table .col-seats { width: 6%; text-align: center; }
+.reservation-table .col-created { width: 10%; }
+.reservation-table .col-note { width: 10%; }
+.reservation-table .col-manage { width: 12%; }
+.applicant-name-line {
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.stats-table,
+.venue-stats-table {
+  min-width: 0 !important;
+}
+.stats-table th,
+.stats-table td,
+.venue-stats-table th,
+.venue-stats-table td {
+  padding: 5px 3px !important;
+  font-size: 11px !important;
+  line-height: 1.15;
+}
+.stats-table th:first-child,
+.stats-table td:first-child,
+.venue-stats-table th:first-child,
+.venue-stats-table td:first-child {
+  width: 22%;
+}
+.reservation-action-row td {
+  padding: 4px !important;
+}
+.reservation-action-panel {
+  padding: 8px;
+  border-radius: 12px;
+}
+.reservation-action-buttons-large .btn,
+.reservation-action-buttons .btn {
+  min-height: 34px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .table-wrap,
+  .reservation-table-wrap {
+    overflow-x: visible;
+  }
+  table,
+  .reservation-table,
+  .stats-table,
+  .venue-stats-table {
+    min-width: 0 !important;
+    width: 100% !important;
+    table-layout: fixed;
+  }
+  th, td {
+    padding: 4px 2px !important;
+    font-size: 9.5px !important;
+    line-height: 1.12 !important;
+  }
+  .btn,
+  .btn-small {
+    min-height: 28px;
+    padding: 5px 7px;
+    font-size: 10px;
+    border-radius: 10px;
+  }
+  .reservation-table .col-reservation-no,
+  .reservation-table .col-created,
+  .reservation-table .col-note {
+    display: none;
+  }
+  .reservation-table .col-venue { width: 15% !important; }
+  .reservation-table .col-screening { width: 25% !important; }
+  .reservation-table .col-applicant { width: 30% !important; }
+  .reservation-table .col-seats { width: 8% !important; }
+  .reservation-table .col-manage { width: 22% !important; }
+  .reservation-table th,
+  .reservation-table td {
+    padding: 3px 2px !important;
+    font-size: 9.5px !important;
+    white-space: normal !important;
+    overflow: hidden;
+  }
+  .reservation-table .help,
+  .reservation-table .applicant-phone,
+  .reservation-table .applicant-email {
+    font-size: 8px !important;
+    line-height: 1.05;
+  }
+  .reservation-table .btn-small,
+  .reservation-manage-compact .btn {
+    min-height: 23px;
+    padding: 3px 3px;
+    font-size: 8px;
+  }
+  .reservation-manage-compact {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .status-index {
+    min-height: 14px;
+    padding: 1px 3px !important;
+    font-size: 7px !important;
+  }
+  .stats-table th,
+  .stats-table td,
+  .venue-stats-table th,
+  .venue-stats-table td {
+    padding: 3px 2px !important;
+    font-size: 8.5px !important;
+    line-height: 1.08;
+  }
+  .stats-table th:first-child,
+  .stats-table td:first-child,
+  .venue-stats-table th:first-child,
+  .venue-stats-table td:first-child {
+    width: 24% !important;
+  }
+  .reservation-action-buttons-large,
+  .reservation-action-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    width: 100%;
+  }
+  .reservation-action-buttons-large .btn,
+  .reservation-action-buttons .btn {
+    width: 100%;
+    min-height: 34px;
+    padding: 6px 4px;
+    font-size: 10px;
+  }
+}
