@@ -1155,7 +1155,7 @@ function getTotals() {
 function appHeader() {
   return `
     <header class="header">
-      <a class="logo" href="/?v=113&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
+      <a class="logo" href="/?v=114&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
         <div class="logo-mark"><img src="assets/munae-horse-logo.png" alt="머내마을영화제 말 캐릭터 로고"></div>
         <div>
           <div class="logo-title">제9회 머내마을영화제</div>
@@ -1167,7 +1167,7 @@ function appHeader() {
         <a href="#/apply">영화 신청</a>
         <a href="#/donate">후원하기</a>
         <a href="#/staff" class="staff-link utility-link">STAFF</a>
-        <a href="#/admin" class="primary-link admin-link utility-link">ADMIN</a>
+        <a href="/admin?v=114&fresh=1" class="primary-link admin-link utility-link">ADMIN</a>
       </nav>
     </header>
   `;
@@ -1176,8 +1176,8 @@ function appHeader() {
 function render() {
   const hash = window.location.hash.replace(/^#\/?/, "");
   const [rawRoute = "", rawSub = ""] = hash.split("/");
-  const route = (!rawRoute && isMasterAdminPath()) ? "admin" : rawRoute;
-  const sub = (!rawRoute && isMasterAdminPath()) ? "overview" : rawSub;
+  const route = (!rawRoute && isAdminRoutePath()) ? "admin" : rawRoute;
+  const sub = (!rawRoute && isAdminRoutePath()) ? "overview" : rawSub;
   const app = document.getElementById("app");
   let view = "";
   if (!route) view = renderHome();
@@ -1894,8 +1894,20 @@ function adminLoginRole() {
   return sessionStorage.getItem(ADMIN_SESSION_KEY) || "";
 }
 
+function normalizedPathname() {
+  return window.location.pathname.replace(/\/+$/, "") || "/";
+}
+
+function isGeneralAdminPath() {
+  return normalizedPathname() === "/admin";
+}
+
 function isMasterAdminPath() {
-  return window.location.pathname.replace(/\/+$/, "") === "/admin";
+  return normalizedPathname() === "/adminor";
+}
+
+function isAdminRoutePath() {
+  return isGeneralAdminPath() || isMasterAdminPath();
 }
 
 function isMasterAdminAuthed() {
@@ -1907,7 +1919,7 @@ function isAdminAuthed() {
 }
 
 function adminMode() {
-  return isMasterAdminAuthed() ? "master" : "general";
+  return isMasterAdminPath() && isMasterAdminAuthed() ? "master" : "general";
 }
 
 function allowedAdminTabsForMode(mode = adminMode()) {
@@ -2803,7 +2815,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=111">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=114">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3395,7 +3407,7 @@ function adminBackup() {
               <button class="btn btn-dark" type="button" data-action="force-google-backup-from-supabase">Supabase 최신 데이터를 구글시트로 강제 백업</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=111">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=114">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -4310,8 +4322,8 @@ function submitAdminLogin(form) {
     if (pin === MASTER_ADMIN_PIN) {
       sessionStorage.setItem(ADMIN_SESSION_KEY, "master");
       toast("마스타관리자로 로그인했습니다.");
-      if (!window.location.hash.startsWith("#/admin")) window.location.hash = "#/admin";
-      else render();
+      window.location.hash = "#/admin/overview";
+      render();
     } else {
       toast("마스타관리자 PIN이 맞지 않습니다.");
     }
@@ -4325,8 +4337,8 @@ function submitAdminLogin(form) {
     }
     sessionStorage.setItem(ADMIN_SESSION_KEY, "general");
     toast("관리자 대시보드에 로그인했습니다.");
-    if (!window.location.hash.startsWith("#/admin")) window.location.hash = "#/admin";
-    else render();
+    window.location.hash = "#/admin/overview";
+    render();
   } else {
     toast("관리자 PIN이 맞지 않습니다.");
   }
@@ -5323,6 +5335,24 @@ function queueGoogleSheetBackupRetries(reason = "data-change") {
   });
 }
 
+
+async function postSupabaseGoogleBackup(reason = "server-supabase-auto") {
+  const response = await fetch("/api/supabase-google-backup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      reason,
+      googleWebhookUrl: typeof getDriveWebhookUrl === "function" ? getDriveWebhookUrl() : ""
+    }),
+    cache: "no-store"
+  });
+  let data = null;
+  try { data = await response.json(); } catch (error) {}
+  if (!response.ok || !data?.ok) throw new Error(data?.message || "Supabase 원본 구글시트 백업에 실패했습니다.");
+  rememberGoogleBackupResult(true, { counts: data.counts || {}, message: "서버 원본 백업 성공" });
+  return data;
+}
+
 async function runGoogleBackupPipeline(reason = "background") {
   if (!getDriveWebhookUrl()) return false;
   if (googleBackupInFlight) {
@@ -5331,7 +5361,15 @@ async function runGoogleBackupPipeline(reason = "background") {
   }
   googleBackupInFlight = true;
   try {
-    const ok = await syncGoogleDriveCore({ silent: true, prompt: false, reason, allowZeroApplicants: false });
+    try {
+      await postSupabaseGoogleBackup(reason);
+      clearGoogleBackupRetries();
+      return true;
+    } catch (serverBackupError) {
+      console.warn("서버 원본 구글백업 실패, 브라우저 payload로 재시도", serverBackupError);
+      rememberGoogleBackupResult(false, { message: String(serverBackupError?.message || serverBackupError), counts: googleDrivePayloadCounts(buildGoogleDrivePayload(`fallback-${reason}`)) });
+    }
+    const ok = await syncGoogleDriveCore({ silent: true, prompt: false, reason: `fallback-${reason}`, allowZeroApplicants: false });
     if (!ok) queueGoogleSheetBackupRetries(reason);
     return ok;
   } finally {
@@ -5660,7 +5698,7 @@ function todayFile() {
 
 function goAdminTab(tab) {
   if (!isAdminAuthed()) {
-    window.location.hash = "#/admin";
+    window.location.hash = "#/admin/overview";
     render();
     return;
   }
@@ -5694,7 +5732,7 @@ document.addEventListener("click", (event) => {
   const id = button.dataset.id;
   if (action === "go-home") {
     event.preventDefault();
-    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=113&fresh=1";
+    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=114&fresh=1";
     else { window.location.hash = "#/"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     return;
   }

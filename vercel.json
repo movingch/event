@@ -3,6 +3,7 @@
     "api/send-sms.js": { "maxDuration": 10 },
     "api/google-drive-sync.js": { "maxDuration": 60 },
     "api/supabase-state.js": { "maxDuration": 60 },
+    "api/supabase-google-backup.js": { "maxDuration": 60 },
     "api/survey.js": { "maxDuration": 60 }
   },
   "headers": [
@@ -14,6 +15,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/admin", "destination": "/index.html" }
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/adminor", "destination": "/index.html" }
   ]
 }
