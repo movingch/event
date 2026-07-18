@@ -1755,7 +1755,11 @@ function renderStaff(preselectedId = "") {
     ${screenings.map((screening) => `
       <section class="card staff-screening-card">
         <div class="section-title">
-          <div><div class="badges"><span class="badge blue">${esc(screening.venue)} - ${esc(screening.title)}</span><span class="badge ${statusInfo(screening).className}">${esc(statusInfo(screening).text)}</span></div><h2>신청자 목록</h2><p>${esc(formatDateTime(screening.startTime))} · 담당 ${esc(screening.staff || session.staffName)}</p></div>
+          <div class="staff-screening-heading">
+            <div class="staff-screening-titleline">${esc(screening.venue)} - ${esc(screening.title)} : 신청자 목록</div>
+            <div class="badges staff-screening-status"><span class="badge ${statusInfo(screening).className}">${esc(statusInfo(screening).text)}</span></div>
+            <p>${esc(formatDateTime(screening.startTime))} · 담당 ${esc(screening.staff || session.staffName)}</p>
+          </div>
           <div class="staff-capacity"><strong>${appliedSeats(screening.id)} / ${Number(screening.capacity || 0)}명</strong><span>신청</span></div>
         </div>
         ${reservationTable(reservations.filter((reservation) => reservation.screeningId === screening.id), { staffMode: true })}
