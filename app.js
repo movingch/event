@@ -1155,7 +1155,7 @@ function getTotals() {
 function appHeader() {
   return `
     <header class="header">
-      <a class="logo" href="/?v=115&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
+      <a class="logo" href="/?v=116&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
         <div class="logo-mark"><img src="assets/munae-horse-logo.png" alt="머내마을영화제 말 캐릭터 로고"></div>
         <div>
           <div class="logo-title">제9회 머내마을영화제</div>
@@ -1167,7 +1167,7 @@ function appHeader() {
         <a href="#/apply">영화 신청</a>
         <a href="#/donate">후원하기</a>
         <a href="#/staff" class="staff-link utility-link">STAFF</a>
-        <a href="/admin?v=115&fresh=1" class="primary-link admin-link utility-link">ADMIN</a>
+        <a href="/admin?v=116&fresh=1" class="primary-link admin-link utility-link">ADMIN</a>
       </nav>
     </header>
   `;
@@ -2838,7 +2838,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=115">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=116">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -2973,7 +2973,7 @@ async function createSurveyTestLink({ sendSms = false } = {}) {
     id: dispatch.screeningId,
     title: dispatch.movieTitle || reservation.movieTitle || reservation.screeningTitle || "상영작",
     venue: dispatch.venue || reservation.venue || "상영관",
-    startsAt: dispatch.screeningTime || reservation.screeningTime || ""
+    startTime: dispatch.screeningTime || reservation.screeningTime || ""
   };
   const message = `[테스트] ${fillSurveySmsTemplate(state.surveySettings.smsTemplate, tempReservation, safeScreening, dispatch.link)}`;
   dispatch.status = "테스트발송중";
@@ -2983,7 +2983,7 @@ async function createSurveyTestLink({ sendSms = false } = {}) {
     const response = await fetch("/api/send-sms", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to: phone, message, type: "survey-test", reservationId: reservation.id })
+      body: JSON.stringify({ kind: "notice", phone, message, type: "survey-test", reservationId: reservation.id })
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.ok === false) throw new Error(result.message || "문자 발송 실패");
@@ -3430,7 +3430,7 @@ function adminBackup() {
               <button class="btn btn-dark" type="button" data-action="force-google-backup-from-supabase">Supabase 최신 데이터를 구글시트로 강제 백업</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=115">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=116">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -5759,7 +5759,7 @@ document.addEventListener("click", (event) => {
   const id = button.dataset.id;
   if (action === "go-home") {
     event.preventDefault();
-    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=115&fresh=1";
+    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=116&fresh=1";
     else { window.location.hash = "#/"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     return;
   }

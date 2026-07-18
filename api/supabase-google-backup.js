@@ -114,14 +114,97 @@ function buildScreenings(state) {
     };
   });
 }
+function parseAnswers(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+  return {};
+}
+function answerValue(response, answers, keys) {
+  for (const key of keys) {
+    const direct = response && response[key];
+    if (direct !== undefined && direct !== null && String(direct) !== '') return direct;
+    const nested = answers && answers[key];
+    if (nested !== undefined && nested !== null && String(nested) !== '') return nested;
+  }
+  return '';
+}
 function buildSurvey(state) {
   const settings = state.surveySettings || {};
-  const questions = arr(settings.questions || state.surveyQuestions).map((q, i) => ({ order: i + 1, type: q.type || '', question: q.question || q.label || '', required: q.required ? '필수' : '' }));
-  const responses = arr(state.surveyResponses).map((r, i) => ({
-    index: i + 1, submittedAt: r.submittedAt || r.createdAt || '', reservationNumber: r.reservationNumber || '', name: r.name || '', phone: r.phone || '', movieTitle: r.movieTitle || '', venue: r.venue || '', rating: r.rating || r.averageRating || '', answers: JSON.stringify(r.answers || r.response || {})
+  const surveyQuestions = arr(settings.questions || state.surveyQuestions);
+  const questions = surveyQuestions.map((q, i) => ({
+    order: q.order || i + 1,
+    id: q.id || '',
+    enabled: q.enabled === false ? 'OFF' : 'ON',
+    type: q.type || '',
+    typeLabel: q.typeLabel || q.type || '',
+    title: q.title || q.question || q.label || '',
+    choices: Array.isArray(q.choices) ? q.choices.join(', ') : (q.choices || ''),
+    required: q.required ? '필수' : '선택'
   }));
-  const dispatches = arr(state.surveyDispatches).map((d, i) => ({ index: i + 1, sentAt: d.sentAt || d.createdAt || '', status: d.status || '', name: d.name || '', phone: d.phone || '', movieTitle: d.movieTitle || '', venue: d.venue || '', token: d.token || '', test: d.test ? 'TEST' : '' }));
-  return { settings: [{ festival: '제9회 머내마을영화제', enabled: settings.enabled ? 'ON' : 'OFF', updatedAt: new Date().toISOString() }], questions, responses, stats: [], dispatches };
+  const responses = arr(state.surveyResponses).map((r, i) => {
+    const answers = parseAnswers(r.answers || r.response || r.responses);
+    const row = {
+      no: i + 1,
+      index: i + 1,
+      submittedAt: r.submittedAt || r.createdAt || '',
+      reservationNumber: r.reservationNumber || '',
+      token: r.token || '',
+      name: r.name || '',
+      phone: r.phone || r.contact || '',
+      movieTitle: r.movieTitle || '',
+      screeningTime: r.screeningTime || r.startTime || '',
+      venue: r.venue || '',
+      overallRating: answerValue(r, answers, ['overallRating', 'q-overall', 'overall', 'rating']),
+      venueRating: answerValue(r, answers, ['venueRating', 'q-venue', 'venueSatisfaction']),
+      guideRating: answerValue(r, answers, ['guideRating', 'q-guide', 'guideSatisfaction']),
+      returnIntent: answerValue(r, answers, ['returnIntent', 'q-return', 'revisitIntent']),
+      goodComment: answerValue(r, answers, ['goodComment', 'q-good', 'good', 'positiveComment']),
+      improveComment: answerValue(r, answers, ['improveComment', 'q-improve', 'improve', 'improvementComment']),
+      status: r.status || '응답완료',
+      test: r.test ? 'TEST' : ''
+    };
+    // 문항 ID가 추가되거나 바뀌어도 구글시트에 값이 사라지지 않도록 answers 객체도 원형 그대로 보냅니다.
+    row.answers = answers;
+    row.answersText = JSON.stringify(answers);
+    surveyQuestions.forEach((q, questionIndex) => {
+      const qid = q && q.id ? String(q.id) : '';
+      const label = `문항${questionIndex + 1}`;
+      row[label] = qid && answers[qid] !== undefined && answers[qid] !== null ? answers[qid] : '';
+    });
+    return row;
+  });
+  const dispatches = arr(state.surveyDispatches).map((d, i) => ({
+    no: i + 1,
+    index: i + 1,
+    sentAt: d.sentAt || d.createdAt || '',
+    reservationNumber: d.reservationNumber || '',
+    token: d.token || '',
+    status: d.status || '',
+    name: d.name || '',
+    phone: d.phone || '',
+    movieTitle: d.movieTitle || '',
+    screeningTime: d.screeningTime || d.startTime || '',
+    venue: d.venue || '',
+    link: d.link || '',
+    error: d.error || '',
+    test: d.test ? 'TEST' : ''
+  }));
+  const stats = buildScreenings(state).map((s, i) => {
+    const movie = s.movieTitle || '';
+    const res = responses.filter((r) => r.movieTitle === movie);
+    const sent = dispatches.filter((d) => d.movieTitle === movie).length;
+    const ratings = res.map((r) => Number(r.overallRating || 0)).filter((n) => n > 0);
+    return { no: i + 1, movieTitle: movie, screeningTime: s.startTime || '', venue: s.venue || '', attendedCount: s.attendedCount || 0, sentCount: sent, responseCount: res.length, responseRate: sent ? `${Math.round(res.length / sent * 100)}%` : '-', averageRating: ratings.length ? (ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1) : '-' };
+  });
+  return { settings: [{ festival: '제9회 머내마을영화제', enabled: settings.enabled ? 'ON' : 'OFF', updatedAt: new Date().toISOString() }], questions, responses, stats, dispatches };
 }
 function rowsFromObjects(items) {
   const keys = [...new Set(items.flatMap((item) => Object.keys(item || {})))];
