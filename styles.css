@@ -3892,3 +3892,10 @@ th, td {
   .survey-rating-row, .survey-choice-row { font-size: 8px; gap: 4px; }
   .survey-rating-track, .survey-rating-fill { min-height: 8px; height: 8px; }
 }
+.stats-table tfoot td,
+.stats-table .total-row td {
+  font-weight: 800;
+  background: #f4efe7;
+  border-top: 2px solid #2b221d;
+}
+.donation-stats-card .metric-value.text-value { font-size: clamp(1.2rem, 2vw, 1.8rem); }

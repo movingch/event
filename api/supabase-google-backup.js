@@ -136,6 +136,22 @@ function answerValue(response, answers, keys) {
   }
   return '';
 }
+
+function buildDonations(state) {
+  return arr(state.donations).map((d, i) => ({
+    no: i + 1,
+    createdAt: d.createdAt || '',
+    donorName: d.donorName || '',
+    depositorName: d.depositorName || '',
+    phone: d.phone || '',
+    amount: num(d.amount || 10000),
+    smsStatus: d.smsStatus || '',
+    smsSentAt: d.smsSentAt || '',
+    smsRequestId: d.smsRequestId || '',
+    smsError: d.smsError || ''
+  }));
+}
+
 function buildSurvey(state) {
   const settings = state.surveySettings || {};
   const surveyQuestions = arr(settings.questions || state.surveyQuestions);
@@ -215,9 +231,10 @@ function buildPayload(state, mode = 'server-supabase-auto') {
   const applicants = buildApplicants(state);
   const stats = buildStats(state);
   const screenings = buildScreenings(state);
+  const donations = buildDonations(state);
   return {
-    festival: '제9회 머내마을영화제', mode, generatedAt: new Date().toISOString(), applicants, stats, screenings, survey: buildSurvey(state),
-    rows: { applicants: rowsFromObjects(applicants), stats: rowsFromObjects(stats), screenings: rowsFromObjects(screenings) }
+    festival: '제9회 머내마을영화제', mode, generatedAt: new Date().toISOString(), applicants, stats, screenings, donations, survey: buildSurvey(state),
+    rows: { applicants: rowsFromObjects(applicants), stats: rowsFromObjects(stats), screenings: rowsFromObjects(screenings), donations: rowsFromObjects(donations) }
   };
 }
 async function postToGoogle(payload, webhookUrl) {
@@ -250,7 +267,7 @@ module.exports = async function handler(req, res) {
       ok: true,
       message: 'Supabase 원본을 구글시트로 백업했습니다.',
       updatedAt,
-      counts: { applicantsCount: payload.applicants.length, statsCount: payload.stats.length, screeningsCount: payload.screenings.length, surveyResponsesCount: payload.survey.responses.length, surveyDispatchesCount: payload.survey.dispatches.length },
+      counts: { applicantsCount: payload.applicants.length, statsCount: payload.stats.length, screeningsCount: payload.screenings.length, surveyResponsesCount: payload.survey.responses.length, surveyDispatchesCount: payload.survey.dispatches.length, donationsCount: payload.donations.length },
       appsScript
     });
   } catch (error) {

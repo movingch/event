@@ -1155,7 +1155,7 @@ function getTotals() {
 function appHeader() {
   return `
     <header class="header">
-      <a class="logo" href="/?v=118&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
+      <a class="logo" href="/?v=119&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
         <div class="logo-mark"><img src="assets/munae-horse-logo.png" alt="머내마을영화제 말 캐릭터 로고"></div>
         <div>
           <div class="logo-title">제9회 머내마을영화제</div>
@@ -1167,7 +1167,7 @@ function appHeader() {
         <a href="#/apply">영화 신청</a>
         <a href="#/donate">후원하기</a>
         <a href="#/staff" class="staff-link utility-link">STAFF</a>
-        <a href="/admin?v=118&fresh=1" class="primary-link admin-link utility-link">ADMIN</a>
+        <a href="/admin?v=119&fresh=1" class="primary-link admin-link utility-link">ADMIN</a>
       </nav>
     </header>
   `;
@@ -2059,11 +2059,11 @@ function adminOverview() {
       <div class="metric-card"><div class="metric-label">신청 인원</div><div class="metric-value">${totals.totalAppliedSeats}</div><div class="metric-note">신청 ${totals.totalApplicationCount}건 · 신청률 ${totals.occupancy}%</div></div>
       <div class="metric-card"><div class="metric-label">참석 인원</div><div class="metric-value">${totals.totalActualAttendees}</div><div class="metric-note">참석 처리 ${totals.totalAttendedApplicationCount}건 · 참석률 ${totals.attendance}%</div></div>
       <div class="metric-card"><div class="metric-label">미참석 인원</div><div class="metric-value">${totals.totalWaitlistSeats}</div><div class="metric-note">미참석 처리</div></div>
-      <div class="metric-card"><div class="metric-label">후원 클릭</div><div class="metric-value">${state.sponsorClicks || 0}</div><div class="metric-note">이 브라우저 기준</div></div>
+      <div class="metric-card"><div class="metric-label">후원 신청</div><div class="metric-value">${donationStats().count}</div><div class="metric-note">총 ${donationStats().amountText}</div></div>
     </section>
 
     <section class="card">
-      <div class="section-title"><div><h2>상영관별 통계</h2><p>상영관을 기준으로 신청, 참석, 미참석을 집계합니다. 후원하기 클릭 ${Number(state.sponsorClicks || 0)}회.</p></div></div>
+      <div class="section-title"><div><h2>상영관별 통계</h2><p>상영관을 기준으로 신청, 참석, 미참석을 집계합니다. 후원 신청 ${donationStats().count}건 · 총 ${donationStats().amountText}.</p></div></div>
       ${venueStatsTable(groupByVenue())}
     </section>
 
@@ -2710,6 +2710,36 @@ function surveyDetailedStatsSection() {
     </section>`;
 }
 
+
+function donationList() {
+  return Array.isArray(state.donations) ? state.donations : [];
+}
+
+function donationStats() {
+  const list = donationList();
+  const amount = list.reduce((sum, d) => sum + Number(d.amount || DONATION_AMOUNT || 0), 0);
+  const done = list.filter((d) => String(d.smsStatus || "").includes("완료")).length;
+  const pending = list.filter((d) => !String(d.smsStatus || "").includes("완료") && !String(d.smsStatus || "").includes("실패")).length;
+  const failed = list.filter((d) => String(d.smsStatus || "").includes("실패")).length;
+  return { count: list.length, amount, amountText: `${amount.toLocaleString("ko-KR")}원`, done, pending, failed };
+}
+
+function donationStatsCard() {
+  const stats = donationStats();
+  const rows = donationList().slice().sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).slice(0, 200);
+  return `
+    <section class="card donation-stats-card">
+      <div class="section-title"><div><h2>후원자 집계</h2><p>후원하기 신청 현황을 별도로 집계하고 구글시트 후원자현황 탭에도 백업합니다.</p></div></div>
+      <section class="metric-grid compact-metric-grid">
+        <div class="metric-card"><div class="metric-label">후원 신청</div><div class="metric-value">${stats.count}</div><div class="metric-note">전체 건수</div></div>
+        <div class="metric-card"><div class="metric-label">후원 예정액</div><div class="metric-value text-value">${esc(stats.amountText)}</div><div class="metric-note">신청 기준</div></div>
+        <div class="metric-card"><div class="metric-label">감사문자 완료</div><div class="metric-value">${stats.done}</div><div class="metric-note">문자 발송완료</div></div>
+        <div class="metric-card"><div class="metric-label">확인 필요</div><div class="metric-value">${stats.pending + stats.failed}</div><div class="metric-note">대기/실패</div></div>
+      </section>
+      ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>No</th><th>신청일</th><th>후원자</th><th>입금자</th><th>연락처</th><th>금액</th><th>문자상태</th></tr></thead><tbody>${rows.map((d, i) => `<tr><td>${i + 1}</td><td>${esc(formatDateTime(d.createdAt || ""))}</td><td><strong>${esc(d.donorName || "")}</strong></td><td>${esc(d.depositorName || "")}</td><td>${esc(d.phone || "")}</td><td>${Number(d.amount || DONATION_AMOUNT || 0).toLocaleString("ko-KR")}원</td><td>${esc(d.smsStatus || "")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">아직 후원 신청 기록이 없습니다.</div>`}
+    </section>`;
+}
+
 function adminStats() {
   const byMovie = groupByMovie();
   const byVenue = groupByVenue();
@@ -2729,6 +2759,7 @@ function adminStats() {
       <div class="section-title"><div><h2>날짜별 통계</h2><p>일자별 운영 규모와 신청 현황을 봅니다.</p></div></div>
       ${statsTable(byDate, ["날짜", "회차", "정원", "신청", "참석", "미참석", "신청률", "참석률"])}
     </section>
+    ${donationStatsCard()}
     ${getOpeningScreening() ? `
     <section class="card">
       <div class="section-title"><div><h2>개막작 세부 통계</h2><p>개막작 신청과 일반 신청, 참석 현황입니다.</p></div></div>
@@ -2807,6 +2838,16 @@ function groupByDate() {
 
 function statsTable(rows, headers) {
   if (!rows.length) return `<div class="empty">통계 데이터가 없습니다.</div>`;
+  const totals = rows.reduce((acc, row) => {
+    acc.screenings += Number(row.screenings || 0);
+    acc.capacity += Number(row.capacity || 0);
+    acc.confirmed += Number(row.confirmed || 0);
+    acc.attended += Number(row.attended || 0);
+    acc.waitlist += Number(row.waitlist || 0);
+    return acc;
+  }, { screenings: 0, capacity: 0, confirmed: 0, attended: 0, waitlist: 0 });
+  const totalRate = totals.capacity ? Math.round((totals.confirmed / totals.capacity) * 100) : 0;
+  const totalAttendanceRate = totals.confirmed ? Math.round((totals.attended / totals.confirmed) * 100) : 0;
   return `
     <div class="table-wrap stats-table-wrap">
       <table class="stats-table">
@@ -2825,10 +2866,12 @@ function statsTable(rows, headers) {
             </tr>
           `).join("")}
         </tbody>
+        <tfoot><tr class="total-row"><td><strong>누적 합계</strong></td><td>${totals.screenings}</td><td>${totals.capacity}</td><td>${totals.confirmed}</td><td>${totals.attended}</td><td>${totals.waitlist}</td><td>${totalRate}%</td><td>${totalAttendanceRate}%</td></tr></tfoot>
       </table>
     </div>
   `;
 }
+
 
 
 function adminBackupAlwaysOnPanel(activeTab = "overview") {
@@ -2858,7 +2901,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=118">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=119">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3197,8 +3240,8 @@ function surveyResponseMatchesDispatch(response, dispatch) {
   const rn = normSurveyValue(response.reservationNumber);
   const dn = normSurveyValue(dispatch.reservationNumber);
   if (rn && dn && rn === dn) return true;
-  const rp = digits(response.phone || response.contact || "");
-  const dp = digits(dispatch.phone || "");
+  const rp = normalizePhoneForSms(response.phone || response.contact || "");
+  const dp = normalizePhoneForSms(dispatch.phone || "");
   if (rp && dp && rp === dp && surveySameMovie(response, dispatch)) return true;
   const rName = normSurveyValue(String(response.name || "").replace(/\s*TEST\s*$/i, ""));
   const dName = normSurveyValue(String(dispatch.name || "").replace(/\s*TEST\s*$/i, ""));
@@ -3450,7 +3493,7 @@ function adminBackup() {
               <button class="btn btn-dark" type="button" data-action="force-google-backup-from-supabase">Supabase 최신 데이터를 구글시트로 강제 백업</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=118">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=119">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -4755,6 +4798,12 @@ function buildStatsRows() {
   rows.push(["날짜별 통계"]);
   rows.push(["날짜", "회차", "정원", "신청", "참석", "미참석", "신청률", "참석률"]);
   groupByDate().forEach((row) => rows.push([row.name, row.screenings, row.capacity, row.confirmed, row.attended, row.waitlist, `${row.rate}%`, `${row.attendanceRate}%`]));
+  rows.push([]);
+  rows.push(["후원자 집계"]);
+  const dstats = donationStats();
+  rows.push(["후원 신청", dstats.count, "후원 예정액", dstats.amountText, "감사문자 완료", dstats.done, "확인 필요", dstats.pending + dstats.failed]);
+  rows.push(["No", "신청일시", "후원자명", "입금자명", "연락처", "후원금액", "문자상태"]);
+  donationList().forEach((d, index) => rows.push([index + 1, d.createdAt || "", d.donorName || "", d.depositorName || "", d.phone || "", Number(d.amount || DONATION_AMOUNT || 0), d.smsStatus || ""]));
   return rows;
 }
 
@@ -4949,10 +4998,35 @@ function buildDriveSurvey() {
   };
 }
 
+
+function buildDonationRows() {
+  const rows = [["No", "신청일시", "후원자명", "입금자명", "연락처", "후원금액", "문자상태", "문자발송일", "문자요청ID", "오류메시지"]];
+  donationList().forEach((d, index) => {
+    rows.push([index + 1, d.createdAt || "", d.donorName || "", d.depositorName || "", d.phone || "", Number(d.amount || DONATION_AMOUNT || 0), d.smsStatus || "", d.smsSentAt || "", d.smsRequestId || "", d.smsError || ""]);
+  });
+  return rows;
+}
+
+function buildDriveDonations() {
+  return donationList().map((d, index) => ({
+    no: index + 1,
+    createdAt: d.createdAt || "",
+    donorName: d.donorName || "",
+    depositorName: d.depositorName || "",
+    phone: d.phone || "",
+    amount: Number(d.amount || DONATION_AMOUNT || 0),
+    smsStatus: d.smsStatus || "",
+    smsSentAt: d.smsSentAt || "",
+    smsRequestId: d.smsRequestId || "",
+    smsError: d.smsError || ""
+  }));
+}
+
 function buildGoogleDrivePayload(mode = "auto") {
   const reservationRows = buildReservationRows();
   const statsRows = buildStatsRows();
   const screeningRows = buildScreeningRows();
+  const donationRows = buildDonationRows();
   return {
     festival: "제9회 머내마을영화제",
     mode,
@@ -4960,16 +5034,19 @@ function buildGoogleDrivePayload(mode = "auto") {
     applicants: buildDriveApplicants(),
     stats: buildDriveStats(),
     screenings: buildDriveScreenings(),
+    donations: buildDriveDonations(),
     survey: buildDriveSurvey(),
     rows: {
       applicants: reservationRows,
       stats: statsRows,
-      screenings: screeningRows
+      screenings: screeningRows,
+      donations: donationRows
     },
     csv: {
       applicants: rowsToCsv(reservationRows).replace(/^\ufeff/, ""),
       stats: rowsToCsv(statsRows).replace(/^\ufeff/, ""),
-      screenings: rowsToCsv(screeningRows).replace(/^\ufeff/, "")
+      screenings: rowsToCsv(screeningRows).replace(/^\ufeff/, ""),
+      donations: rowsToCsv(donationRows).replace(/^\ufeff/, "")
     }
   };
 }
@@ -5780,7 +5857,7 @@ document.addEventListener("click", (event) => {
   const id = button.dataset.id;
   if (action === "go-home") {
     event.preventDefault();
-    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=118&fresh=1";
+    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=119&fresh=1";
     else { window.location.hash = "#/"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     return;
   }
