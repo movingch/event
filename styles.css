@@ -3127,3 +3127,85 @@ tr:last-child td { border-bottom: 0; }
   .survey-question-table-wrap table { min-width: 760px; }
   .check-inline { padding-top: .5rem; }
 }
+
+/* v78: 신청자/스태프 출석체크 간소화 및 티켓/좌석 표시 제거 */
+.reservation-table {
+  min-width: 700px !important;
+  table-layout: fixed !important;
+}
+.reservation-table th,
+.reservation-table td {
+  padding: 5px 6px !important;
+}
+.reservation-table:not(.reservation-table-sms) th:nth-child(1),
+.reservation-table:not(.reservation-table-sms) td:nth-child(1) { width: 13% !important; }
+.reservation-table:not(.reservation-table-sms) th:nth-child(2),
+.reservation-table:not(.reservation-table-sms) td:nth-child(2) { width: 22% !important; }
+.reservation-table:not(.reservation-table-sms) th:nth-child(3),
+.reservation-table:not(.reservation-table-sms) td:nth-child(3) { width: 19% !important; }
+.reservation-table:not(.reservation-table-sms) th:nth-child(4),
+.reservation-table:not(.reservation-table-sms) td:nth-child(4) { width: 12% !important; }
+.reservation-table:not(.reservation-table-sms) th:nth-child(5),
+.reservation-table:not(.reservation-table-sms) td:nth-child(5) { width: 6% !important; text-align: center; }
+.reservation-table:not(.reservation-table-sms) th:nth-child(6),
+.reservation-table:not(.reservation-table-sms) td:nth-child(6) { width: 10% !important; }
+.reservation-table:not(.reservation-table-sms) th:nth-child(7),
+.reservation-table:not(.reservation-table-sms) td:nth-child(7) { width: 8% !important; }
+.reservation-table:not(.reservation-table-sms) th:nth-child(8),
+.reservation-table:not(.reservation-table-sms) td:nth-child(8) { width: 10% !important; }
+.reservation-table-sms th:nth-child(1), .reservation-table-sms td:nth-child(1) { width: 4% !important; }
+.reservation-table-sms th:nth-child(2), .reservation-table-sms td:nth-child(2) { width: 12% !important; }
+.reservation-table-sms th:nth-child(3), .reservation-table-sms td:nth-child(3) { width: 21% !important; }
+.reservation-table-sms th:nth-child(4), .reservation-table-sms td:nth-child(4) { width: 18% !important; }
+.reservation-table-sms th:nth-child(5), .reservation-table-sms td:nth-child(5) { width: 11% !important; }
+.reservation-table-sms th:nth-child(6), .reservation-table-sms td:nth-child(6) { width: 5% !important; text-align: center; }
+.reservation-table-sms th:nth-child(7), .reservation-table-sms td:nth-child(7) { width: 9% !important; }
+.reservation-table-sms th:nth-child(8), .reservation-table-sms td:nth-child(8) { width: 8% !important; }
+.reservation-table-sms th:nth-child(9), .reservation-table-sms td:nth-child(9) { width: 12% !important; }
+.status-index.blue {
+  background: rgba(49, 90, 139, 0.12);
+  color: #315a8b;
+  border-color: rgba(49, 90, 139, 0.28);
+}
+.status-index.warn {
+  background: rgba(180, 107, 0, 0.12);
+  color: #945900;
+  border-color: rgba(180, 107, 0, 0.28);
+}
+.reservation-table .reservation-manage-compact {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 4px !important;
+  justify-items: stretch;
+}
+.reservation-table .reservation-manage-compact .btn-small {
+  width: 100%;
+  min-height: 28px !important;
+  padding: 4px 3px !important;
+  font-size: 10px !important;
+}
+.reservation-action-panel-buttons-only {
+  display: block !important;
+  padding: 14px !important;
+}
+.reservation-action-buttons-large {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px !important;
+  justify-content: center !important;
+  align-items: stretch;
+  width: min(760px, 100%);
+  margin: 0 auto;
+}
+.reservation-action-buttons-large .btn {
+  min-height: 46px;
+  width: 100%;
+  justify-content: center;
+  font-size: 14px;
+  padding: 10px 8px;
+}
+@media (max-width: 760px) {
+  .reservation-table { min-width: 680px !important; }
+  .reservation-action-buttons-large { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px !important; }
+  .reservation-action-buttons-large .btn { min-height: 44px; font-size: 13px; }
+}

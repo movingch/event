@@ -298,6 +298,7 @@ function normalizeReservation(reservation = {}) {
     status: base.status || "확정",
     attended,
     attendedSeats,
+    attendanceStatus: base.attendanceStatus || (attended ? "참석" : (base.status === "취소" ? "취소" : "신청")),
     attendedAt: attended ? (base.attendedAt || base.updatedAt || base.createdAt || new Date().toISOString()) : "",
     ticketType,
     seatType,
@@ -1348,13 +1349,13 @@ function renderOpeningTicketing() {
         </div>
       </div>
       <aside class="opening-status-card">
-        <h2>현재 티켓팅 상태</h2>
+        <h2>현재 신청 상태</h2>
         <div class="opening-status-big ${phase.className}">${esc(phase.label)}</div>
-        <p>${esc(phase.message || "개막작 티켓팅 상태를 확인하세요.")}</p>
+        <p>${esc(phase.message || "개막작 신청 상태를 확인하세요.")}</p>
         <div class="opening-mini-grid">
           <div><span>정원</span><strong>${Number(opening.capacity || 0)}명</strong></div>
           <div><span>확정</span><strong>${confirmed}명</strong></div>
-          <div><span>남은 좌석</span><strong>${remaining}명</strong></div>
+          <div><span>잔여 인원</span><strong>${remaining}명</strong></div>
           <div><span>대기</span><strong>${waitlistSeats(opening.id)}명</strong></div>
         </div>
       </aside>
@@ -1646,8 +1647,10 @@ function canManageReservation(reservation) {
 }
 
 function reservationAttendanceIndex(reservation) {
-  if (reservation?.attended === true) return `<span class="badge status-index ok">참석</span>`;
-  return `<span class="badge status-index danger">취소</span>`;
+  if (reservation?.attended === true || reservation?.attendanceStatus === "참석") return `<span class="badge status-index ok">참석</span>`;
+  if (reservation?.attendanceStatus === "미참석") return `<span class="badge status-index warn">미참석</span>`;
+  if (reservation?.status === "취소") return `<span class="badge status-index danger">취소</span>`;
+  return `<span class="badge status-index blue">신청</span>`;
 }
 
 function renderStaff(preselectedId = "") {
@@ -2095,7 +2098,7 @@ function adminOpening() {
     <section class="card opening-admin-card">
       <div class="section-title">
         <div>
-          <h2>개막식·개막작 티켓팅 설정</h2>
+          <h2>개막식·개막작 신청 설정</h2>
           <p>개막식 “얼굴”, 박정민 배우 참석, 메인 화면 노출 종료일, 포스터·소개영상, 개막작 신청 기간과 일반 신청 기간을 관리합니다.</p>
         </div>
         <a class="btn btn-outline" href="#/opening">관객 화면 보기</a>
@@ -2374,13 +2377,13 @@ function reservationTable(reservations, options = {}) {
       || String(a.name || "").localeCompare(String(b.name || ""), "ko")
       || String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
   });
-  const colSpan = options.smsSelectMode ? 10 : 9;
+  const colSpan = options.smsSelectMode ? 9 : 8;
   return `
     <div class="table-wrap reservation-table-wrap">
       <table class="reservation-table ${options.smsSelectMode ? "reservation-table-sms" : ""}">
         <thead>
           <tr>
-            ${options.smsSelectMode ? `<th class="screen-only sms-check-col"><input type="checkbox" data-action="toggle-visible-reservation-checks" aria-label="현재 목록 전체 선택" /></th>` : ""}<th>상영관</th><th>영화 / 시간</th><th>신청자</th><th>예약번호</th><th>티켓/좌석</th><th>인원</th><th>신청일</th><th>메모</th><th class="screen-only">관리</th>
+            ${options.smsSelectMode ? `<th class="screen-only sms-check-col"><input type="checkbox" data-action="toggle-visible-reservation-checks" aria-label="현재 목록 전체 선택" /></th>` : ""}<th>상영관</th><th>영화 / 시간</th><th>신청자</th><th>예약번호</th><th>인원</th><th>신청일</th><th>메모</th><th class="screen-only">관리</th>
           </tr>
         </thead>
         <tbody>
@@ -2399,33 +2402,28 @@ function reservationTable(reservations, options = {}) {
                   ${reservation.email ? `<span class="help applicant-email">${esc(reservation.email)}</span>` : ""}
                   <span class="print-only print-attendance-text">${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : ""}</span>
                 </td>
-                <td><strong>${esc(reservationDisplayNumber(reservation, screening))}</strong><br><span class="help">${esc(reservationTicketLabel(reservation, screening))}</span></td>
-                <td class="ticket-seat-cell"><strong>${esc(reservationTicketLabel(reservation, screening))}</strong><br><span class="help">${esc(reservationSeatLabel(reservation, screening))}</span>${reservation.donorName ? `<br><span class="help">후원자 ${esc(reservation.donorName)}</span>` : ""}</td>
+                <td><strong>${esc(reservationDisplayNumber(reservation, screening))}</strong></td>
                 <td>${Number(reservation.seats || 0)}명</td>
                 <td>${esc(formatDateTime(reservation.createdAt))}</td>
                 <td class="table-note">${esc(reservation.note || "-")}</td>
                 <td class="screen-only">
                   <div class="row-actions reservation-manage-compact">
                     <button class="btn btn-outline btn-small attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true" title="참석 인원 입력">참석</button>
-                    <button class="btn btn-outline btn-small" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="false">취소</button>
+                    <button class="btn btn-outline btn-small" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="false">미참석</button>
                   </div>
                 </td>
               </tr>
               ${selected ? `
                 <tr class="reservation-action-row screen-only">
                   <td colspan="${colSpan}">
-                    <div class="reservation-action-panel">
-                      <div>
-                        <strong>${esc(reservation.name)} 님 관리</strong>
-                        <p class="help">목록을 클릭하면 이 관리창이 열립니다. 참석 확인, 취소, 정보 수정, 삭제, 문자전송을 바로 처리할 수 있습니다.</p>
-                      </div>
-                      <div class="row-actions reservation-action-buttons">
-                        <button class="btn btn-outline btn-small attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true">참석</button>
-                        <button class="btn btn-outline btn-small" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="false">취소</button>
-                        <button class="btn btn-outline btn-small" type="button" data-action="staff-edit-reservation" data-id="${esc(reservation.id)}">수정</button>
-                        <button class="btn btn-danger btn-small" type="button" data-action="delete-reservation" data-id="${esc(reservation.id)}">삭제</button>
-                        <button class="btn btn-dark btn-small" type="button" data-action="send-sms" data-id="${esc(reservation.id)}">예약문자</button>
-                        <button class="btn btn-primary btn-small" type="button" data-action="open-single-notice-sms" data-id="${esc(reservation.id)}">별도안내문자</button>
+                    <div class="reservation-action-panel reservation-action-panel-buttons-only">
+                      <div class="row-actions reservation-action-buttons reservation-action-buttons-large">
+                        <button class="btn btn-outline attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true">참석</button>
+                        <button class="btn btn-outline" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="false">미참석</button>
+                        <button class="btn btn-outline" type="button" data-action="staff-edit-reservation" data-id="${esc(reservation.id)}">수정</button>
+                        <button class="btn btn-danger" type="button" data-action="delete-reservation" data-id="${esc(reservation.id)}">삭제</button>
+                        <button class="btn btn-dark" type="button" data-action="send-sms" data-id="${esc(reservation.id)}">예약문자</button>
+                        <button class="btn btn-primary" type="button" data-action="open-single-notice-sms" data-id="${esc(reservation.id)}">별도안내문자</button>
                       </div>
                     </div>
                   </td>
@@ -2916,7 +2914,7 @@ function openOpeningBooking(screening) {
         <span class="badge warn">${esc(screening.guest || "박정민 배우")} 참석</span>
       </div>
       <p><strong>${esc(formatDateTime(screening.startTime))}</strong></p>
-      <p class="help">정원 ${Number(screening.capacity || 0)}명 · 확정 ${confirmedSeats(screening.id)}명 · 남은 좌석 ${Math.max(remainingSeats(screening), 0)}명 · 대기 ${waitlistSeats(screening.id)}명</p>
+      <p class="help">정원 ${Number(screening.capacity || 0)}명 · 확정 ${confirmedSeats(screening.id)}명 · 잔여 인원 ${Math.max(remainingSeats(screening), 0)}명 · 대기 ${waitlistSeats(screening.id)}명</p>
     </div>
     ${openingBookingIntro(screening, phase, stats)}
     <form id="bookingForm" data-id="${esc(screening.id)}" data-opening="true" data-ticket-type="${esc(phase.ticketType)}">
@@ -2974,7 +2972,7 @@ function openBooking(screeningId) {
         <span class="badge ${statusInfo(screening).className}">${esc(statusInfo(screening).text)}</span>
       </div>
       <p><strong>${esc(formatDateTime(screening.startTime))}</strong></p>
-      <p class="help">정원 ${Number(screening.capacity || 0)}명 · 확정 ${confirmedSeats(screening.id)}명 · 남은 좌석 ${Math.max(remaining, 0)}명 · 대기 ${waitlistSeats(screening.id)}명</p>
+      <p class="help">정원 ${Number(screening.capacity || 0)}명 · 확정 ${confirmedSeats(screening.id)}명 · 잔여 인원 ${Math.max(remaining, 0)}명 · 대기 ${waitlistSeats(screening.id)}명</p>
     </div>
     <form id="bookingForm" data-id="${esc(screening.id)}">
       <div class="form-grid">
@@ -3003,7 +3001,7 @@ function openBooking(screeningId) {
           <textarea class="textarea" id="guestNote" name="note" placeholder="접근성 지원, 단체 참석, 기타 요청사항"></textarea>
         </div>
       </div>
-      <p class="help">남은 좌석보다 많이 신청하면 대기 신청으로 접수됩니다. 운영진이 연락처로 확정 여부를 안내할 수 있습니다.</p>
+      <p class="help">잔여 인원보다 많이 신청하면 대기 신청으로 접수됩니다. 운영진이 연락처로 확정 여부를 안내할 수 있습니다.</p>
       <div class="donation-mini">
         <strong>신청 후 후원도 함께해 주세요.</strong>
         <span>주민들이 직접 만드는 영화제가 계속 이어질 수 있도록 작은 후원의 손길을 보태주세요.</span>
@@ -3305,8 +3303,8 @@ function reservationSmsPeople(reservation) {
   return `${Math.max(1, Number(reservation.seats || 1))}명`;
 }
 
-function reservationSmsSeatPeople(reservation, screening) {
-  return `${reservationSeatLabel(reservation, screening)} / ${reservationSmsPeople(reservation)}`;
+function reservationSmsSeatPeople(reservation) {
+  return reservationSmsPeople(reservation);
 }
 
 function reservationConfirmationMessage(reservation, screening, status) {
@@ -3319,7 +3317,7 @@ function reservationConfirmationMessage(reservation, screening, status) {
     `${reservation.name} 님 ${statusText}`,
     `예약번호: ${reservationDisplayNumber(reservation, screening)}`,
     `영화명: ${movieTitle}`,
-    `좌석/인원: ${reservationSmsSeatPeople(reservation, screening)}`,
+    `인원: ${reservationSmsSeatPeople(reservation, screening)}`,
     `일시: ${time}`,
     `장소: ${venue}`,
     "상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요."
@@ -3498,7 +3496,7 @@ function showReservationComplete(reservation, status) {
   const description = openingReservation
     ? (isConfirmed
       ? `개막식 신청이 접수되었습니다. 상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요.`
-      : "좌석이 부족해 대기 신청으로 접수되었습니다. 운영진이 연락처로 확정 여부를 안내할 수 있습니다.")
+      : "잔여 인원이 부족해 대기 신청으로 접수되었습니다. 운영진이 연락처로 확정 여부를 안내할 수 있습니다.")
     : (isConfirmed
       ? "상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요."
       : "정원이 부족해 대기 신청으로 접수되었습니다. 운영진이 연락처로 확정 여부를 안내할 수 있습니다.");
@@ -3664,7 +3662,7 @@ function submitOpeningSettings(form) {
   if (!state.screenings.some((screening) => screening.id === opening.id)) state.screenings.unshift(payload);
   persist();
   render();
-  toast("개막작 티켓팅 설정을 저장했습니다.");
+  toast("개막작 신청 설정을 저장했습니다.");
 }
 
 function submitBooking(form) {
@@ -3791,6 +3789,7 @@ function setReservationStatus(id, status) {
   reservation.status = status;
   if (status === "취소") {
     reservation.attended = false;
+    reservation.attendanceStatus = "취소";
     reservation.attendedSeats = 0;
     reservation.attendedAt = "";
   }
@@ -3814,11 +3813,13 @@ function setAttendance(id, attended) {
     }
     reservation.status = "확정";
     reservation.attended = attendedSeats > 0;
+    reservation.attendanceStatus = reservation.attended ? "참석" : "미참석";
     reservation.attendedSeats = attendedSeats;
     reservation.seats = Math.floor(attendedSeats);
     reservation.attendedAt = reservation.attended ? new Date().toISOString() : "";
   } else {
     reservation.attended = false;
+    reservation.attendanceStatus = "미참석";
     reservation.attendedSeats = 0;
     reservation.attendedAt = "";
   }
@@ -3828,7 +3829,7 @@ function setAttendance(id, attended) {
   const screeningId = reservation.screeningId;
   render();
   if (rosterOpen) openRoster(screeningId);
-  toast(reservation.attended ? `실제 참석 ${reservation.attendedSeats}명으로 기록했습니다.` : "미참석으로 되돌렸습니다.");
+  toast(reservation.attended ? `실제 참석 ${reservation.attendedSeats}명으로 기록했습니다.` : "미참석으로 체크했습니다.");
 }
 
 function staffAddReservation() {
@@ -3877,18 +3878,6 @@ function staffEditReservation(id) {
         <div>
           <label class="label" for="editReservationNumber">예약번호</label>
           <input class="input" id="editReservationNumber" name="reservationNumber" value="${esc(reservationDisplayNumber(r, screening))}" />
-        </div>
-        <div>
-          <label class="label" for="editTicketType">티켓 구분</label>
-          <select class="select" id="editTicketType" name="ticketType">
-            <option value="사전신청" ${r.ticketType === "사전신청" ? "selected" : ""}>개막작 신청</option>
-            <option value="일반" ${r.ticketType === "일반" ? "selected" : ""}>일반 신청</option>
-            <option value="" ${!r.ticketType ? "selected" : ""}>일반상영</option>
-          </select>
-        </div>
-        <div>
-          <label class="label" for="editSeatAssignment">좌석</label>
-          <input class="input" id="editSeatAssignment" name="seatAssignment" value="${esc(r.seatAssignment || "")}" placeholder="예: A-001 또는 자유석" />
         </div>
         <div>
           <label class="label" for="editSeats">인원</label>
@@ -3942,14 +3931,13 @@ function submitReservationEdit(form) {
   r.phone = String(data.phone || "").trim();
   r.email = String(data.email || "").trim();
   r.reservationNumber = String(data.reservationNumber || "").trim();
-  r.ticketType = String(data.ticketType || "").trim();
-  r.seatAssignment = String(data.seatAssignment || "").trim();
-  r.seatType = r.seatAssignment ? "지정좌석" : "";
   r.seats = seats;
   r.attendedSeats = attendedSeats;
   r.attended = attendedSeats > 0;
+  r.attendanceStatus = r.attended ? "참석" : (r.attendanceStatus === "미참석" ? "미참석" : "신청");
   r.attendedAt = r.attended ? (r.attendedAt || new Date().toISOString()) : "";
   r.status = ["확정", "대기", "취소"].includes(data.status) ? data.status : "확정";
+  if (r.status === "취소") r.attendanceStatus = "취소";
   r.donorName = String(data.donorName || "").trim();
   r.smsConsent = data.smsConsent === "on";
   r.note = String(data.note || "").trim();
@@ -3995,15 +3983,14 @@ function rowsToCsv(rows) {
 }
 
 function buildReservationRows() {
-  const rows = [["예약번호", "상태", "신청구분", "후원자명/입금자명", "참석여부", "참석처리일", "영화", "상영관", "상영시간", "신청자", "연락처", "이메일", "문자수신동의", "문자상태", "문자발송일", "문자요청ID", "신청인원", "실제참석인원", "신청일", "메모"]];
+  const rows = [["예약번호", "상태", "후원자명/입금자명", "참석여부", "참석처리일", "영화", "상영관", "상영시간", "신청자", "연락처", "이메일", "문자수신동의", "문자상태", "문자발송일", "문자요청ID", "신청인원", "실제참석인원", "신청일", "메모"]];
   state.reservations.forEach((reservation) => {
     const screening = state.screenings.find((s) => s.id === reservation.screeningId);
     rows.push([
       reservationDisplayNumber(reservation, screening),
       reservation.status,
-      reservationTicketLabel(reservation, screening),
       reservation.donorName || "",
-      reservation.attended === true ? "참석" : "취소",
+      reservation.attended === true ? "참석" : (reservation.attendanceStatus || "신청"),
       reservation.attendedAt || "",
       screening?.title || "삭제된 회차",
       screening?.venue || "",
@@ -4025,21 +4012,19 @@ function buildReservationRows() {
 }
 
 function buildScreeningRows() {
-  const rows = [["회차ID", "영화", "상영관", "시작", "종료", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석확인건수", "참석인원", "취소건수", "취소인원", "신청률", "참석률", "상태", "개막작여부", "티켓팅단계", "GV", "모더레이터", "담당스태프", "연락처", "기타"]];
+  const rows = [["회차ID", "영화", "상영관", "시작", "종료", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석확인건수", "참석인원", "미참석건수", "미참석인원", "신청률", "참석률", "상태", "개막작여부", "GV", "모더레이터", "담당스태프", "연락처", "기타"]];
   sortedScreenings().forEach((s) => {
     const stats = isOpeningScreening(s) ? openingStats(s) : null;
-    const phase = isOpeningScreening(s) ? openingPhaseInfo(s) : null;
-    rows.push([s.id, s.title, s.venue, s.startTime, s.endTime, s.capacity, applicationCount(s.id), appliedSeats(s.id), stats ? stats.earlybirdSeats : 0, stats ? stats.generalSeats : 0, attendedApplicationCount(s.id), actualAttendees(s.id), canceledApplicationCount(s.id), canceledSeats(s.id), `${occupancyRate(s)}%`, `${attendanceRate(s.id)}%`, s.status, isOpeningScreening(s) ? "개막작" : "", phase ? phase.label : "", s.gvHost, s.moderator, s.staff, s.staffPhone, s.notes]);
+    rows.push([s.id, s.title, s.venue, s.startTime, s.endTime, s.capacity, applicationCount(s.id), appliedSeats(s.id), stats ? stats.earlybirdSeats : 0, stats ? stats.generalSeats : 0, attendedApplicationCount(s.id), actualAttendees(s.id), canceledApplicationCount(s.id), canceledSeats(s.id), `${occupancyRate(s)}%`, `${attendanceRate(s.id)}%`, s.status, isOpeningScreening(s) ? "개막작" : "", s.gvHost, s.moderator, s.staff, s.staffPhone, s.notes]);
   });
   return rows;
 }
 
 function buildStatsRows() {
-  const rows = [["영화", "상영관", "상영시간", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석인원", "취소건수", "취소인원", "남은좌석", "신청률", "참석률", "정원상태", "티켓팅단계"]];
+  const rows = [["영화", "상영관", "상영시간", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석인원", "미참석건수", "미참석인원", "잔여인원", "신청률", "참석률", "정원상태"]];
   sortedScreenings().forEach((s) => {
     const stats = isOpeningScreening(s) ? openingStats(s) : null;
-    const phase = isOpeningScreening(s) ? openingPhaseInfo(s) : null;
-    rows.push([s.title, s.venue, s.startTime, s.capacity, applicationCount(s.id), appliedSeats(s.id), stats ? stats.earlybirdSeats : 0, stats ? stats.generalSeats : 0, actualAttendees(s.id), canceledApplicationCount(s.id), canceledSeats(s.id), remainingSeats(s), `${occupancyRate(s)}%`, `${attendanceRate(s.id)}%`, statusInfo(s).text, phase ? phase.label : ""]);
+    rows.push([s.title, s.venue, s.startTime, s.capacity, applicationCount(s.id), appliedSeats(s.id), stats ? stats.earlybirdSeats : 0, stats ? stats.generalSeats : 0, actualAttendees(s.id), canceledApplicationCount(s.id), canceledSeats(s.id), remainingSeats(s), `${occupancyRate(s)}%`, `${attendanceRate(s.id)}%`, statusInfo(s).text]);
   });
   rows.push([]);
   rows.push(["상영관별 통계"]);
@@ -4087,11 +4072,9 @@ function buildDriveApplicants() {
       name: reservation.name || "",
       phone: reservation.phone || "",
       email: reservation.email || "",
-      seat: reservationSeatLabel(reservation, screening),
       count: Number(reservation.seats || 0),
       attendedCount: reservation.attended ? Number(reservation.attendedSeats || reservation.seats || 0) : 0,
-      attendanceStatus: reservation.attended === true ? "참석" : "취소",
-      ticketType: reservationTicketLabel(reservation, screening),
+      attendanceStatus: reservation.attended === true ? "참석" : (reservation.attendanceStatus || "신청"),
       donorName: reservation.donorName || "",
       smsConsent: reservation.smsConsent === false ? "미동의" : "동의",
       smsStatus: reservation.smsStatus || "미발송",
@@ -4118,11 +4101,10 @@ function buildDriveStats() {
       attendedCount: actualAttendees(s.id),
       canceledCount: canceledApplicationCount(s.id),
       canceledSeats: canceledSeats(s.id),
-      remainingSeats: remainingSeats(s),
+      remainingCount: remainingSeats(s),
       applicationRate: `${occupancyRate(s)}%`,
       attendanceRate: `${attendanceRate(s.id)}%`,
-      status: statusInfo(s).text,
-      ticketingPhase: phase ? phase.label : ""
+      status: statusInfo(s).text
     };
   });
 }
@@ -4149,7 +4131,6 @@ function buildDriveScreenings() {
       attendanceRate: `${attendanceRate(s.id)}%`,
       status: s.status || "",
       opening: isOpeningScreening(s) ? "개막작" : "",
-      ticketingPhase: phase ? phase.label : "",
       gvHost: s.gvHost || "",
       moderator: s.moderator || "",
       staff: s.staff || "",
