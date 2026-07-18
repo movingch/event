@@ -1155,7 +1155,7 @@ function getTotals() {
 function appHeader() {
   return `
     <header class="header">
-      <a class="logo" href="#/">
+      <a class="logo" href="/?v=112&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
         <div class="logo-mark"><img src="assets/munae-horse-logo.png" alt="머내마을영화제 말 캐릭터 로고"></div>
         <div>
           <div class="logo-title">제9회 머내마을영화제</div>
@@ -1982,9 +1982,8 @@ function renderAdminLogin() {
 }
 
 function adminTabLink(tab, label, active) {
-  const href = `#/admin/${tab}`;
   const labelEsc = esc(label);
-  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="${href}" data-admin-tab="${esc(tab)}">${labelEsc}</a>`;
+  return `<button class="admin-tab ${tab === active ? "active" : ""}" type="button" data-action="admin-tab" data-admin-tab="${esc(tab)}">${labelEsc}</button>`;
 }
 
 function adminTopReportActions(active) {
@@ -2803,7 +2802,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=106">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=111">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3350,7 +3349,7 @@ function adminBackup() {
               <button class="btn btn-dark" type="button" data-action="force-google-backup-from-supabase">Supabase 최신 데이터를 구글시트로 강제 백업</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=106">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=111">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -3907,7 +3906,9 @@ function smsStatusText(reservation) {
 
 function updateReservationSmsState(reservation, patch) {
   Object.assign(reservation, patch);
-  persist();
+  const transient = String(patch?.smsStatus || "").includes("발송중");
+  persist(transient ? { autoSync: false } : {});
+  if (!transient) scheduleGoogleBackupSoon("reservation-sms-status");
   const escapedId = window.CSS && CSS.escape ? CSS.escape(reservation.id) : String(reservation.id).replaceAll('"', '\\"');
   const statusEl = document.querySelector(`[data-sms-status-for="${escapedId}"]`);
   if (statusEl) statusEl.textContent = smsStatusText(reservation);
@@ -4882,7 +4883,10 @@ let supabasePushing = false;
 let supabaseLastError = "";
 let supabaseLastPullAt = 0;
 let supabaseLastPushAt = 0;
+let supabaseLastRemoteUpdatedAt = "";
 let supabaseAutoSyncTimer = null;
+let supabasePendingPushReason = "";
+let supabasePendingPushOptions = null;
 let supabaseWriteRetryTimers = [];
 let googleBackupRetryTimers = [];
 let googleBackupLastStatus = null;
@@ -4904,6 +4908,22 @@ function hasSupabaseData(data = {}) {
   ));
 }
 
+function stateChangeKey(data = state) {
+  try {
+    const s = data || {};
+    return [
+      s.lastUpdated || "",
+      Array.isArray(s.reservations) ? s.reservations.length : 0,
+      Array.isArray(s.screenings) ? s.screenings.length : 0,
+      Array.isArray(s.surveyResponses) ? s.surveyResponses.length : 0,
+      Array.isArray(s.surveyDispatches) ? s.surveyDispatches.length : 0,
+      Array.isArray(s.donations) ? s.donations.length : 0
+    ].join("|");
+  } catch (error) {
+    return String(Date.now());
+  }
+}
+
 async function readSupabaseState() {
   const response = await fetch(SUPABASE_STATE_API_ENDPOINT, { method: "GET", cache: "no-store" });
   let data = null;
@@ -4914,11 +4934,19 @@ async function readSupabaseState() {
 }
 
 async function postSupabaseState(reason = "auto", options = {}) {
-  if (supabasePushing) return false;
+  if (supabasePushing) {
+    supabasePendingPushReason = reason || "pending-data-change";
+    supabasePendingPushOptions = { ...(options || {}), fromRetry: false };
+    return false;
+  }
   supabasePushing = true;
   try {
+    // v111: Supabase 저장은 항상 빠르게 끝내고, 구글시트 백업은 별도 자동 작업으로 넘깁니다.
+    // 이전 구조처럼 Supabase 저장 요청 안에서 구글 Apps Script 응답까지 기다리면
+    // 문자 상태가 "발송중"으로 저장된 동안 다음 "발송완료" 저장이 밀리거나 누락될 수 있습니다.
     const skipGoogleBackup = options.skipGoogleBackup === true;
-    const googlePayload = !skipGoogleBackup && typeof buildGoogleDrivePayload === "function" ? buildGoogleDrivePayload(`supabase-${reason}`) : null;
+    const syncGoogleInline = options.syncGoogleBackup === true;
+    const googlePayload = (!skipGoogleBackup && syncGoogleInline && typeof buildGoogleDrivePayload === "function") ? buildGoogleDrivePayload(`supabase-${reason}`) : null;
     const response = await fetch(SUPABASE_STATE_API_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4935,6 +4963,7 @@ async function postSupabaseState(reason = "auto", options = {}) {
     if (!response.ok || !data?.ok) throw new Error(data?.message || "Supabase 저장에 실패했습니다.");
     supabaseConfigured = true;
     supabaseLastPushAt = Date.now();
+    if (data?.updatedAt) supabaseLastRemoteUpdatedAt = String(data.updatedAt);
     supabaseLastError = "";
     clearSupabaseWriteRetries();
     // v103: Supabase 저장 후 구글시트 백업이 서버 환경변수 문제 등으로 건너뛰거나 실패하면
@@ -4956,7 +4985,7 @@ async function postSupabaseState(reason = "auto", options = {}) {
         queueGoogleSheetBackupRetries(reason);
       }
     }
-    if (!skipGoogleBackup) queueGoogleSheetBackupRetries(reason);
+    if (!skipGoogleBackup) scheduleGoogleBackupSoon(reason);
     return true;
   } catch (error) {
     console.warn("Supabase 저장 실패", error);
@@ -4965,6 +4994,13 @@ async function postSupabaseState(reason = "auto", options = {}) {
     return false;
   } finally {
     supabasePushing = false;
+    if (supabasePendingPushReason) {
+      const nextReason = supabasePendingPushReason;
+      const nextOptions = supabasePendingPushOptions || {};
+      supabasePendingPushReason = "";
+      supabasePendingPushOptions = null;
+      window.setTimeout(() => postSupabaseState(`${nextReason}-pending`, nextOptions), 120);
+    }
   }
 }
 
@@ -5005,13 +5041,24 @@ async function pullSupabaseCore(options = {}) {
       return false;
     }
     if (result.found && hasSupabaseData(result.data)) {
-      state = normalizeState(result.data);
+      const remoteUpdatedAt = String(result.updatedAt || "");
+      if (remoteUpdatedAt && remoteUpdatedAt === supabaseLastRemoteUpdatedAt && options.force !== true) {
+        supabaseConfigured = true;
+        supabaseLastPullAt = Date.now();
+        supabaseLastError = "";
+        return true;
+      }
+      const nextState = normalizeState(result.data);
+      const beforeKey = stateChangeKey(state);
+      const afterKey = stateChangeKey(nextState);
+      state = nextState;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       supabaseSourceLoaded = true;
       supabaseConfigured = true;
       supabaseLastPullAt = Date.now();
+      supabaseLastRemoteUpdatedAt = remoteUpdatedAt || supabaseLastRemoteUpdatedAt;
       supabaseLastError = "";
-      safeRenderAfterBackgroundSync(options);
+      if (beforeKey !== afterKey || options.force === true) safeRenderAfterBackgroundSync(options);
       return true;
     }
     // Supabase가 비어 있을 때: 현재 브라우저에 실제 운영 데이터가 있으면 최초 1회 원본으로 올립니다.
@@ -5130,6 +5177,7 @@ const DRIVE_LAST_SYNC_STORAGE_KEY = "munae9DriveLastSyncAt";
 const DRIVE_LAST_PULL_STORAGE_KEY = "munae9DriveLastPullAt";
 const DEFAULT_DRIVE_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwc18Y1SArlzYkXfnw1so5SsFKUMg3v9-RgJagkvgihNgEqRuS-eJtM7fKpMfgqrnyE/exec";
 let driveAutoSyncTimer = null;
+let googleBackupSoonTimer = null;
 let googleSheetSourceLoaded = false;
 let googleSheetPulling = false;
 let googleSheetLastError = "";
@@ -5229,9 +5277,11 @@ function queueGoogleSheetBackupRetries(reason = "data-change") {
 
 function scheduleGoogleBackupSoon(reason = "background") {
   if (!getDriveWebhookUrl()) return;
-  window.setTimeout(() => {
+  if (googleBackupSoonTimer) window.clearTimeout(googleBackupSoonTimer);
+  googleBackupSoonTimer = window.setTimeout(() => {
+    googleBackupSoonTimer = null;
     syncGoogleDriveCore({ silent: true, prompt: false, reason, allowZeroApplicants: false });
-  }, 100);
+  }, 900);
   queueGoogleSheetBackupRetries(reason);
 }
 
@@ -5255,15 +5305,21 @@ async function forceBackupSupabaseToGoogleSheet() {
 }
 
 async function postGoogleDrivePayload(url, payload) {
-  // v63: 브라우저에서 Apps Script로 직접 보내면 본문이 비는 사례가 있어
-  // 같은 도메인의 Vercel API가 Apps Script로 전달하는 서버 프록시 방식을 기본으로 사용합니다.
-  // 이 방식은 응답과 건수도 확인할 수 있어 운영 중 원인 파악이 훨씬 쉽습니다.
-  const response = await fetch("/api/google-drive-sync", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ webhookUrl: url, payload }),
-    cache: "no-store"
-  });
+  // v111: 구글시트 백업은 원본 저장을 막으면 안 됩니다. 오래 걸리면 실패로 기록하고 자동 재시도합니다.
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  let response;
+  try {
+    response = await fetch("/api/google-drive-sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ webhookUrl: url, payload }),
+      cache: "no-store",
+      signal: controller.signal
+    });
+  } finally {
+    window.clearTimeout(timeout);
+  }
   let data = null;
   try { data = await response.json(); } catch (error) {}
   if (!response.ok || !data?.ok) {
@@ -5567,6 +5623,12 @@ document.addEventListener("click", (event) => {
   if (!button) return;
   const action = button.dataset.action;
   const id = button.dataset.id;
+  if (action === "go-home") {
+    event.preventDefault();
+    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=112&fresh=1";
+    else { window.location.hash = "#/"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+    return;
+  }
   if (action === "donate") handleDonate();
   if (action === "copy-donation-account") {
     copyTextToClipboard(DONATION_ACCOUNT_NUMBER);
@@ -5739,6 +5801,6 @@ document.addEventListener("visibilitychange", () => {
 window.setInterval(() => {
   if (shouldPauseBackgroundSupabasePull()) return;
   pullSupabaseCore({ render: true });
-}, 10000);
+}, 30000);
 
 window.setInterval(() => { checkSurveyAutoSmsQueue(); }, 60000);

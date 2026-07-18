@@ -2964,6 +2964,7 @@ tr:last-child td { border-bottom: 0; }
 /* v67: mobile admin hard navigation and compact 3-column controls */
 .admin-tab {
   cursor: pointer;
+  font: inherit;
   text-decoration: none;
   display: flex;
   align-items: center;
