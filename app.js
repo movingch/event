@@ -2624,7 +2624,7 @@ function surveyDetailedStatsSection() {
           <h2>만족도조사 응답 통계</h2>
           <p>관람 후 설문 응답을 수치, 그래프, 주관식 의견으로 확인합니다. 구글시트 만족도_응답·만족도_통계 탭에도 함께 기록됩니다.</p>
         </div>
-        <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${responses.length}건</span>
+        <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${allResponses.length}건</span>
       </div>
       <div class="metric-grid survey-metric-grid">
         <div class="metric-card"><div class="metric-label">응답수</div><div class="metric-value">${responses.length}</div><div class="metric-note">설문 제출 기준</div></div>
@@ -2893,53 +2893,76 @@ function createSurveyTestDispatch(reservation, screening, phoneOverride = "") {
 async function createSurveyTestLink({ sendSms = false } = {}) {
   const reservationId = document.getElementById("surveyTestReservationId")?.value || "";
   const phoneOverride = document.getElementById("surveyTestPhone")?.value || "";
-  const reservation = state.reservations.find((item) => item.id === reservationId);
+  const reservation = state.reservations.find((r) => r.id === reservationId);
   if (!reservation) { toast("테스트할 신청자를 선택해 주세요."); return; }
-  const screening = getSurveyScreeningForReservation(reservation);
-  if (!screening) { toast("선택한 신청자의 상영 정보를 찾을 수 없습니다."); return; }
+  const screening = getSurveyScreeningForReservation(reservation) || {};
   if (!state.surveySettings?.enabled) { toast("먼저 만족도조사 사용을 ON으로 저장해 주세요."); return; }
+
+  const actionSelector = sendSms ? '[data-action="send-survey-test-sms"]' : '[data-action="create-survey-test-link"]';
+  const button = document.querySelector(actionSelector);
+  const originalText = button?.textContent || "";
+  if (button) { button.disabled = true; button.textContent = sendSms ? "문자 준비 중..." : "링크 준비 중..."; }
+
   const dispatch = createSurveyTestDispatch(reservation, screening, phoneOverride);
   dispatch.status = sendSms ? "테스트발송준비" : "테스트링크";
-  persist({ autoSync: false });
-  try { await postSupabaseState("survey-test-dispatch"); } catch (error) { console.warn("테스트 발송 기록 Supabase 저장 실패", error); }
-  const synced = await syncGoogleDriveCore({ silent: false, prompt: false, reason: "survey-test" });
-  if (!synced) {
-    toast("구글시트 백업은 실패했지만 Supabase 기준 테스트 링크는 계속 진행합니다.");
+  dispatch.link = surveyLinkForDispatch(dispatch);
+
+  // v110: 테스트 링크/문자는 Supabase 원본 저장만 먼저 빠르게 처리합니다.
+  // 구글시트 백업은 화면을 붙잡지 않고 뒤에서 자동 재시도합니다.
+  const saved = await postSupabaseState("survey-test-dispatch-fast", { skipGoogleBackup: true });
+  if (!saved) {
+    if (button) { button.disabled = false; button.textContent = originalText; }
+    toast(`테스트 기록 저장 실패: ${supabaseLastError || "Supabase 연결을 확인해 주세요."}`);
+    return;
   }
+
   copyTextToClipboard(dispatch.link);
+  scheduleGoogleBackupSoon("survey-test-dispatch");
 
   if (!sendSms) {
+    if (button) { button.disabled = false; button.textContent = originalText; }
     window.open(dispatch.link, "_blank", "noopener");
-    toast("테스트 설문 링크를 만들고 복사했습니다. 새 창에서 설문을 확인해 주세요.");
+    toast("테스트 설문 링크를 만들고 복사했습니다.");
     return;
   }
 
   const phone = normalizePhoneForSms(dispatch.phone);
-  if (!phone || phone.length < 10) { toast("테스트 문자를 받을 휴대폰 번호를 확인해 주세요."); return; }
+  if (!phone || phone.length < 10) {
+    if (button) { button.disabled = false; button.textContent = originalText; }
+    toast("테스트 문자를 받을 휴대폰 번호를 확인해 주세요.");
+    return;
+  }
+
   const tempReservation = { ...reservation, name: dispatch.name, phone, attended: true, smsConsent: true };
-  const message = `[테스트] ${fillSurveySmsTemplate(state.surveySettings.smsTemplate, tempReservation, screening, dispatch.link)}`;
+  const safeScreening = screening && Object.keys(screening).length ? screening : {
+    id: dispatch.screeningId,
+    title: dispatch.movieTitle || reservation.movieTitle || reservation.screeningTitle || "상영작",
+    venue: dispatch.venue || reservation.venue || "상영관",
+    startsAt: dispatch.screeningTime || reservation.screeningTime || ""
+  };
+  const message = `[테스트] ${fillSurveySmsTemplate(state.surveySettings.smsTemplate, tempReservation, safeScreening, dispatch.link)}`;
   dispatch.status = "테스트발송중";
-  persist({ autoSync: false });
+  if (button) button.textContent = "문자 보내는 중...";
+
   try {
-    const response = await fetch(SMS_API_ENDPOINT, {
+    const response = await fetch("/api/send-sms", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "notice", phone, message })
+      body: JSON.stringify({ to: phone, message, type: "survey-test", reservationId: reservation.id })
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok || result.ok === false) throw new Error(result.error || `HTTP ${response.status}`);
+    if (!response.ok || result.ok === false) throw new Error(result.message || "문자 발송 실패");
     Object.assign(dispatch, { status: "테스트발송완료", sentAt: new Date().toISOString(), requestId: result.requestId || "", error: "" });
-    persist({ autoSync: false });
-    try { await postSupabaseState("survey-test-sent"); } catch (error) { console.warn("테스트 문자 발송 기록 Supabase 저장 실패", error); }
-    await syncGoogleDriveCore({ silent: true, prompt: false, reason: "survey-test-sent" });
+    await postSupabaseState("survey-test-sent-fast", { skipGoogleBackup: true });
+    scheduleGoogleBackupSoon("survey-test-sent");
     toast("테스트 만족도조사 문자를 발송했습니다. 링크도 복사했습니다.");
-    render();
   } catch (error) {
     Object.assign(dispatch, { status: "테스트발송실패", error: String(error?.message || error).slice(0, 120) });
-    persist({ autoSync: false });
-    try { await postSupabaseState("survey-test-failed"); } catch (error) { console.warn("테스트 문자 실패 기록 Supabase 저장 실패", error); }
-    await syncGoogleDriveCore({ silent: true, prompt: false, reason: "survey-test-failed" });
-    toast("테스트 문자 발송에 실패했습니다. 문자 설정을 확인해 주세요.");
+    await postSupabaseState("survey-test-failed-fast", { skipGoogleBackup: true });
+    scheduleGoogleBackupSoon("survey-test-failed");
+    toast(`테스트 문자 발송 실패: ${String(error?.message || error).slice(0, 80)}`);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = originalText; }
     render();
   }
 }
@@ -3148,8 +3171,10 @@ function surveyDispatchRow(dispatch, index) {
 }
 
 function adminSurveyView() {
-  const responses = (state.surveyResponses || []).slice().reverse();
-  const dispatches = (state.surveyDispatches || []).slice().reverse();
+  const allResponses = (state.surveyResponses || []).slice().reverse();
+  const allDispatches = (state.surveyDispatches || []).slice().reverse();
+  const responses = allResponses.slice(0, 300);
+  const dispatches = allDispatches.slice(0, 300);
   return `
     <section class="card survey-view-card">
       <div class="section-title">
@@ -3157,20 +3182,20 @@ function adminSurveyView() {
           <h2>만족도조사현황</h2>
           <p>설문 수신 명단, 응답 목록, 실제 응답 내용을 일반관리자도 확인할 수 있습니다. 테스트 응답도 통계에 포함됩니다.</p>
         </div>
-        <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${responses.length}건</span>
+        <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${allResponses.length}건</span>
       </div>
       ${surveyDetailedStatsSection()}
     </section>
     <section class="card survey-response-list-card">
       <div class="section-title">
-        <div><h3>만족도조사 응답 목록</h3><p>제출된 설문 내용 전체를 확인하고, 잘못 들어온 테스트 또는 중복 응답은 삭제할 수 있습니다.</p></div>
+        <div><h3>만족도조사 응답 목록</h3><p>제출된 설문 내용을 확인하고, 잘못 들어온 테스트 또는 중복 응답은 삭제할 수 있습니다. 최근 300건을 우선 표시합니다.</p></div>
       </div>
       ${responses.length ? `<div class="table-wrap survey-response-table-wrap"><table class="survey-response-table"><thead><tr><th>No</th><th>구분</th><th>응답자</th><th>영화/장소</th><th>전체</th><th>응답일</th><th>응답 내용</th><th>관리</th></tr></thead><tbody>${responses.map(surveyResponseRow).join("")}</tbody></table></div>` : `<div class="empty">아직 만족도조사 응답이 없습니다.</div>`}
     </section>
     <section class="card survey-dispatch-list-card">
       <div class="section-title">
-        <div><h3>만족도조사 수신/발송 명단</h3><p>만족도조사 문자를 받은 대상과 응답 여부를 확인합니다. 테스트 발송도 함께 표시됩니다.</p></div>
-        <span class="badge">발송 ${dispatches.length}건</span>
+        <div><h3>만족도조사 수신/발송 명단</h3><p>만족도조사 문자를 받은 대상과 응답 여부를 확인합니다. 테스트 발송도 함께 표시됩니다. 최근 300건을 우선 표시합니다.</p></div>
+        <span class="badge">발송 ${allDispatches.length}건</span>
       </div>
       ${dispatches.length ? `<div class="table-wrap"><table><thead><tr><th>No</th><th>구분</th><th>수신자</th><th>영화/장소</th><th>발송상태</th><th>응답상태</th><th>발송일</th><th>관리</th></tr></thead><tbody>${dispatches.map(surveyDispatchRow).join("")}</tbody></table></div>` : `<div class="empty">아직 만족도조사 발송 기록이 없습니다.</div>`}
     </section>
@@ -3186,7 +3211,7 @@ function deleteSurveyResponse(id) {
   if (!confirm(`${label}을 삭제할까요?\n삭제 후 Supabase와 구글시트 백업에도 반영됩니다.`)) return;
   state.surveyResponses = list.filter((r) => String(r.id || r.token || r.reservationId || r.submittedAt || r.createdAt || "") !== target);
   persist();
-  postSupabaseState("delete-survey-response").then(() => syncGoogleDriveCore({ silent: true, prompt: false, reason: "delete-survey-response" })).catch((error) => console.warn("만족도 응답 삭제 동기화 실패", error));
+  postSupabaseState("delete-survey-response", { skipGoogleBackup: true }).then(() => scheduleGoogleBackupSoon("delete-survey-response")).catch((error) => console.warn("만족도 응답 삭제 동기화 실패", error));
   render();
   toast("만족도조사 응답을 삭제했습니다.");
 }
@@ -3200,7 +3225,7 @@ function deleteSurveyDispatch(id) {
   if (!confirm(`${label}을 삭제할까요?\n발송 기록만 삭제되며, 이미 제출된 응답은 별도로 삭제해야 합니다.`)) return;
   state.surveyDispatches = list.filter((d) => String(d.id || d.token || d.reservationId || d.sentAt || d.createdAt || "") !== target);
   persist();
-  postSupabaseState("delete-survey-dispatch").then(() => syncGoogleDriveCore({ silent: true, prompt: false, reason: "delete-survey-dispatch" })).catch((error) => console.warn("만족도 발송 기록 삭제 동기화 실패", error));
+  postSupabaseState("delete-survey-dispatch", { skipGoogleBackup: true }).then(() => scheduleGoogleBackupSoon("delete-survey-dispatch")).catch((error) => console.warn("만족도 발송 기록 삭제 동기화 실패", error));
   render();
   toast("만족도조사 발송 기록을 삭제했습니다.");
 }
@@ -4892,7 +4917,8 @@ async function postSupabaseState(reason = "auto", options = {}) {
   if (supabasePushing) return false;
   supabasePushing = true;
   try {
-    const googlePayload = typeof buildGoogleDrivePayload === "function" ? buildGoogleDrivePayload(`supabase-${reason}`) : null;
+    const skipGoogleBackup = options.skipGoogleBackup === true;
+    const googlePayload = !skipGoogleBackup && typeof buildGoogleDrivePayload === "function" ? buildGoogleDrivePayload(`supabase-${reason}`) : null;
     const response = await fetch(SUPABASE_STATE_API_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4930,7 +4956,7 @@ async function postSupabaseState(reason = "auto", options = {}) {
         queueGoogleSheetBackupRetries(reason);
       }
     }
-    queueGoogleSheetBackupRetries(reason);
+    if (!skipGoogleBackup) queueGoogleSheetBackupRetries(reason);
     return true;
   } catch (error) {
     console.warn("Supabase 저장 실패", error);
@@ -5199,6 +5225,14 @@ function queueGoogleSheetBackupRetries(reason = "data-change") {
     }, delay);
     googleBackupRetryTimers.push(timer);
   });
+}
+
+function scheduleGoogleBackupSoon(reason = "background") {
+  if (!getDriveWebhookUrl()) return;
+  window.setTimeout(() => {
+    syncGoogleDriveCore({ silent: true, prompt: false, reason, allowZeroApplicants: false });
+  }, 100);
+  queueGoogleSheetBackupRetries(reason);
 }
 
 async function forceBackupSupabaseToGoogleSheet() {
