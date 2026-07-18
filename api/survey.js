@@ -22,6 +22,8 @@ function setCors(req, res) {
 }
 
 
+const DEFAULT_GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwc18Y1SArlzYkXfnw1so5SsFKUMg3v9-RgJagkvgihNgEqRuS-eJtM7fKpMfgqrnyE/exec';
+
 function env(name) {
   return String(process.env[name] || '').trim();
 }
@@ -217,18 +219,36 @@ async function appendSurveyResponseToSupabase(response) {
   });
   state.lastUpdated = now;
   await writeSupabaseState(state);
-  return { ok: true, count: next.length, matchedDispatch: Boolean(matchedDispatch) };
+  return { ok: true, count: next.length, matchedDispatch: Boolean(matchedDispatch), state, response: enriched };
 }
 
 function decodeWebhook(value) {
-  const raw = String(value || '').trim();
+  const raw = String(value || env('GOOGLE_APPS_SCRIPT_URL') || DEFAULT_GOOGLE_APPS_SCRIPT_URL || '').trim();
   if (!raw) return '';
   if (/^https:\/\/script\.google\.com\/macros\/s\//.test(raw)) return raw;
   try {
-    return Buffer.from(raw, 'base64').toString('utf8');
+    const decoded = Buffer.from(raw, 'base64').toString('utf8').trim();
+    return /^https:\/\/script\.google\.com\/macros\/s\//.test(decoded) ? decoded : '';
   } catch (error) {
     return '';
   }
+}
+
+async function submitSurveyResponseToGoogle(webhookUrl, surveyResponse) {
+  const validWebhook = /^https:\/\/script\.google\.com\/macros\/s\//.test(webhookUrl) && webhookUrl.endsWith('/exec');
+  if (!validWebhook || !surveyResponse) return { skipped: true, reason: 'NO_GOOGLE_WEBHOOK' };
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ type: 'survey-response', response: surveyResponse })
+  });
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (error) { data = text.slice(0, 500); }
+  if (!response.ok || (data && typeof data === 'object' && data.ok === false)) {
+    return { ok: false, status: response.status, data, message: data?.message || '구글시트 만족도 응답 백업 실패' };
+  }
+  return { ok: true, status: response.status, data };
 }
 
 module.exports = async function handler(req, res) {
@@ -241,52 +261,58 @@ module.exports = async function handler(req, res) {
       const token = String(query.token || query.t || '').trim();
       const validWebhook = /^https:\/\/script\.google\.com\/macros\/s\//.test(webhookUrl) && webhookUrl.endsWith('/exec');
       if (!token) return sendJson(res, 400, { ok: false, message: '설문 토큰이 없습니다.' });
-      let data = validWebhook ? null : { ok: false, message: '구글 설문 연동 URL이 없어 Supabase 원본에서 조회합니다.' };
-      let upstreamStatus = validWebhook ? 200 : 404;
+      let googleLookup = null;
+      try {
+        const supabaseLookup = await fallbackSurveyLookupFromSupabase(token);
+        if (supabaseLookup && supabaseLookup.ok) {
+          return sendJson(res, 200, { ...supabaseLookup, source: 'supabase' });
+        }
+        googleLookup = supabaseLookup || null;
+      } catch (fallbackError) {
+        googleLookup = { ok: false, message: fallbackError && fallbackError.message ? fallbackError.message : 'Supabase 설문 조회 실패' };
+      }
       if (validWebhook) {
         const url = `${webhookUrl}?action=surveyLookup&token=${encodeURIComponent(token)}`;
         try {
           const response = await fetch(url, { method: 'GET' });
-          upstreamStatus = response.status || 500;
-          data = await response.json().catch(() => ({}));
-          if (response.ok && data && data.ok !== false && data.participant) return sendJson(res, 200, data);
+          const data = await response.json().catch(() => ({}));
+          if (response.ok && data && data.ok !== false && data.participant) {
+            return sendJson(res, 200, { ...data, source: 'google-fallback', supabaseLookup: googleLookup });
+          }
+          return sendJson(res, response.status || 404, { ok: false, message: data?.message || 'Supabase 원본에서 설문 대상 정보를 찾지 못했습니다.', googleLookup: data, supabaseLookup: googleLookup });
         } catch (lookupError) {
-          data = { ok: false, message: lookupError && lookupError.message ? lookupError.message : String(lookupError) };
+          return sendJson(res, 500, { ok: false, message: lookupError && lookupError.message ? lookupError.message : String(lookupError), supabaseLookup: googleLookup });
         }
       }
-      try {
-        const fallback = await fallbackSurveyLookupFromSupabase(token);
-        if (fallback) return sendJson(res, fallback.ok ? 200 : 404, { ...fallback, googleLookup: data || null });
-      } catch (fallbackError) {
-        return sendJson(res, 500, { ok: false, message: fallbackError && fallbackError.message ? fallbackError.message : 'Supabase 설문 조회 실패', googleLookup: data || null });
-      }
-      return sendJson(res, upstreamStatus, data || { ok: false, message: '설문 정보를 찾지 못했습니다.' });
+      return sendJson(res, 404, { ok: false, message: 'Supabase 원본에서 설문 대상 정보를 찾지 못했습니다. 관리자에서 테스트 링크/문자를 다시 만들어 주세요.', supabaseLookup: googleLookup });
     }
 
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       const webhookUrl = decodeWebhook(body.webhookUrl || body.w);
-      const validWebhook = /^https:\/\/script\.google\.com\/macros\/s\//.test(webhookUrl) && webhookUrl.endsWith('/exec');
       const surveyResponse = body.response || {};
-      const payload = { type: 'survey-response', response: surveyResponse };
-      let response = { ok: false, status: 502 };
-      let data = { ok: false, message: validWebhook ? '구글시트 전송 전' : '구글 설문 연동 URL이 없어 Supabase에만 저장합니다.' };
-      if (validWebhook) {
-        response = await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-        data = await response.json().catch(() => ({}));
-      }
       let supabaseUpdate = { skipped: true };
       try {
         supabaseUpdate = await appendSurveyResponseToSupabase(surveyResponse);
       } catch (supabaseError) {
         supabaseUpdate = { ok: false, message: supabaseError && supabaseError.message ? supabaseError.message : String(supabaseError) };
       }
-      const finalOk = (response.ok && data?.ok !== false) || supabaseUpdate?.ok === true;
-      return sendJson(res, finalOk ? 200 : response.status || 500, { ok: finalOk, ...(data || {}), supabaseUpdate, googleSubmitOk: response.ok && data?.ok !== false });
+      let googleSubmit = { skipped: true };
+      if (supabaseUpdate?.ok === true) {
+        try {
+          googleSubmit = await submitSurveyResponseToGoogle(webhookUrl, supabaseUpdate.response || surveyResponse);
+        } catch (googleError) {
+          googleSubmit = { ok: false, message: googleError && googleError.message ? googleError.message : String(googleError) };
+        }
+      }
+      const finalOk = supabaseUpdate?.ok === true;
+      return sendJson(res, finalOk ? 200 : 500, {
+        ok: finalOk,
+        message: finalOk ? 'Supabase 원본에 저장했습니다. 구글시트는 자동 백업 대상입니다.' : (supabaseUpdate.message || 'Supabase 저장 실패'),
+        supabaseUpdate,
+        googleSubmit,
+        googleSubmitOk: googleSubmit?.ok === true
+      });
     }
 
     return sendJson(res, 405, { ok: false, message: 'GET 또는 POST만 허용됩니다.' });

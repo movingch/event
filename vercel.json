@@ -3,7 +3,7 @@
     "api/send-sms.js": { "maxDuration": 10 },
     "api/google-drive-sync.js": { "maxDuration": 60 },
     "api/supabase-state.js": { "maxDuration": 60 },
-    "api/survey.js": { "maxDuration": 30 }
+    "api/survey.js": { "maxDuration": 60 }
   },
   "headers": [
     {

@@ -4858,6 +4858,7 @@ let supabaseLastError = "";
 let supabaseLastPullAt = 0;
 let supabaseLastPushAt = 0;
 let supabaseAutoSyncTimer = null;
+let supabaseWriteRetryTimers = [];
 let googleBackupRetryTimers = [];
 let googleBackupLastStatus = null;
 
@@ -4887,7 +4888,7 @@ async function readSupabaseState() {
   return data || {};
 }
 
-async function postSupabaseState(reason = "auto") {
+async function postSupabaseState(reason = "auto", options = {}) {
   if (supabasePushing) return false;
   supabasePushing = true;
   try {
@@ -4909,6 +4910,7 @@ async function postSupabaseState(reason = "auto") {
     supabaseConfigured = true;
     supabaseLastPushAt = Date.now();
     supabaseLastError = "";
+    clearSupabaseWriteRetries();
     // v103: Supabase 저장 후 구글시트 백업이 서버 환경변수 문제 등으로 건너뛰거나 실패하면
     // 브라우저에서 같은 payload를 한 번 더 직접 백업 요청합니다. 구글시트는 원본이 아니라 백업 대상입니다.
     const backup = data?.googleBackup || {};
@@ -4933,6 +4935,7 @@ async function postSupabaseState(reason = "auto") {
   } catch (error) {
     console.warn("Supabase 저장 실패", error);
     supabaseLastError = String(error?.message || error || "Supabase 저장 실패");
+    if (!options.fromRetry) queueSupabaseWriteRetries(reason);
     return false;
   } finally {
     supabasePushing = false;
@@ -5067,6 +5070,23 @@ function pullSupabaseIfStale(maxAgeMs = 10000) {
   if (!supabaseLastPullAt || Date.now() - supabaseLastPullAt > maxAgeMs) {
     pullSupabaseCore({ render: true });
   }
+}
+
+function clearSupabaseWriteRetries() {
+  supabaseWriteRetryTimers.forEach((timer) => window.clearTimeout(timer));
+  supabaseWriteRetryTimers = [];
+}
+
+function queueSupabaseWriteRetries(reason = "data-change") {
+  clearSupabaseWriteRetries();
+  [3000, 15000, 60000].forEach((delay, index) => {
+    const timer = window.setTimeout(async () => {
+      if (supabasePushing) return;
+      const ok = await postSupabaseState(`${reason}-supabase-retry-${index + 1}`, { fromRetry: true });
+      if (ok) clearSupabaseWriteRetries();
+    }, delay);
+    supabaseWriteRetryTimers.push(timer);
+  });
 }
 
 function queueSupabaseAutoSync(reason = "data-change") {

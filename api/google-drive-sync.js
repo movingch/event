@@ -26,25 +26,9 @@ module.exports = async function handler(req, res) {
     }
 
     if (body.action === 'read' || payload.action === 'read') {
-      const readUrl = new URL(webhookUrl);
-      readUrl.searchParams.set('action', 'exportData');
-      readUrl.searchParams.set('t', String(Date.now()));
-      const upstream = await fetch(readUrl.toString(), { method: 'GET', redirect: 'follow', cache: 'no-store' });
-      const text = await upstream.text();
-      let upstreamJson = null;
-      try { upstreamJson = JSON.parse(text); } catch (error) {}
-      if (!upstream.ok || !upstreamJson?.ok) {
-        return json(res, 502, {
-          ok: false,
-          message: 'Apps Script 데이터 불러오기에 실패했습니다.',
-          status: upstream.status,
-          responseText: text.slice(0, 500)
-        });
-      }
-      return json(res, 200, {
-        ok: true,
-        message: '구글시트 데이터 불러오기 완료',
-        data: upstreamJson.data || upstreamJson
+      return json(res, 410, {
+        ok: false,
+        message: '구글시트 읽기 기능은 비활성화되었습니다. 운영 원본은 Supabase이며 구글시트는 백업 전용입니다.'
       });
     }
 
