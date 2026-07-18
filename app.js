@@ -1298,8 +1298,8 @@ function renderOpeningHome(opening) {
         <p class="opening-home-lead">개막식 영화 &lt;얼굴&gt;<br>${esc(openingDateLine)} · ${esc(opening.guest || "박정민 배우")} 참석</p>
         <p>${esc(OPENING_PROMO_COPY)}</p>
         <div class="opening-home-facts" aria-label="개막식 핵심 정보">
-          <div><span>개막식</span><strong>9월 9일 저녁 7시</strong></div>
-          <div><span>장소</span><strong>동천농협강당</strong></div>
+          <div><span>개막식</span><strong>${esc(formatDateTime(opening.startTime))}</strong></div>
+          <div><span>장소</span><strong>${esc(opening.venue || "상영관")}</strong></div>
           <div><span>참석</span><strong>박정민 배우</strong></div>
           <div><span>상영작</span><strong>얼굴</strong></div>
         </div>
@@ -1344,7 +1344,7 @@ function openingInlineCard() {
           <span class="badge ${phase.className}">${esc(phase.label)}</span>
         </div>
         <h2>박정민 배우, 머내마을영화제 개막식에 오다</h2>
-        <p>개막식 영화 &lt;얼굴&gt; · 9월 9일 저녁 7시 동천농협강당 · 박정민 배우 참석. 개막식은 현장 안내에 따라 운영됩니다. 전체 잔여 ${stats.remainingTotal}석</p>
+        <p>개막식 영화 &lt;얼굴&gt; · ${esc(formatDateTime(opening.startTime))} · ${esc(opening.venue || "상영관")} · ${esc(opening.guest || "박정민 배우")} 참석. 개막식은 현장 안내에 따라 운영됩니다. 전체 잔여 ${stats.remainingTotal}석</p>
       </div>
       <div class="cta-row">
         <a class="btn btn-dark" href="#/opening">개막작 신청 보기</a>
@@ -1622,6 +1622,7 @@ function renderApply() {
 }
 
 function screeningCard(screening) {
+  screening = state.screenings.find((item) => item.id === screening?.id) || screening;
   const info = statusInfo(screening);
   const isOpening = isOpeningScreening(screening);
   const exposeOpening = isOpening && shouldExposeOpeningPromotion(screening);
@@ -2624,7 +2625,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=90">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=91">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -2846,7 +2847,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=90">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=91">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">

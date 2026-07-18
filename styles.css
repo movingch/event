@@ -3716,3 +3716,42 @@ th, td {
     font-size: 11px !important;
   }
 }
+
+/* v91: 모바일 영화 카드 가독성 강화 */
+@media (max-width: 640px) {
+  .section .screening-grid,
+  #screeningList.screening-grid {
+    gap: 10px;
+  }
+  .compact-screening-card .screening-top {
+    padding: 11px 10px 9px;
+  }
+  .compact-screening-card .screening-title {
+    font-size: 17px !important;
+    line-height: 1.22 !important;
+    letter-spacing: -0.055em;
+    font-weight: 950;
+  }
+  .compact-screening-card .screening-meta {
+    margin-top: 6px !important;
+    font-size: 12px !important;
+    line-height: 1.42 !important;
+    font-weight: 750;
+  }
+  .compact-screening-card .badge {
+    font-size: 9px !important;
+    padding: 4px 6px !important;
+  }
+  .compact-screening-body {
+    padding: 8px 9px 9px !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .compact-screening-card .screening-title {
+    font-size: 16px !important;
+  }
+  .compact-screening-card .screening-meta {
+    font-size: 11.5px !important;
+  }
+}
