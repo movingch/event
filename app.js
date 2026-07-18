@@ -1876,9 +1876,7 @@ function renderAdmin(tab) {
         <h1>관리자 대시보드</h1>
         <p>상영관 관리, 신청자 명단, 정원 초과 여부, 실제 참석 현황, 통계와 백업을 관리합니다.</p>
       </div>
-      <div class="cta-row">
-        <button class="btn btn-outline" type="button" data-action="print">인쇄</button>
-        <a class="btn btn-outline admin-backup-direct" href="#/admin/backup" onclick="window.location.hash='#/admin/backup'; return false;">백업·연동</a>
+      <div class="cta-row admin-top-actions">
         <button class="btn btn-danger" type="button" data-action="admin-logout">로그아웃</button>
       </div>
     </section>
@@ -1937,6 +1935,17 @@ function adminOverview() {
   const totals = getTotals();
   const risky = sortedScreenings().filter((s) => statusInfo(s).className !== "ok");
   return `
+    <section class="card admin-report-tools screen-only">
+      <div class="section-title compact-title">
+        <div><h2>운영요약 저장·출력</h2><p>운영요약 화면 기준으로 통계와 신청자 자료를 저장하거나 A4 인쇄/PDF로 저장합니다.</p></div>
+        <div class="cta-row report-action-row">
+          <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
+          <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
+          <button class="btn btn-primary" type="button" data-action="print-admin-report">인쇄/PDF저장</button>
+        </div>
+      </div>
+    </section>
+
     <section class="metric-grid">
       <div class="metric-card"><div class="metric-label">총 신청 건수</div><div class="metric-value">${totals.totalApplicationCount}</div><div class="metric-note">신청 인원 ${totals.totalAppliedSeats}명</div></div>
       <div class="metric-card"><div class="metric-label">신청 인원</div><div class="metric-value">${totals.totalAppliedSeats}</div><div class="metric-note">신청 ${totals.totalApplicationCount}건 · 신청률 ${totals.occupancy}%</div></div>
@@ -2364,7 +2373,7 @@ function adminReservations() {
         </div>
         <div class="cta-row">
           <button class="btn btn-primary" type="button" data-action="toggle-bulk-sms">문자전송하기</button>
-          <button class="btn btn-dark" type="button" data-action="print">인쇄용 명단</button>
+          <button class="btn btn-dark" type="button" data-action="print-admin-report">인쇄/PDF저장</button>
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
         </div>
       </div>
@@ -2508,6 +2517,7 @@ function adminStats() {
       <div class="cta-row export-action-row">
         <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
         <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
+        <button class="btn btn-primary" type="button" data-action="print-admin-report">인쇄/PDF저장</button>
       </div>
     </section>
   `;
@@ -2629,7 +2639,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=87">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=88">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -2851,7 +2861,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=87">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=88">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -4092,6 +4102,17 @@ function exportStats() {
   downloadFile(`munae9_stats_${todayFile()}.csv`, rowsToCsv(buildStatsRows()), "text/csv;charset=utf-8");
 }
 
+function printAdminReport() {
+  document.body.classList.add("admin-print-mode");
+  const cleanup = () => {
+    document.body.classList.remove("admin-print-mode");
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  setTimeout(() => window.print(), 50);
+  setTimeout(cleanup, 2500);
+}
+
 function tableRowsToObjects(rows) {
   if (!Array.isArray(rows) || rows.length < 2) return [];
   const headers = rows[0].map((header) => String(header || "").trim());
@@ -4650,6 +4671,7 @@ document.addEventListener("click", (event) => {
     updateReservationTable();
   }
   if (action === "print") window.print();
+  if (action === "print-admin-report") printAdminReport();
   if (action === "edit-screening") { selectedScreeningId = id; window.location.hash = "#/admin/screenings"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
   if (action === "cancel-edit") { selectedScreeningId = null; render(); }
   if (action === "delete-screening") deleteScreening(id);
