@@ -3111,3 +3111,19 @@ tr:last-child td { border-bottom: 0; }
     line-height: 1.18;
   }
 }
+
+
+/* v77 Satisfaction survey admin */
+.survey-metric-grid { margin-top: 1rem; }
+.check-card { display: flex; gap: .75rem; align-items: flex-start; padding: 1rem; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.check-card input { margin-top: .2rem; }
+.check-card span { display: block; color: var(--muted); font-size: .88rem; margin-top: .2rem; }
+.check-inline { display: flex; align-items: center; gap: .5rem; padding-top: 1.8rem; }
+.survey-question-table input[type="checkbox"] { width: 18px; height: 18px; }
+.compact-input { min-width: 64px; max-width: 80px; }
+.compact-select { min-width: 96px; }
+.survey-question-table td { vertical-align: middle; }
+@media (max-width: 720px) {
+  .survey-question-table-wrap table { min-width: 760px; }
+  .check-inline { padding-top: .5rem; }
+}

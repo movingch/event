@@ -312,6 +312,198 @@ function normalizeReservation(reservation = {}) {
   };
 }
 
+
+function defaultSurveySettings() {
+  return {
+    enabled: false,
+    autoSmsEnabled: false,
+    sendDelayMinutes: 5,
+    responseDeadlineDays: 7,
+    preventDuplicate: true,
+    smsTemplate: "[머내마을영화제]\n{이름} 님, 〈{영화명}〉 관람은 어떠셨나요?\n만족도조사에 참여해 주세요.\n{설문링크}"
+  };
+}
+
+function defaultSurveyQuestions() {
+  return [
+    { id: "q-overall", enabled: true, order: 1, type: "rating", title: "관람하신 영화에 얼마나 만족하셨나요?", choices: "", required: true },
+    { id: "q-venue", enabled: true, order: 2, type: "rating", title: "상영 장소와 환경은 만족스러웠나요?", choices: "", required: true },
+    { id: "q-guide", enabled: true, order: 3, type: "rating", title: "영화제 진행과 안내는 만족스러웠나요?", choices: "", required: true },
+    { id: "q-return", enabled: true, order: 4, type: "single", title: "다음에도 머내마을영화제에 참여하고 싶으신가요?", choices: "예, 아니오, 잘 모르겠음", required: true },
+    { id: "q-good", enabled: true, order: 5, type: "text", title: "가장 좋았던 점은 무엇인가요?", choices: "", required: false },
+    { id: "q-improve", enabled: true, order: 6, type: "text", title: "개선되었으면 하는 점은 무엇인가요?", choices: "", required: false }
+  ];
+}
+
+function normalizeSurveySettings(settings = {}) {
+  const defaults = defaultSurveySettings();
+  return {
+    ...defaults,
+    ...settings,
+    enabled: settings.enabled === true,
+    autoSmsEnabled: settings.autoSmsEnabled === true,
+    sendDelayMinutes: Math.max(1, Number(settings.sendDelayMinutes || defaults.sendDelayMinutes)),
+    responseDeadlineDays: Math.max(1, Number(settings.responseDeadlineDays || defaults.responseDeadlineDays)),
+    preventDuplicate: settings.preventDuplicate !== false,
+    smsTemplate: String(settings.smsTemplate || defaults.smsTemplate)
+  };
+}
+
+function normalizeSurveyQuestions(questions) {
+  const source = Array.isArray(questions) && questions.length ? questions : defaultSurveyQuestions();
+  return source.map((q, index) => ({
+    id: String(q.id || `q-${Date.now()}-${index}`),
+    enabled: q.enabled !== false,
+    order: Math.max(1, Number(q.order || index + 1)),
+    type: ["rating", "single", "multiple", "text"].includes(q.type) ? q.type : "text",
+    title: String(q.title || "").trim() || `문항 ${index + 1}`,
+    choices: String(q.choices || ""),
+    required: q.required === true
+  })).sort((a, b) => a.order - b.order);
+}
+
+function normalizeSurveyScreenings(value = {}) {
+  const result = {};
+  Object.keys(value || {}).forEach((key) => {
+    const item = value[key] || {};
+    result[key] = { enabled: item.enabled !== false, autoSmsEnabled: item.autoSmsEnabled === true };
+  });
+  return result;
+}
+
+function surveyScreeningConfig(screeningId) {
+  return state.surveyScreenings?.[screeningId] || { enabled: true, autoSmsEnabled: false };
+}
+
+function surveyTypeLabel(type) {
+  return { rating: "별점 5점", single: "단일선택", multiple: "복수선택", text: "주관식" }[type] || type;
+}
+
+function surveySettingLabel(value) {
+  return value ? "ON" : "OFF";
+}
+
+function surveySummaryStats() {
+  const responses = Array.isArray(state.surveyResponses) ? state.surveyResponses : [];
+  const dispatches = Array.isArray(state.surveyDispatches) ? state.surveyDispatches : [];
+  const sent = dispatches.filter((item) => item.status === "발송완료").length;
+  const overall = responses.map((item) => Number(item.overallRating || item.answers?.["q-overall"] || 0)).filter((n) => n > 0);
+  const avg = overall.length ? (overall.reduce((sum, n) => sum + n, 0) / overall.length).toFixed(1) : "-";
+  return { responses: responses.length, dispatches: dispatches.length, sent, average: avg };
+}
+
+function surveyToken() {
+  if (window.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function surveyPublicBaseUrl() {
+  const origin = window.location.origin && window.location.origin !== "null" ? window.location.origin : "https://cine-event.vercel.app";
+  return `${origin}/survey.html`;
+}
+
+function encodeSurveyWebhookUrl() {
+  try { return btoa(unescape(encodeURIComponent(getDriveWebhookUrl() || ""))); } catch (error) { return ""; }
+}
+
+function surveyLinkForDispatch(dispatch) {
+  const params = new URLSearchParams({ t: dispatch.token || "" });
+  const encodedWebhook = encodeSurveyWebhookUrl();
+  if (encodedWebhook) params.set("w", encodedWebhook);
+  return `${surveyPublicBaseUrl()}?${params.toString()}`;
+}
+
+function findSurveyDispatchByReservation(reservationId) {
+  return (state.surveyDispatches || []).find((item) => item.reservationId === reservationId);
+}
+
+function ensureSurveyDispatch(reservation, screening) {
+  let dispatch = findSurveyDispatchByReservation(reservation.id);
+  if (dispatch) return dispatch;
+  dispatch = {
+    id: `sd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    reservationId: reservation.id,
+    screeningId: screening?.id || "",
+    reservationNumber: reservationDisplayNumber(reservation, screening),
+    token: surveyToken(),
+    name: reservation.name || "",
+    phone: reservation.phone || "",
+    movieTitle: screening?.title || "",
+    venue: screening?.venue || "",
+    screeningTime: screening?.startTime || "",
+    status: "대기",
+    sentAt: "",
+    error: "",
+    createdAt: new Date().toISOString()
+  };
+  state.surveyDispatches.push(dispatch);
+  return dispatch;
+}
+
+function fillSurveySmsTemplate(template, reservation, screening, link) {
+  return String(template || defaultSurveySettings().smsTemplate)
+    .replaceAll("{이름}", reservation.name || "관객")
+    .replaceAll("{영화명}", cleanMovieTitle(screening?.title || "상영작"))
+    .replaceAll("{상영일시}", formatSmsDateTime(screening?.startTime || ""))
+    .replaceAll("{장소}", screening?.venue || "상영관")
+    .replaceAll("{설문링크}", link);
+}
+
+async function sendSurveySms(reservation, screening, options = {}) {
+  if (!reservation || !screening) return false;
+  const manual = options.manual === true;
+  if (!state.surveySettings?.enabled) { if (manual) toast("만족도조사 사용이 OFF입니다."); return false; }
+  if (!reservation.attended) { if (manual) toast("참석 처리된 신청자에게만 설문 문자를 보낼 수 있습니다."); return false; }
+  if (reservation.smsConsent === false) { if (manual) toast("문자 수신 미동의 신청자입니다."); return false; }
+  const phone = normalizePhoneForSms(reservation.phone);
+  if (!phone || phone.length < 10) { if (manual) toast("연락처가 올바르지 않습니다."); return false; }
+  const dispatch = ensureSurveyDispatch(reservation, screening);
+  if (dispatch.status === "발송완료" && !manual) return true;
+  const link = surveyLinkForDispatch(dispatch);
+  const message = fillSurveySmsTemplate(state.surveySettings.smsTemplate, reservation, screening, link);
+  dispatch.status = "발송중";
+  dispatch.error = "";
+  persist({ autoSync: false });
+  try {
+    const response = await fetch(SMS_API_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "notice", phone, message })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok === false) throw new Error(result.error || `HTTP ${response.status}`);
+    Object.assign(dispatch, { status: "발송완료", sentAt: new Date().toISOString(), requestId: result.requestId || "", error: "", link });
+    persist();
+    if (manual) toast("만족도조사 문자를 발송했습니다.");
+    return true;
+  } catch (error) {
+    Object.assign(dispatch, { status: "발송실패", error: String(error?.message || error).slice(0, 120), link });
+    persist();
+    if (manual) toast("만족도조사 문자 발송에 실패했습니다.");
+    return false;
+  }
+}
+
+async function checkSurveyAutoSmsQueue() {
+  if (!isAdminAuthed()) return;
+  const settings = state.surveySettings || defaultSurveySettings();
+  if (!settings.enabled || !settings.autoSmsEnabled) return;
+  const now = Date.now();
+  const delayMs = Math.max(1, Number(settings.sendDelayMinutes || 5)) * 60000;
+  for (const screening of state.screenings || []) {
+    const cfg = surveyScreeningConfig(screening.id);
+    if (!cfg.enabled || !cfg.autoSmsEnabled) continue;
+    const end = new Date(screening.endTime || screening.startTime || "").getTime();
+    if (!end || Number.isNaN(end) || now < end + delayMs) continue;
+    const targets = state.reservations.filter((r) => r.screeningId === screening.id && r.attended === true && r.smsConsent !== false && !findSurveyDispatchByReservation(r.id));
+    for (const reservation of targets) await sendSurveySms(reservation, screening, { manual: false });
+  }
+}
+
 function normalizeState(data) {
   let screenings = Array.isArray(data.screenings) ? data.screenings.map(normalizeScreening) : cloneData(seedScreenings).map(normalizeScreening);
   if (!screenings.some((screening) => screening.isOpening === true)) {
@@ -325,6 +517,11 @@ function normalizeState(data) {
     adminPin: String(data.adminPin || ADMIN_PIN),
     masterStaffPin: String(data.masterStaffPin || "0909"),
     masterStaffPresent: Boolean(data.masterStaffPresent),
+    surveySettings: normalizeSurveySettings(data.surveySettings),
+    surveyQuestions: normalizeSurveyQuestions(data.surveyQuestions),
+    surveyScreenings: normalizeSurveyScreenings(data.surveyScreenings),
+    surveyResponses: Array.isArray(data.surveyResponses) ? data.surveyResponses : [],
+    surveyDispatches: Array.isArray(data.surveyDispatches) ? data.surveyDispatches : [],
     lastUpdated: data.lastUpdated || new Date().toISOString()
   });
 }
@@ -1635,7 +1832,7 @@ function isAdminAuthed() {
 
 function renderAdmin(tab) {
   if (!isAdminAuthed()) return renderAdminLogin();
-  const active = ["overview", "opening", "screenings", "reservations", "stats", "staff", "backup"].includes(tab) ? tab : "overview";
+  const active = ["overview", "opening", "screenings", "reservations", "stats", "staff", "survey", "backup"].includes(tab) ? tab : "overview";
   return `
     <section class="section-title">
       <div>
@@ -1656,6 +1853,7 @@ function renderAdmin(tab) {
         ${adminTabLink("staff", "STAFF 관리", active)}
         ${adminTabLink("opening", "개막작관리", active)}
         ${adminTabLink("screenings", "상영관, 영화 관리", active)}
+        ${adminTabLink("survey", "만족도조사", active)}
         ${adminTabLink("backup", "백업·연동", active)}
       </aside>
       <div class="admin-panel">
@@ -1665,6 +1863,7 @@ function renderAdmin(tab) {
         ${active === "reservations" ? adminReservations() : ""}
         ${active === "stats" ? adminStats() : ""}
         ${active === "staff" ? adminStaffManagement() : ""}
+        ${active === "survey" ? adminSurvey() : ""}
         ${active === "backup" ? adminBackup() : ""}
       </div>
     </section>
@@ -2398,11 +2597,189 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=75">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=77">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
   `;
+}
+
+
+function adminSurvey() {
+  const settings = state.surveySettings || defaultSurveySettings();
+  const questions = state.surveyQuestions || defaultSurveyQuestions();
+  const stats = surveySummaryStats();
+  const screenings = sortedScreenings();
+  const dispatchRows = (state.surveyDispatches || []).slice().reverse().slice(0, 20);
+  return `
+    <section class="card">
+      <div class="section-title">
+        <div>
+          <h2>만족도조사 관리</h2>
+          <p>설문 사용 여부, 문자 자동발송, 문항, 회차별 설정과 응답 통계를 관리합니다. 기본값은 안전을 위해 OFF입니다.</p>
+        </div>
+        <span class="badge ${settings.enabled ? "badge-ok" : ""}">만족도조사 ${surveySettingLabel(settings.enabled)}</span>
+      </div>
+      <section class="metric-grid survey-metric-grid">
+        <div class="metric-card"><div class="metric-label">만족도조사</div><div class="metric-value">${surveySettingLabel(settings.enabled)}</div><div class="metric-note">최종 사용 여부</div></div>
+        <div class="metric-card"><div class="metric-label">자동문자</div><div class="metric-value">${surveySettingLabel(settings.autoSmsEnabled)}</div><div class="metric-note">상영 종료 후 ${settings.sendDelayMinutes}분</div></div>
+        <div class="metric-card"><div class="metric-label">응답수</div><div class="metric-value">${stats.responses}</div><div class="metric-note">평균 만족도 ${stats.average}</div></div>
+        <div class="metric-card"><div class="metric-label">문자 발송</div><div class="metric-value">${stats.sent}</div><div class="metric-note">기록 ${stats.dispatches}건</div></div>
+      </section>
+    </section>
+
+    <section class="card">
+      <h3>전체 설정</h3>
+      <form id="surveySettingsForm" class="survey-settings-form">
+        <div class="grid-2">
+          <label class="check-card"><input type="checkbox" name="enabled" ${settings.enabled ? "checked" : ""} /> <strong>만족도조사 사용</strong><span>OFF이면 설문 링크 접속과 응답 저장이 중지됩니다.</span></label>
+          <label class="check-card"><input type="checkbox" name="autoSmsEnabled" ${settings.autoSmsEnabled ? "checked" : ""} /> <strong>설문 문자 자동발송</strong><span>상영 종료 후 참석자에게 자동 발송합니다.</span></label>
+        </div>
+        <div class="form-grid">
+          <label><span class="label">발송 지연 시간</span><input class="input" name="sendDelayMinutes" type="number" min="1" value="${esc(settings.sendDelayMinutes)}" /></label>
+          <label><span class="label">응답 마감일</span><input class="input" name="responseDeadlineDays" type="number" min="1" value="${esc(settings.responseDeadlineDays)}" /></label>
+          <label class="check-inline"><input type="checkbox" name="preventDuplicate" ${settings.preventDuplicate ? "checked" : ""} /> 중복 응답 방지</label>
+        </div>
+        <label class="label" for="surveySmsTemplate">문자 내용</label>
+        <textarea class="input" id="surveySmsTemplate" name="smsTemplate" rows="5">${esc(settings.smsTemplate)}</textarea>
+        <span class="help">사용 가능: {이름}, {영화명}, {상영일시}, {장소}, {설문링크}</span>
+        <div class="form-actions"><button class="btn btn-dark" type="submit">만족도조사 설정 저장</button></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="section-title"><div><h3>설문 문항</h3><p>문항은 구글시트 만족도_문항 탭에도 함께 저장됩니다.</p></div></div>
+      <form id="surveyQuestionsForm">
+        <div class="table-wrap survey-question-table-wrap">
+          <table class="survey-question-table">
+            <thead><tr><th>사용</th><th>순서</th><th>유형</th><th>문항</th><th>선택지</th><th>필수</th></tr></thead>
+            <tbody>
+              ${questions.map((q, index) => `
+                <tr>
+                  <td><input type="checkbox" name="q_enabled_${index}" ${q.enabled ? "checked" : ""} /></td>
+                  <td><input class="input compact-input" name="q_order_${index}" type="number" min="1" value="${esc(q.order)}" /><input type="hidden" name="q_id_${index}" value="${esc(q.id)}" /></td>
+                  <td><select class="input compact-select" name="q_type_${index}"><option value="rating" ${q.type === "rating" ? "selected" : ""}>별점</option><option value="single" ${q.type === "single" ? "selected" : ""}>단일</option><option value="multiple" ${q.type === "multiple" ? "selected" : ""}>복수</option><option value="text" ${q.type === "text" ? "selected" : ""}>주관식</option></select></td>
+                  <td><input class="input" name="q_title_${index}" value="${esc(q.title)}" /></td>
+                  <td><input class="input" name="q_choices_${index}" value="${esc(q.choices)}" placeholder="쉼표로 구분" /></td>
+                  <td><input type="checkbox" name="q_required_${index}" ${q.required ? "checked" : ""} /></td>
+                </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+        <input type="hidden" name="questionCount" value="${questions.length}" />
+        <div class="form-actions"><button class="btn btn-dark" type="submit">설문 문항 저장</button></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="section-title"><div><h3>회차별 설정</h3><p>전체 ON 상태에서도 회차별 설문/자동문자를 따로 제어합니다.</p></div></div>
+      <form id="surveyScreeningsForm">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>영화명</th><th>상영일시</th><th>장소</th><th>설문사용</th><th>자동문자</th><th>참석자</th><th>발송대상</th></tr></thead>
+            <tbody>
+              ${screenings.map((screening) => {
+                const cfg = surveyScreeningConfig(screening.id);
+                const attended = state.reservations.filter((r) => r.screeningId === screening.id && r.attended === true).length;
+                const unsent = state.reservations.filter((r) => r.screeningId === screening.id && r.attended === true && !findSurveyDispatchByReservation(r.id)).length;
+                return `<tr>
+                  <td><strong>${esc(cleanMovieTitle(screening.title))}</strong><input type="hidden" name="sid_${esc(screening.id)}" value="1" /></td>
+                  <td>${esc(formatDateTime(screening.startTime))}</td>
+                  <td>${esc(screening.venue)}</td>
+                  <td><input type="checkbox" name="senabled_${esc(screening.id)}" ${cfg.enabled ? "checked" : ""} /></td>
+                  <td><input type="checkbox" name="sauto_${esc(screening.id)}" ${cfg.autoSmsEnabled ? "checked" : ""} /></td>
+                  <td>${attended}</td>
+                  <td>${unsent}</td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+        <div class="form-actions"><button class="btn btn-dark" type="submit">회차별 설정 저장</button></div>
+      </form>
+    </section>
+
+    <section class="grid-2">
+      <div class="card">
+        <h3>응답 통계</h3>
+        <p>응답 ${stats.responses}건 · 평균 만족도 ${stats.average} · 구글시트 만족도_통계 탭에 함께 저장됩니다.</p>
+        ${surveyResponseStatsTable()}
+      </div>
+      <div class="card">
+        <h3>최근 문자 발송 기록</h3>
+        ${dispatchRows.length ? `<div class="roster-list">${dispatchRows.map((d) => `<div class="roster-item"><strong>${esc(d.name || "이름 없음")} · ${esc(d.status)}</strong><span>${esc(cleanMovieTitle(d.movieTitle || ""))} · ${esc(d.sentAt ? formatDateTime(d.sentAt) : d.createdAt ? formatDateTime(d.createdAt) : "")}</span></div>`).join("")}</div>` : `<div class="empty">아직 설문 문자 발송 기록이 없습니다.</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function surveyResponseStatsTable() {
+  const rows = sortedScreenings().map((s) => {
+    const responses = (state.surveyResponses || []).filter((r) => r.screeningId === s.id || r.movieTitle === s.title);
+    const attended = state.reservations.filter((r) => r.screeningId === s.id && r.attended === true).length;
+    const sent = (state.surveyDispatches || []).filter((d) => d.screeningId === s.id || d.movieTitle === s.title).length;
+    const ratings = responses.map((r) => Number(r.overallRating || r.answers?.["q-overall"] || 0)).filter((n) => n > 0);
+    const avg = ratings.length ? (ratings.reduce((sum, n) => sum + n, 0) / ratings.length).toFixed(1) : "-";
+    const rate = sent ? `${Math.round((responses.length / sent) * 100)}%` : "-";
+    return { movie: cleanMovieTitle(s.title), attended, sent, responses: responses.length, rate, avg };
+  });
+  return `<div class="table-wrap"><table><thead><tr><th>영화명</th><th>참석자</th><th>발송</th><th>응답</th><th>응답률</th><th>평균</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(r.movie)}</td><td>${r.attended}</td><td>${r.sent}</td><td>${r.responses}</td><td>${r.rate}</td><td>${r.avg}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function submitSurveySettings(form) {
+  const data = new FormData(form);
+  const willEnableAuto = data.get("autoSmsEnabled") === "on";
+  if (willEnableAuto && !state.surveySettings?.autoSmsEnabled) {
+    const ok = confirm("만족도조사 문자 자동발송을 켜시겠습니까?\n상영 종료 후 참석자에게 문자가 자동 발송되며 문자 발송 비용이 발생할 수 있습니다.");
+    if (!ok) return;
+  }
+  state.surveySettings = normalizeSurveySettings({
+    enabled: data.get("enabled") === "on",
+    autoSmsEnabled: willEnableAuto,
+    sendDelayMinutes: data.get("sendDelayMinutes"),
+    responseDeadlineDays: data.get("responseDeadlineDays"),
+    preventDuplicate: data.get("preventDuplicate") === "on",
+    smsTemplate: data.get("smsTemplate")
+  });
+  persist();
+  render();
+  toast("만족도조사 설정을 저장했습니다.");
+}
+
+function submitSurveyQuestions(form) {
+  const data = new FormData(form);
+  const count = Number(data.get("questionCount") || 0);
+  const questions = [];
+  for (let i = 0; i < count; i++) {
+    questions.push({
+      id: String(data.get(`q_id_${i}`) || `q-${i + 1}`),
+      enabled: data.get(`q_enabled_${i}`) === "on",
+      order: Number(data.get(`q_order_${i}`) || i + 1),
+      type: String(data.get(`q_type_${i}`) || "text"),
+      title: String(data.get(`q_title_${i}`) || "").trim(),
+      choices: String(data.get(`q_choices_${i}`) || ""),
+      required: data.get(`q_required_${i}`) === "on"
+    });
+  }
+  state.surveyQuestions = normalizeSurveyQuestions(questions);
+  persist();
+  render();
+  toast("설문 문항을 저장했습니다.");
+}
+
+function submitSurveyScreenings(form) {
+  const data = new FormData(form);
+  const next = {};
+  state.screenings.forEach((screening) => {
+    next[screening.id] = {
+      enabled: data.get(`senabled_${screening.id}`) === "on",
+      autoSmsEnabled: data.get(`sauto_${screening.id}`) === "on"
+    };
+  });
+  state.surveyScreenings = next;
+  persist();
+  render();
+  toast("회차별 만족도조사 설정을 저장했습니다.");
 }
 
 function adminBackup() {
@@ -2442,7 +2819,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=75">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=77">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -3782,6 +4159,76 @@ function buildDriveScreenings() {
   });
 }
 
+function buildDriveSurvey() {
+  const settings = state.surveySettings || defaultSurveySettings();
+  const questions = (state.surveyQuestions || defaultSurveyQuestions()).map((q) => ({
+    id: q.id,
+    enabled: q.enabled ? "ON" : "OFF",
+    order: q.order,
+    type: q.type,
+    typeLabel: surveyTypeLabel(q.type),
+    title: q.title,
+    choices: q.choices,
+    required: q.required ? "필수" : "선택"
+  }));
+  const screeningSettings = sortedScreenings().map((s) => {
+    const cfg = surveyScreeningConfig(s.id);
+    return {
+      screeningId: s.id,
+      movieTitle: s.title || "",
+      venue: s.venue || "",
+      screeningTime: s.startTime || "",
+      surveyEnabled: cfg.enabled ? "ON" : "OFF",
+      autoSmsEnabled: cfg.autoSmsEnabled ? "ON" : "OFF",
+      attendedCount: state.reservations.filter((r) => r.screeningId === s.id && r.attended === true).length
+    };
+  });
+  const responses = (state.surveyResponses || []).map((r, index) => ({ no: index + 1, ...r }));
+  const dispatches = (state.surveyDispatches || []).map((d, index) => ({ no: index + 1, ...d }));
+  const stats = sortedScreenings().map((s, index) => {
+    const res = responses.filter((r) => r.screeningId === s.id || r.movieTitle === s.title);
+    const attended = state.reservations.filter((r) => r.screeningId === s.id && r.attended === true).length;
+    const sent = dispatches.filter((d) => d.screeningId === s.id || d.movieTitle === s.title || d.movieTitle === cleanMovieTitle(s.title)).length;
+    const ratings = res.map((r) => Number(r.overallRating || r.answers?.["q-overall"] || 0)).filter((n) => n > 0);
+    return {
+      no: index + 1,
+      movieTitle: s.title || "",
+      venue: s.venue || "",
+      screeningTime: s.startTime || "",
+      attendedCount: attended,
+      sentCount: sent,
+      responseCount: res.length,
+      responseRate: sent ? `${Math.round((res.length / sent) * 100)}%` : "-",
+      averageRating: ratings.length ? (ratings.reduce((sum, n) => sum + n, 0) / ratings.length).toFixed(1) : "-"
+    };
+  });
+  return {
+    settings: [{
+      festival: "제9회 머내마을영화제",
+      enabled: settings.enabled ? "ON" : "OFF",
+      autoSmsEnabled: settings.autoSmsEnabled ? "ON" : "OFF",
+      sendDelayMinutes: settings.sendDelayMinutes,
+      responseDeadlineDays: settings.responseDeadlineDays,
+      preventDuplicate: settings.preventDuplicate ? "ON" : "OFF",
+      smsTemplate: settings.smsTemplate,
+      updatedAt: new Date().toISOString()
+    }, ...screeningSettings.map((item) => ({
+      festival: "회차별 설정",
+      enabled: item.surveyEnabled,
+      autoSmsEnabled: item.autoSmsEnabled,
+      sendDelayMinutes: "",
+      responseDeadlineDays: "",
+      preventDuplicate: "",
+      smsTemplate: `${item.movieTitle} / ${item.venue} / ${item.screeningTime}`,
+      updatedAt: new Date().toISOString()
+    }))],
+    questions,
+    responses,
+    stats,
+    dispatches
+  };
+}
+
 function buildGoogleDrivePayload(mode = "auto") {
   const reservationRows = buildReservationRows();
   const statsRows = buildStatsRows();
@@ -3793,6 +4240,7 @@ function buildGoogleDrivePayload(mode = "auto") {
     applicants: buildDriveApplicants(),
     stats: buildDriveStats(),
     screenings: buildDriveScreenings(),
+    survey: buildDriveSurvey(),
     rows: {
       applicants: reservationRows,
       stats: statsRows,
@@ -4098,7 +4546,7 @@ function goAdminTab(tab) {
     render();
     return;
   }
-  const safeTab = ["overview", "opening", "screenings", "reservations", "stats", "staff", "backup"].includes(tab) ? tab : "overview";
+  const safeTab = ["overview", "opening", "screenings", "reservations", "stats", "staff", "survey", "backup"].includes(tab) ? tab : "overview";
   const nextHash = `#/admin/${safeTab}`;
   if (window.location.hash === nextHash) render();
   else window.location.hash = nextHash;
@@ -4232,6 +4680,9 @@ document.addEventListener("submit", (event) => {
   if (form.id === "openingForm") submitOpeningSettings(form);
   if (form.id === "screeningForm") submitScreening(form);
   if (form.id === "reservationEditForm") submitReservationEdit(form);
+  if (form.id === "surveySettingsForm") submitSurveySettings(form);
+  if (form.id === "surveyQuestionsForm") submitSurveyQuestions(form);
+  if (form.id === "surveyScreeningsForm") submitSurveyScreenings(form);
 });
 
 document.addEventListener("keydown", (event) => {
@@ -4268,3 +4719,5 @@ window.setInterval(() => {
   if (!getDriveWebhookUrl()) return;
   syncGoogleDriveCore({ silent: true, prompt: false, reason: "interval" });
 }, 60000);
+
+window.setInterval(() => { checkSurveyAutoSmsQueue(); }, 60000);

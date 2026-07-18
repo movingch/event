@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>머내마을영화제 만족도조사</title>
+  <link rel="stylesheet" href="styles.css?v=77" />
+  <style>
+    body{background:#f6f4ef}.survey-page{max-width:760px;margin:0 auto;padding:32px 16px}.survey-card{background:#fff;border:1px solid #e5e7eb;border-radius:24px;padding:24px;box-shadow:0 18px 45px rgba(15,23,42,.08)}.survey-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.survey-meta div{background:#f9fafb;border-radius:14px;padding:12px}.survey-question{border-top:1px solid #e5e7eb;padding:18px 0}.stars{display:flex;gap:8px;flex-wrap:wrap}.stars label{border:1px solid #d1d5db;border-radius:999px;padding:8px 12px;cursor:pointer}.survey-done{text-align:center;padding:40px 16px}.survey-error{color:#b91c1c;background:#fee2e2;border-radius:14px;padding:12px}@media(max-width:640px){.survey-meta{grid-template-columns:1fr}.survey-card{padding:18px}}
+  </style>
+</head>
+<body>
+  <main class="survey-page">
+    <section class="survey-card" id="surveyRoot">
+      <p>만족도조사를 불러오는 중입니다...</p>
+    </section>
+  </main>
+  <script>
+    const root = document.getElementById('surveyRoot');
+    const params = new URLSearchParams(location.search);
+    const token = params.get('t') || params.get('token') || '';
+    const webhook = params.get('w') || params.get('webhookUrl') || '';
+    const esc = (v) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+    let lookupData = null;
+
+    function questionHtml(q, index) {
+      const id = esc(q.id || `q-${index}`);
+      const title = esc(q.title || `문항 ${index + 1}`);
+      const required = q.required === '필수' || q.required === true || q.required === 'true';
+      const mark = required ? ' <span class="required">*</span>' : '';
+      const type = q.type === 'rating' || q.typeLabel === '별점 5점' ? 'rating' : (q.type || '').includes('single') || q.typeLabel === '단일선택' ? 'single' : (q.type || '').includes('multiple') || q.typeLabel === '복수선택' ? 'multiple' : 'text';
+      if (type === 'rating') {
+        return `<div class="survey-question"><label class="label">${title}${mark}</label><div class="stars">${[1,2,3,4,5].map(n => `<label><input type="radio" name="${id}" value="${n}" ${required?'required':''}> ${n}점</label>`).join('')}</div></div>`;
+      }
+      if (type === 'single' || type === 'multiple') {
+        const choices = String(q.choices || '예, 아니오').split(',').map(v => v.trim()).filter(Boolean);
+        return `<div class="survey-question"><label class="label">${title}${mark}</label><div class="choice-list">${choices.map(c => `<label class="check-inline"><input type="${type==='multiple'?'checkbox':'radio'}" name="${id}" value="${esc(c)}" ${required && type==='single'?'required':''}> ${esc(c)}</label>`).join('')}</div></div>`;
+      }
+      return `<div class="survey-question"><label class="label" for="${id}">${title}${mark}</label><textarea class="input" id="${id}" name="${id}" rows="4" ${required?'required':''}></textarea></div>`;
+    }
+
+    function renderSurvey(data) {
+      lookupData = data;
+      if (!data.ok) {
+        root.innerHTML = `<div class="survey-error">${esc(data.message || '설문을 불러올 수 없습니다.')}</div>`;
+        return;
+      }
+      if (data.alreadySubmitted) {
+        root.innerHTML = `<div class="survey-done"><h1>이미 응답해 주셨습니다.</h1><p>소중한 의견 감사합니다.</p></div>`;
+        return;
+      }
+      const p = data.participant || {};
+      const questions = (data.questions || []).filter(q => q.enabled === 'ON' || q.enabled === true || q.enabled === 'true');
+      root.innerHTML = `
+        <div class="eyebrow">제9회 머내마을영화제</div>
+        <h1>만족도조사</h1>
+        <p><strong>${esc(p.name || '관객')} 님</strong>, 〈${esc(p.movieTitle || '관람작')}〉 관람은 어떠셨나요?</p>
+        <div class="survey-meta">
+          <div><small>상영일시</small><br><strong>${esc(p.screeningTime || '')}</strong></div>
+          <div><small>장소</small><br><strong>${esc(p.venue || '')}</strong></div>
+          <div><small>예약번호</small><br><strong>${esc(p.reservationNumber || '')}</strong></div>
+          <div><small>신청자</small><br><strong>${esc(p.name || '')}</strong></div>
+        </div>
+        <form id="surveyForm">
+          ${questions.map(questionHtml).join('')}
+          <div class="form-actions"><button class="btn btn-dark" type="submit">만족도조사 제출</button></div>
+        </form>`;
+      document.getElementById('surveyForm').addEventListener('submit', submitSurvey);
+    }
+
+    async function submitSurvey(event) {
+      event.preventDefault();
+      const form = event.target;
+      const fd = new FormData(form);
+      const answers = {};
+      for (const [key, value] of fd.entries()) {
+        if (answers[key]) answers[key] = Array.isArray(answers[key]) ? [...answers[key], value] : [answers[key], value];
+        else answers[key] = value;
+      }
+      const p = lookupData.participant || {};
+      const response = { ...p, token, answers, submittedAt: new Date().toISOString(), status: '응답완료' };
+      const btn = form.querySelector('button[type="submit"]');
+      if (btn) { btn.disabled = true; btn.textContent = '제출 중...'; }
+      try {
+        const res = await fetch('/api/survey', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ w: webhook, response }) });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) throw new Error(data.message || '제출 실패');
+        root.innerHTML = `<div class="survey-done"><h1>응답해 주셔서 감사합니다.</h1><p>소중한 의견은 다음 영화제를 준비하는 데 사용하겠습니다.</p></div>`;
+      } catch (error) {
+        if (btn) { btn.disabled = false; btn.textContent = '만족도조사 제출'; }
+        alert(error.message || '제출 중 오류가 발생했습니다.');
+      }
+    }
+
+    async function init() {
+      if (!token || !webhook) {
+        root.innerHTML = '<div class="survey-error">설문 링크 정보가 올바르지 않습니다.</div>';
+        return;
+      }
+      try {
+        const res = await fetch(`/api/survey?w=${encodeURIComponent(webhook)}&t=${encodeURIComponent(token)}`);
+        const data = await res.json();
+        renderSurvey(data);
+      } catch (error) {
+        root.innerHTML = `<div class="survey-error">설문을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</div>`;
+      }
+    }
+    init();
+  </script>
+</body>
+</html>
