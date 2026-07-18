@@ -2803,7 +2803,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=103">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=105">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3271,7 +3271,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글시트 백업 실행</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=103">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=105">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -3494,6 +3494,8 @@ function closeModals() {
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
   });
+  // v105: 입력창을 닫은 뒤에만 최신 Supabase 원본을 다시 확인합니다.
+  window.setTimeout(() => pullSupabaseIfStale(1000), 250);
 }
 
 function hydrateRoute(route, sub) {
@@ -4877,6 +4879,33 @@ async function postSupabaseState(reason = "auto") {
   }
 }
 
+
+function isUserEditingForm() {
+  const active = document.activeElement;
+  if (!active) return false;
+  if (active.isContentEditable) return true;
+  const tag = String(active.tagName || "").toLowerCase();
+  if (["input", "textarea", "select"].includes(tag)) return true;
+  return Boolean(active.closest && active.closest("form"));
+}
+
+function isModalOpen() {
+  return Boolean(document.querySelector(".modal-backdrop.open, .reservation-complete-modal.open"));
+}
+
+function shouldPauseBackgroundSupabasePull() {
+  // v105: 모바일에서 키보드가 열리거나 신청폼 입력 중일 때는
+  // focus/pageshow/interval 동기화가 render()를 호출하면 모달 DOM이 다시 그려져 신청창이 닫힐 수 있습니다.
+  // 사용자가 입력 중인 동안에는 백그라운드 불러오기를 잠시 멈추고, 제출/닫기 이후 다시 동기화합니다.
+  return isModalOpen() || isUserEditingForm();
+}
+
+function safeRenderAfterBackgroundSync(options = {}) {
+  if (options.render === false) return;
+  if (shouldPauseBackgroundSupabasePull()) return;
+  render();
+}
+
 async function pullSupabaseCore(options = {}) {
   if (supabasePulling || supabasePushing) return false;
   supabasePulling = true;
@@ -4893,7 +4922,7 @@ async function pullSupabaseCore(options = {}) {
       supabaseConfigured = true;
       supabaseLastPullAt = Date.now();
       supabaseLastError = "";
-      if (options.render !== false) render();
+      safeRenderAfterBackgroundSync(options);
       return true;
     }
     // Supabase가 비어 있을 때: 현재 브라우저에 실제 운영 데이터가 있으면 최초 1회 원본으로 올립니다.
@@ -4905,7 +4934,7 @@ async function pullSupabaseCore(options = {}) {
           supabaseSourceLoaded = true;
           supabaseConfigured = true;
           supabaseLastPullAt = Date.now();
-          if (options.render !== false) render();
+          safeRenderAfterBackgroundSync(options);
           return true;
         }
       }
@@ -4973,6 +5002,7 @@ async function forceMigrateCurrentBrowserToSupabase() {
 }
 
 function pullSupabaseIfStale(maxAgeMs = 10000) {
+  if (shouldPauseBackgroundSupabasePull()) return;
   if (!supabaseConfigured && supabaseLastError) return;
   if (!supabaseLastPullAt || Date.now() - supabaseLastPullAt > maxAgeMs) {
     pullSupabaseCore({ render: true });
@@ -5532,6 +5562,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 window.setInterval(() => {
+  if (shouldPauseBackgroundSupabasePull()) return;
   pullSupabaseCore({ render: true });
 }, 10000);
 
