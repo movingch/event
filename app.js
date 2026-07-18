@@ -20,7 +20,8 @@ const FESTIVAL_START_DATE = "2026-09-09";
 const FESTIVAL_END_DATE = "2026-09-13";
 const FESTIVAL_PERIOD_LABEL = "9월 9일 ~ 9월 13일";
 const OPENING_FILM_ID = "scr-opening";
-const OPENING_MAIN_END_AT = "2026-09-09T23:59";
+const OPENING_MAIN_LEGACY_END_AT = "2026-09-09T23:59";
+const OPENING_MAIN_END_AT = "2026-07-17T23:59";
 const OPENING_POSTER_SRC = "assets/face-poster.jpeg";
 const OPENING_VIDEO_URL = "https://youtu.be/dM0quIEmrYA";
 const OPENING_VIDEO_EMBED = "https://www.youtube.com/embed/dM0quIEmrYA?autoplay=1&mute=1&loop=1&playlist=dM0quIEmrYA&playsinline=1&controls=1&rel=0&modestbranding=1";
@@ -245,7 +246,10 @@ function normalizeScreening(screening) {
     merged.guest = merged.guest || seedOpeningScreening.guest;
     merged.festivalStartDate = merged.festivalStartDate || FESTIVAL_START_DATE;
     merged.festivalEndDate = merged.festivalEndDate || FESTIVAL_END_DATE;
-    merged.openingMainEndAt = merged.openingMainEndAt || OPENING_MAIN_END_AT;
+    // v85: 모바일/새 기기에서도 개막작 광고 노출 종료 설정이 동일하게 적용되도록
+    // 이전 기본값(행사 당일까지 노출)을 가진 저장 데이터는 현재 기본 종료일로 자동 보정합니다.
+    const openingEndRaw = String(merged.openingMainEndAt || "").trim();
+    if (!openingEndRaw || openingEndRaw === OPENING_MAIN_LEGACY_END_AT) merged.openingMainEndAt = OPENING_MAIN_END_AT;
     merged.posterSrc = merged.posterSrc || OPENING_POSTER_SRC;
     merged.videoUrl = merged.videoUrl || OPENING_VIDEO_URL;
     merged.videoEmbedUrl = youtubeEmbedUrl(merged.videoUrl || merged.videoEmbedUrl || OPENING_VIDEO_URL) || OPENING_VIDEO_EMBED;
@@ -755,8 +759,22 @@ function getOpeningScreening() {
 
 function toDate(value) {
   if (!value) return null;
-  const date = new Date(value);
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const date = new Date(raw);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toEndOfLocalDayIfDateOnly(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]), 23, 59, 59, 999);
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+  // datetime-local 값은 브라우저 로컬시간 기준으로 비교합니다.
+  return date;
 }
 
 function youtubeIdFromUrl(url) {
@@ -919,9 +937,10 @@ function festivalPeriodLabel(screening = getOpeningScreening()) {
 }
 
 function shouldShowOpeningMainHero(screening = getOpeningScreening()) {
-  const end = toDate(screening?.openingMainEndAt || OPENING_MAIN_END_AT);
+  const rawEnd = screening?.openingMainEndAt || OPENING_MAIN_END_AT;
+  const end = toEndOfLocalDayIfDateOnly(rawEnd);
   if (!end) return true;
-  return new Date() <= end;
+  return new Date().getTime() <= end.getTime();
 }
 
 // v83: 개막작 노출 기간 판단을 데스크톱/모바일/카드 목록에서 모두 동일하게 사용합니다.
