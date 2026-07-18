@@ -211,6 +211,20 @@ const seedReservations = [
   }
 ];
 
+
+const DEMO_RESERVATION_IDS = new Set(seedReservations.map((item) => item.id));
+
+function isDemoReservation(reservation = {}) {
+  if (DEMO_RESERVATION_IDS.has(reservation.id)) return true;
+  const demo = seedReservations.find((item) => item.id === reservation.id || item.reservationNumber === reservation.reservationNumber);
+  if (!demo) return false;
+  return String(reservation.name || "") === String(demo.name || "") && String(reservation.phone || "") === String(demo.phone || "");
+}
+
+function removeDemoReservations(reservations = []) {
+  return Array.isArray(reservations) ? reservations.filter((reservation) => !isDemoReservation(reservation)) : [];
+}
+
 let state = loadState();
 if (localStorage.getItem(STAFF_PIN_MIGRATION_KEY) !== "done") {
   state.screenings = state.screenings.map((screening) => ({ ...screening, staffPin: "0909" }));
@@ -532,7 +546,7 @@ function normalizeState(data) {
   }
   return applyVenueReservationNumbering({
     screenings,
-    reservations: Array.isArray(data.reservations) ? data.reservations.map(normalizeReservation) : [],
+    reservations: removeDemoReservations(Array.isArray(data.reservations) ? data.reservations.map(normalizeReservation) : []),
     donations: Array.isArray(data.donations) ? data.donations : [],
     sponsorClicks: Number(data.sponsorClicks || 0),
     adminPin: String(data.adminPin || ADMIN_PIN),
@@ -560,7 +574,9 @@ function loadState() {
   }
   const fresh = normalizeState({
     screenings: cloneData(seedScreenings),
-    reservations: cloneData(seedReservations),
+    // 운영용 기본값에서는 샘플 신청자 2건을 만들지 않습니다.
+    // 구글시트 자동연동 중 빈 브라우저/새 기기가 샘플 데이터로 실제 신청자현황을 덮어쓰는 일을 막습니다.
+    reservations: [],
     donations: [],
     sponsorClicks: 0,
     lastUpdated: new Date().toISOString()
@@ -4494,6 +4510,13 @@ async function syncGoogleDriveCore(options = {}) {
   }
   const payload = buildGoogleDrivePayload(options.reason || "auto");
   const counts = googleDrivePayloadCounts(payload);
+  // 자동연동 중 새 브라우저나 캐시가 비어 있는 기기가 실제 구글시트 신청자현황을
+  // 0명/샘플데이터로 덮어쓰지 않도록, 신청자 0명 상태의 조용한 자동 저장은 차단합니다.
+  // 실제로 전체 명단을 비우고 싶을 때는 관리자 화면에서 수동 저장을 실행하면 확인창을 거칩니다.
+  if (silent && counts.applicants === 0) {
+    console.warn("구글시트 자동저장 건너뜀: 이 브라우저의 신청자 데이터가 0명입니다.");
+    return false;
+  }
   if (!silent && counts.applicants === 0) {
     const ok = confirm(`현재 이 브라우저에서 전송할 신청자가 0명입니다.\n통계 ${counts.stats}건, 상영정보 ${counts.screenings}건만 구글시트로 보낼까요?\n\n신청자 명단이 화면에 보이는 브라우저에서 연동해야 신청자현황이 저장됩니다.`);
     if (!ok) return false;
