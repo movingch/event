@@ -21,6 +21,28 @@ module.exports = async function handler(req, res) {
       return json(res, 400, { ok: false, message: '유효한 Apps Script /exec URL이 아닙니다.' });
     }
 
+    if (body.action === 'read' || payload.action === 'read') {
+      const readUrl = new URL(webhookUrl);
+      readUrl.searchParams.set('action', 'exportData');
+      const upstream = await fetch(readUrl.toString(), { method: 'GET', redirect: 'follow' });
+      const text = await upstream.text();
+      let upstreamJson = null;
+      try { upstreamJson = JSON.parse(text); } catch (error) {}
+      if (!upstream.ok || !upstreamJson?.ok) {
+        return json(res, 502, {
+          ok: false,
+          message: 'Apps Script 데이터 불러오기에 실패했습니다.',
+          status: upstream.status,
+          responseText: text.slice(0, 500)
+        });
+      }
+      return json(res, 200, {
+        ok: true,
+        message: '구글시트 데이터 불러오기 완료',
+        data: upstreamJson.data || upstreamJson
+      });
+    }
+
     const applicantsCount = Array.isArray(payload.applicants) ? payload.applicants.length : 0;
     const statsCount = Array.isArray(payload.stats) ? payload.stats.length : 0;
     const screeningsCount = Array.isArray(payload.screenings) ? payload.screenings.length : 0;
