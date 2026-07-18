@@ -120,8 +120,8 @@ button:disabled { cursor: not-allowed; opacity: 0.58; }
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 1.2fr .8fr;
-  gap: 28px;
+  grid-template-columns: 1fr;
+  gap: 18px;
   align-items: center;
 }
 .eyebrow {
@@ -3209,3 +3209,7 @@ tr:last-child td { border-bottom: 0; }
   .reservation-action-buttons-large { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px !important; }
   .reservation-action-buttons-large .btn { min-height: 44px; font-size: 13px; }
 }
+
+/* v79: 일반 홈 후원 안내 카드 제거 후 히어로 높이 축소 */
+.hero .hero-grid > div { max-width: 820px; }
+.hero { padding-top: clamp(24px, 4vw, 46px); padding-bottom: clamp(24px, 4vw, 46px); }

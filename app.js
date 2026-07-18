@@ -1141,7 +1141,7 @@ function renderHome() {
 }
 
 function renderGeneralHome() {
-  const popular = sortedScreenings().filter((screening) => !isOpeningScreening(screening));
+  const popular = sortedScreenings();
   return `
     <section class="hero">
       <div class="hero-grid">
@@ -1154,12 +1154,7 @@ function renderGeneralHome() {
             <a class="btn btn-primary" href="#/donate">후원하기</a>
           </div>
         </div>
-        <aside class="hero-card donation-card" aria-label="후원 안내">
-          <div class="icon-badge">💛</div>
-          <h2>이 귀한 일에 작은 후원의 손길을 보태주세요.</h2>
-          <p>후원금은 상영 준비, 공간 운영, 장비, 홍보물, 주민 창작자와 스태프의 활동을 이어가는 데 소중히 사용됩니다.</p>
-          <a class="btn btn-light" href="#/donate">후원하기</a>
-        </aside>
+
       </div>
     </section>
 
@@ -1254,7 +1249,7 @@ function renderOpeningHome(opening) {
   const phase = openingPhaseInfo(opening);
   const stats = openingStats(opening);
   const poster = openingPosterSrc(opening);
-  const regularPreview = sortedScreenings().filter((screening) => !isOpeningScreening(screening));
+  const regularPreview = sortedScreenings();
   const openingDateLine = `${formatDateTime(opening.startTime)} · ${opening.venue}`;
   return `
     <section class="opening-home-hero">
@@ -1632,9 +1627,10 @@ function staffScreenings() {
   const session = getStaffSession();
   if (!session) return [];
   if (session.isMaster === true) return sortedScreenings();
+  const allowed = new Set(session.screeningIds || []);
   return sortedScreenings()
-    .filter((screening) => session.screeningIds.includes(screening.id))
-    .sort((a, b) => String(a.venue || "").localeCompare(String(b.venue || ""), "ko") || String(a.startTime || "").localeCompare(String(b.startTime || "")));
+    .filter((screening) => allowed.has(screening.id))
+    .sort((a, b) => String(a.startTime || "").localeCompare(String(b.startTime || "")) || String(a.title || "").localeCompare(String(b.title || ""), "ko"));
 }
 
 function canStaffManageScreening(screeningId) {
@@ -1668,12 +1664,13 @@ function renderStaff(preselectedId = "") {
   const attendedSeats = reservations.filter((r) => r.attended).reduce((sum, r) => sum + Number(r.attendedSeats || 0), 0);
   const canceledSeats = reservations.filter((r) => r.status === "취소").reduce((sum, r) => sum + Number(r.seats || 0), 0);
   const venueStats = groupByVenue();
+  const staffScopeLabel = session.isMaster === true ? "전체영화" : `${screenings[0]?.venue || session.venue || "상영관"} - ${screenings[0]?.title || "영화"}`;
   return `
     <section class="section-title staff-portal-title">
       <div>
         <div class="eyebrow">상영관 담당자 전용</div>
-        <h1>${session.isMaster === true ? "전체영화 신청자 관리" : `${esc(session.venue || screenings[0].venue)} 신청자 관리`}</h1>
-        <p>${session.isMaster === true ? "마스타스탭이 모든 영화 신청자를 추가·수정·삭제하고 참석 현황을 관리합니다." : `${esc(session.staffName)} 담당자가 자신의 상영관 신청자를 추가·수정·삭제하고 참석 현황을 관리합니다.`}</p>
+        <h1>${session.isMaster === true ? "전체영화 신청자 관리" : `${esc(staffScopeLabel)} 신청자 관리`}</h1>
+        <p>${session.isMaster === true ? "마스타스탭이 모든 영화 신청자를 추가·수정·삭제하고 참석 현황을 관리합니다." : `${esc(session.staffName)} 담당자가 선택한 상영관-영화 신청자와 참석 현황을 관리합니다.`}</p>
       </div>
       <div class="cta-row">
         <button class="btn btn-primary" type="button" data-action="staff-add-reservation">신청자 추가</button>
@@ -1682,7 +1679,7 @@ function renderStaff(preselectedId = "") {
       </div>
     </section>
     <section class="card staff-password-card screen-only">
-      <div><h2>스태프 비밀번호 변경</h2><p>${session.isMaster === true ? "마스타스탭 전체영화 비밀번호가 변경됩니다." : "현재 담당 상영관의 모든 회차에 같은 새 비밀번호가 적용됩니다."}</p></div>
+      <div><h2>스태프 비밀번호 변경</h2><p>${session.isMaster === true ? "마스타스탭 전체영화 비밀번호가 변경됩니다." : "현재 담당 상영관-영화의 비밀번호만 변경됩니다."}</p></div>
       <form id="staffPinChangeForm" class="staff-pin-form">
         <label class="label" for="currentStaffPin">현재 비밀번호</label><input class="input" id="currentStaffPin" name="currentPin" type="password" inputmode="numeric" required />
         <label class="label" for="newStaffPin">새 비밀번호</label><input class="input" id="newStaffPin" name="newPin" type="password" inputmode="numeric" minlength="4" required />
@@ -1691,25 +1688,25 @@ function renderStaff(preselectedId = "") {
       </form>
     </section>
     <section class="stats-grid staff-stats">
-      <div class="stat-card"><span>${session.isMaster === true ? "담당 범위" : "담당 상영관"}</span><strong>${session.isMaster === true ? "전체영화" : esc(session.venue || screenings[0].venue)}</strong><small>${screenings.length}회차</small></div>
+      <div class="stat-card"><span>${session.isMaster === true ? "담당 범위" : "담당 상영관-영화"}</span><strong>${esc(staffScopeLabel)}</strong><small>${screenings.length}회차</small></div>
       <div class="stat-card"><span>신청 인원</span><strong>${totalSeats}</strong><small>취소 제외</small></div>
       <div class="stat-card"><span>참석자</span><strong>${attendedSeats}</strong><small>실제 참석</small></div>
       <div class="stat-card"><span>취소 인원</span><strong>${canceledSeats}</strong><small>취소 처리</small></div>
       <div class="stat-card"><span>후원하기 클릭</span><strong>${Number(state.sponsorClicks || 0)}</strong><small>전체 누적</small></div>
     </section>
-    <section class="card">
-      <div class="section-title"><div><h2>전체 상영관 통계</h2><p>모든 담당 스태프가 함께 확인할 수 있는 전체 현황입니다.</p></div></div>
-      ${venueStatsTable(venueStats)}
-    </section>
     ${screenings.map((screening) => `
       <section class="card staff-screening-card">
         <div class="section-title">
-          <div><div class="badges"><span class="badge blue">${esc(screening.venue)}</span><span class="badge ${statusInfo(screening).className}">${esc(statusInfo(screening).text)}</span></div><h2>${esc(screening.title)}</h2><p>${esc(formatDateTime(screening.startTime))} · 담당 ${esc(screening.staff || session.staffName)}</p></div>
+          <div><div class="badges"><span class="badge blue">${esc(screening.venue)} - ${esc(screening.title)}</span><span class="badge ${statusInfo(screening).className}">${esc(statusInfo(screening).text)}</span></div><h2>신청자 목록</h2><p>${esc(formatDateTime(screening.startTime))} · 담당 ${esc(screening.staff || session.staffName)}</p></div>
           <div class="staff-capacity"><strong>${appliedSeats(screening.id)} / ${Number(screening.capacity || 0)}명</strong><span>신청</span></div>
         </div>
         ${reservationTable(reservations.filter((reservation) => reservation.screeningId === screening.id), { staffMode: true })}
       </section>
     `).join("")}
+    <section class="card">
+      <div class="section-title"><div><h2>전체 상영관 통계</h2><p>모든 담당 스태프가 함께 확인할 수 있는 전체 현황입니다.</p></div></div>
+      ${venueStatsTable(venueStats)}
+    </section>
   `;
 }
 
@@ -1733,7 +1730,7 @@ function venueStatsTable(rows) {
 }
 
 function renderStaffLogin(preselectedId = "") {
-  const options = sortedScreenings().map((screening) => `<option value="${esc(screening.id)}" ${screening.id === preselectedId ? "selected" : ""}>${esc(screening.venue)} · ${esc(screening.title)} · ${esc(screening.staff || "담당 미정")}</option>`).join("");
+  const options = sortedScreenings().map((screening) => `<option value="${esc(screening.id)}" ${screening.id === preselectedId ? "selected" : ""}>${esc(screening.venue)} - ${esc(screening.title)} · ${esc(formatDateTime(screening.startTime))} · ${esc(screening.staff || "담당 미정")}</option>`).join("");
   return `
     <section class="admin-login staff-login">
       <div class="login-card">
@@ -1741,9 +1738,9 @@ function renderStaffLogin(preselectedId = "") {
         <h1>신청자 확인</h1>
         <p>담당 상영 영화를 선택하고 스탭 비밀번호를 입력하세요. 임시 스탭 비밀번호는 <strong>0909</strong>입니다.</p>
         <form id="staffLoginForm">
-          <label class="label" for="staffScreeningId">담당 상영 영화</label>
+          <label class="label" for="staffScreeningId">담당 상영관-영화</label>
           <select class="select" id="staffScreeningId" name="screeningId" required>
-            <option value="">상영관 영화를 선택하세요</option>
+            <option value="">상영관-영화를 선택하세요</option>
             <option value="__all__" ${preselectedId === "__all__" ? "selected" : ""}>전체영화 · 마스타스탭</option>${options}
           </select>
           <label class="label" for="staffPin">스태프 비밀번호</label>
@@ -1779,13 +1776,12 @@ function submitStaffLogin(form) {
   const screening = state.screenings.find((item) => item.id === data.screeningId);
   if (!screening || !screening.staffPin) return toast("이 회차에는 아직 스태프 비밀번호가 설정되지 않았습니다.");
   if (String(data.pin || "") !== String(screening.staffPin)) return toast("스태프 비밀번호가 맞지 않습니다.");
-  const venueScreenings = state.screenings.filter((item) => item.venue === screening.venue && String(item.staffPin || "") === String(screening.staffPin || ""));
-  venueScreenings.forEach((item) => { item.staffPresent = true; });
+  screening.staffPresent = true;
   persist();
   sessionStorage.setItem(STAFF_SESSION_KEY, JSON.stringify({
     staffName: screening.staff || "담당 스태프",
-    venue: screening.venue,
-    screeningIds: venueScreenings.map((item) => item.id),
+    venue: `${screening.venue || "상영관"} - ${screening.title || "영화"}`,
+    screeningIds: [screening.id],
     loggedInAt: new Date().toISOString()
   }));
   window.location.hash = "#/staff";
@@ -1812,7 +1808,7 @@ function submitStaffPinChange(form) {
   if (!screening) return toast("담당 상영관을 찾을 수 없습니다.");
   if (String(data.currentPin || "") !== String(screening.staffPin || "")) return toast("현재 비밀번호가 맞지 않습니다.");
   state.screenings.forEach((item) => {
-    if (session.screeningIds.includes(item.id)) item.staffPin = newPin;
+    if ((session.screeningIds || []).includes(item.id)) item.staffPin = newPin;
   });
   persist();
   form.reset();
