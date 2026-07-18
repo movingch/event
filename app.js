@@ -2787,16 +2787,16 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
       <div class="section-title admin-backup-fixed-title">
         <div>
           <h2>백업·연동 즉시 실행 패널</h2>
-          <p>메뉴 버튼을 누르지 않아도 이 자리에서 바로 구글시트 연동과 엑셀 저장을 실행합니다. 별도 페이지도 사용할 수 있습니다.</p>
+          <p>Supabase 원본 저장 후 현재 구글시트 양식으로 자동 백업합니다. 필요할 때 이 자리에서 수동 백업도 실행할 수 있습니다.</p>
         </div>
-        <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">구글시트 자동동기화</span>
+        <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">구글시트 자동백업</span>
       </div>
       <form id="driveSyncQuickForm" class="drive-sync-form admin-backup-fixed-form">
         <label class="label" for="driveWebhookUrlQuick">Google Apps Script 웹앱 URL</label>
         <input class="input" id="driveWebhookUrlQuick" name="driveWebhookUrl" type="url" value="${esc(getDriveWebhookUrl())}" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" />
-        <span class="help">현재 전송 예정: ${esc(counts)} · 마지막 저장: ${esc(formatDriveLastSyncTime())}</span>
+        <span class="help">백업 예정: ${esc(counts)} · 마지막 백업: ${esc(formatDriveLastSyncTime())}</span>
         <div class="form-actions admin-backup-fixed-actions">
-          <button class="btn btn-primary" type="submit">구글시트 연동 실행</button>
+          <button class="btn btn-primary" type="submit">구글시트 백업 실행</button>
           <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
@@ -3146,18 +3146,18 @@ function adminBackup() {
           </form>
         </div>
         <div class="card compact">
-          <h3>구글시트 자동동기화</h3>
+          <h3>구글시트 자동백업</h3>
           <p>Apps Script 웹앱 URL을 입력하고 저장하면 자동저장이 바로 켜집니다. 팝업창 없이 이 화면에서 바로 설정합니다.</p>
           <div class="drive-sync-status">
-            <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">항상 자동동기화</span>
-            <span class="muted">마지막 저장: ${esc(formatDriveLastSyncTime())}</span>
+            <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">항상 자동백업</span>
+            <span class="muted">마지막 백업: ${esc(formatDriveLastSyncTime())}</span>
           </div>
           <form id="driveSyncForm" class="drive-sync-form">
             <label class="label" for="driveWebhookUrl">Google Apps Script 웹앱 URL</label>
             <input class="input" id="driveWebhookUrl" name="driveWebhookUrl" type="url" value="${esc(getDriveWebhookUrl())}" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" />
-            <span class="help">현재 전송 예정: ${esc(googleDriveCountsLabel(buildGoogleDrivePayload("preview")))} · /exec 로 끝나는 URL을 넣어주세요.</span>
+            <span class="help">백업 예정: ${esc(googleDriveCountsLabel(buildGoogleDrivePayload("preview")))} · /exec 로 끝나는 Apps Script URL을 넣어주세요.</span>
             <div class="form-actions">
-              <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
+              <button class="btn btn-primary" type="submit">구글시트 백업 실행</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
           <a class="btn btn-dark" href="/backup.html?v=100">별도 백업페이지 열기</a>
@@ -3176,7 +3176,7 @@ function adminBackup() {
         </div>
         <div class="card compact">
           <h3>백업 복원</h3>
-          <p>이 앱에서 내려받은 JSON 파일을 다시 불러옵니다.</p>
+          <p>이 앱에서 내려받은 JSON 백업 파일을 다시 불러옵니다.</p>
           <div class="form-actions"><input class="input" type="file" id="importJson" accept="application/json" /></div>
         </div>
       </div>
@@ -4885,13 +4885,13 @@ function setDriveWebhookUrl(url) {
 }
 
 function isGoogleDriveAutoSyncEnabled() {
-  // v98: 운영용 앱은 ON/OFF 개념을 없애고, 모든 기기에서 구글시트 원본과 항상 동기화합니다.
+  // v101: 구글시트는 원본이 아니라 Supabase 저장 후 따라오는 백업본입니다.
   return Boolean(getDriveWebhookUrl());
 }
 
 function setGoogleDriveAutoSyncEnabled(enabled) {
-  // v98: 이전 버전의 OFF 저장값이 남아 있어도 무시하고 항상 ON으로 보정합니다.
-  localStorage.setItem(DRIVE_AUTO_SYNC_STORAGE_KEY, "true");
+  // v101: ON/OFF 개념 대신 백업 URL 존재 여부만 사용합니다.
+  if (enabled) localStorage.setItem(DRIVE_AUTO_SYNC_STORAGE_KEY, "true");
 }
 
 function formatDriveLastSyncTime() {
@@ -4912,7 +4912,7 @@ function setDriveLastPullNow() {
 
 function promptDriveWebhookUrl() {
   const current = getDriveWebhookUrl();
-  const url = prompt("구글 Apps Script 웹앱 URL을 입력해 주세요.\n/exec 로 끝나는 주소를 넣으면 구글드라이브 자동저장이 바로 켜집니다.", current);
+  const url = prompt("구글 Apps Script 웹앱 URL을 입력해 주세요.\n/exec 로 끝나는 주소를 넣으면 구글시트 백업 주소로 저장됩니다.", current);
   if (!url) return "";
   const trimmed = url.trim();
   if (!trimmed) return "";
@@ -4963,7 +4963,7 @@ async function syncRowsToGoogleDrive(type, options = {}) {
   let url = getDriveWebhookUrl();
   if (!url && options.prompt !== false) url = promptDriveWebhookUrl();
   if (!url) {
-    if (!options.silent) toast("구글드라이브 연동 URL을 먼저 설정해 주세요.");
+    if (!options.silent) toast("구글시트 백업 실행 URL을 먼저 설정해 주세요.");
     return false;
   }
   const rows = builder();
@@ -5005,12 +5005,11 @@ async function syncGoogleDriveCore(options = {}) {
   const prompt = options.prompt !== false;
   const url = getDriveWebhookUrl() || (prompt ? promptDriveWebhookUrl() : "");
   if (!url) {
-    if (!silent) toast("구글드라이브 연동 URL을 먼저 설정해 주세요.");
+    if (!silent) toast("구글시트 백업 실행 URL을 먼저 설정해 주세요.");
     return false;
   }
-  if (!googleSheetSourceLoaded && options.reason !== "startup-push" && options.skipPullBeforePush !== true) {
-    await pullGoogleDriveCore({ silent: true, render: false });
-  }
+  // v101: 구글시트는 백업 대상입니다. 저장 전에 구글시트 데이터를 다시 읽어와
+  // Supabase 원본 화면을 덮어쓰지 않습니다.
   const payload = buildGoogleDrivePayload(options.reason || "auto");
   const counts = googleDrivePayloadCounts(payload);
   // 자동연동 중 새 브라우저나 캐시가 비어 있는 기기가 실제 구글시트 신청자현황을
@@ -5309,7 +5308,7 @@ function openGoogleDriveSyncSetup() {
   const inlineUrl = String(inlineInput?.value || "").trim();
   if (inlineInput && inlineUrl) {
     const previewPayload = buildGoogleDrivePayload("manual-setup");
-    const ok = confirm(`현재 입력된 URL로 구글시트 자동동기화을 시작합니다.
+    const ok = confirm(`현재 입력된 URL로 구글시트 자동백업을 시작합니다.
 
 전송 예정: ${googleDriveCountsLabel(previewPayload)}
 
@@ -5317,7 +5316,7 @@ function openGoogleDriveSyncSetup() {
     if (!ok) return;
     setDriveWebhookUrl(inlineUrl);
     setGoogleDriveAutoSyncEnabled(true);
-    toast("구글드라이브 연동 URL을 저장했고 자동저장을 켰습니다.");
+    toast("구글시트 백업 실행 URL을 저장했고 자동저장을 켰습니다.");
     syncGoogleDriveCore({ silent: false, prompt: false, reason: "manual-setup" });
     render();
     return;
@@ -5334,13 +5333,13 @@ function openGoogleDriveSyncSetup() {
 function submitDriveSyncForm(form) {
   const input = form.querySelector('[name="driveWebhookUrl"]');
   const url = String(input?.value || "").trim();
-  if (!url) return toast("구글드라이브 연동 URL을 입력해 주세요.");
+  if (!url) return toast("구글시트 백업 실행 URL을 입력해 주세요.");
   if (!url.includes("script.google.com") || !url.includes("/exec")) {
     const ok = confirm("입력한 주소가 Apps Script /exec 주소처럼 보이지 않습니다. 그래도 저장할까요?");
     if (!ok) return;
   }
   const previewPayload = buildGoogleDrivePayload("manual-setup");
-  const ok = confirm(`구글시트 자동동기화을 시작합니다.
+  const ok = confirm(`구글시트 자동백업을 시작합니다.
 
 전송 예정: ${googleDriveCountsLabel(previewPayload)}
 
@@ -5348,7 +5347,7 @@ function submitDriveSyncForm(form) {
   if (!ok) return;
   setDriveWebhookUrl(url);
   setGoogleDriveAutoSyncEnabled(true);
-  toast("구글드라이브 연동 URL을 저장했고 자동저장을 켰습니다.");
+  toast("구글시트 백업 실행 URL을 저장했고 자동저장을 켰습니다.");
   syncGoogleDriveCore({ silent: false, prompt: false, reason: "manual-setup" });
   render();
 }
@@ -5529,7 +5528,7 @@ document.addEventListener("click", (event) => {
   if (action === "sync-drive-stats") syncGoogleDriveCore({ silent: false, prompt: true, reason: "manual-stats" });
   if (action === "sync-drive-screenings") syncGoogleDriveCore({ silent: false, prompt: true, reason: "manual-screenings" });
   if (action === "sync-drive-all") syncGoogleDriveCore({ silent: false, prompt: true, reason: "manual-all" });
-  if (action === "pull-drive-all") pullGoogleDriveCore({ silent: false });
+  if (action === "pull-drive-all") toast("이제 구글시트는 백업용입니다. 데이터 불러오기는 Supabase 원본을 사용합니다.");
   if (action === "drive-sync-settings") openGoogleDriveSyncSetup();
   if (action === "set-drive-webhook") { const url = promptDriveWebhookUrl(); if (url) syncGoogleDriveCore({ silent: false, prompt: false }); render(); }
   if (action === "toggle-drive-autosync") toggleGoogleDriveAutoSync();
@@ -5597,18 +5596,17 @@ window.addEventListener("hashchange", () => {
   render();
 });
 
-function renderGoogleSheetLoading() {
+function renderSupabaseLoading() {
   const app = document.getElementById("app");
   if (!app) return;
   app.innerHTML = `<main class="app-shell">${appHeader()}<section class="section"><div class="panel sync-loading-panel"><span class="eyebrow">Supabase 원본 동기화</span><h1>최신 신청자 데이터를 불러오는 중입니다.</h1><p>모바일, 다른 노트북, 다른 브라우저에서도 같은 Supabase 원본 데이터를 먼저 불러온 뒤 화면을 표시합니다. Supabase가 비어 있으면 마스타관리자 백업·연동에서 강제 이전을 한 번 실행하세요.</p></div></section></main>`;
 }
 
-localStorage.setItem(DRIVE_AUTO_SYNC_STORAGE_KEY, "true");
 if (!localStorage.getItem(DRIVE_WEBHOOK_STORAGE_KEY) && DEFAULT_DRIVE_WEBHOOK_URL) {
   localStorage.setItem(DRIVE_WEBHOOK_STORAGE_KEY, DEFAULT_DRIVE_WEBHOOK_URL);
 }
 
-renderGoogleSheetLoading();
+renderSupabaseLoading();
 bootstrapPrimaryDataSource({ render: false }).finally(() => {
   googleSheetInitialReady = true;
   render();
