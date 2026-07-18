@@ -24,7 +24,8 @@ module.exports = async function handler(req, res) {
     if (body.action === 'read' || payload.action === 'read') {
       const readUrl = new URL(webhookUrl);
       readUrl.searchParams.set('action', 'exportData');
-      const upstream = await fetch(readUrl.toString(), { method: 'GET', redirect: 'follow' });
+      readUrl.searchParams.set('t', String(Date.now()));
+      const upstream = await fetch(readUrl.toString(), { method: 'GET', redirect: 'follow', cache: 'no-store' });
       const text = await upstream.text();
       let upstreamJson = null;
       try { upstreamJson = JSON.parse(text); } catch (error) {}

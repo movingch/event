@@ -2786,7 +2786,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <h2>백업·연동 즉시 실행 패널</h2>
           <p>메뉴 버튼을 누르지 않아도 이 자리에서 바로 구글시트 연동과 엑셀 저장을 실행합니다. 별도 페이지도 사용할 수 있습니다.</p>
         </div>
-        <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">${isGoogleDriveAutoSyncEnabled() ? "자동저장 ON" : "URL 필요"}</span>
+        <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">구글시트 자동동기화</span>
       </div>
       <form id="driveSyncQuickForm" class="drive-sync-form admin-backup-fixed-form">
         <label class="label" for="driveWebhookUrlQuick">Google Apps Script 웹앱 URL</label>
@@ -3131,10 +3131,10 @@ function adminBackup() {
           </form>
         </div>
         <div class="card compact">
-          <h3>구글드라이브 자동연동</h3>
+          <h3>구글시트 자동동기화</h3>
           <p>Apps Script 웹앱 URL을 입력하고 저장하면 자동저장이 바로 켜집니다. 팝업창 없이 이 화면에서 바로 설정합니다.</p>
           <div class="drive-sync-status">
-            <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">${isGoogleDriveAutoSyncEnabled() ? "자동저장 ON" : "연동 URL 필요"}</span>
+            <span class="badge ${isGoogleDriveAutoSyncEnabled() ? "badge-ok" : ""}">항상 자동동기화</span>
             <span class="muted">마지막 저장: ${esc(formatDriveLastSyncTime())}</span>
           </div>
           <form id="driveSyncForm" class="drive-sync-form">
@@ -3152,12 +3152,12 @@ function adminBackup() {
             <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
             <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           </div>
-          <span class="help">구글드라이브는 수동 저장 버튼이 아니라 자동연동 방식입니다. URL 저장 후 데이터 변경 시와 관리자 화면 1분 주기로 저장됩니다.</span>
+          <span class="help">이 앱은 ON/OFF 없이 구글시트를 원본으로 사용합니다. 모든 브라우저와 모바일은 열릴 때 즉시 불러오고, 변경사항은 자동 저장됩니다.</span>
         </div>
         <div class="card compact">
           <h3>백업 다운로드</h3>
           <p>상영 회차, 신청자, 참석 체크, 후원 클릭 수를 하나의 JSON 파일로 저장합니다.</p>
-          <div class="form-actions"><button class="btn btn-dark" type="button" data-action="export-json">전체 JSON 백업</button><button class="btn btn-outline" type="button" data-action="reset-drive-webhook">구글드라이브 연동 URL 초기화</button></div>
+          <div class="form-actions"><button class="btn btn-dark" type="button" data-action="export-json">전체 JSON 백업</button><button class="btn btn-outline" type="button" data-action="reset-drive-webhook">구글시트 URL 재설정</button></div>
         </div>
         <div class="card compact">
           <h3>백업 복원</h3>
@@ -4673,6 +4673,8 @@ const DEFAULT_DRIVE_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwc18
 let driveAutoSyncTimer = null;
 let googleSheetSourceLoaded = false;
 let googleSheetPulling = false;
+let googleSheetLastError = "";
+let googleSheetInitialReady = false;
 
 function getDriveWebhookUrl() {
   return localStorage.getItem(DRIVE_WEBHOOK_STORAGE_KEY) || DEFAULT_DRIVE_WEBHOOK_URL || "";
@@ -4687,13 +4689,13 @@ function setDriveWebhookUrl(url) {
 }
 
 function isGoogleDriveAutoSyncEnabled() {
-  const flag = localStorage.getItem(DRIVE_AUTO_SYNC_STORAGE_KEY);
-  if (flag === "false") return false;
-  return flag === "true" || Boolean(getDriveWebhookUrl());
+  // v98: 운영용 앱은 ON/OFF 개념을 없애고, 모든 기기에서 구글시트 원본과 항상 동기화합니다.
+  return Boolean(getDriveWebhookUrl());
 }
 
 function setGoogleDriveAutoSyncEnabled(enabled) {
-  localStorage.setItem(DRIVE_AUTO_SYNC_STORAGE_KEY, enabled ? "true" : "false");
+  // v98: 이전 버전의 OFF 저장값이 남아 있어도 무시하고 항상 ON으로 보정합니다.
+  localStorage.setItem(DRIVE_AUTO_SYNC_STORAGE_KEY, "true");
 }
 
 function formatDriveLastSyncTime() {
@@ -4735,7 +4737,8 @@ async function postGoogleDrivePayload(url, payload) {
   const response = await fetch("/api/google-drive-sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ webhookUrl: url, payload })
+    body: JSON.stringify({ webhookUrl: url, payload }),
+    cache: "no-store"
   });
   let data = null;
   try { data = await response.json(); } catch (error) {}
@@ -4846,7 +4849,8 @@ async function readGoogleDriveData(url) {
   const response = await fetch("/api/google-drive-sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ webhookUrl: url, action: "read" })
+    body: JSON.stringify({ webhookUrl: url, action: "read", cacheBust: Date.now() }),
+    cache: "no-store"
   });
   let data = null;
   try { data = await response.json(); } catch (error) {}
@@ -5055,10 +5059,15 @@ async function pullGoogleDriveCore(options = {}) {
   googleSheetPulling = true;
   try {
     const data = await readGoogleDriveData(url);
-    if (!hasUsefulDriveData(data)) return false;
+    if (!hasUsefulDriveData(data)) {
+      googleSheetLastError = "구글시트에 읽을 수 있는 데이터가 없습니다.";
+      return false;
+    }
     const nextState = driveDataToState(data);
     state = nextState;
     googleSheetSourceLoaded = true;
+    googleSheetInitialReady = true;
+    googleSheetLastError = "";
     setDriveLastPullNow();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     if (!silent) toast("구글시트 최신 데이터를 불러왔습니다.");
@@ -5066,16 +5075,20 @@ async function pullGoogleDriveCore(options = {}) {
     return true;
   } catch (error) {
     console.warn("구글시트 데이터 불러오기 실패", error);
-    if (!silent) toast("구글시트 데이터 불러오기에 실패했습니다. Apps Script v95 배포를 확인해 주세요.");
+    googleSheetLastError = String(error?.message || error || "구글시트 데이터 불러오기 실패");
+    if (!silent) toast("구글시트 데이터 불러오기에 실패했습니다. Apps Script v98 배포와 기본 구글시트 URL을 확인해 주세요.");
     return false;
   } finally {
     googleSheetPulling = false;
   }
 }
 
-function bootstrapGoogleSheetSource(options = {}) {
-  if (!getDriveWebhookUrl()) return Promise.resolve(false);
-  return pullGoogleDriveCore({ silent: options.silent !== false, render: options.render !== false });
+async function bootstrapGoogleSheetSource(options = {}) {
+  if (!getDriveWebhookUrl()) return false;
+  const first = await pullGoogleDriveCore({ silent: options.silent !== false, render: options.render === true });
+  if (first) return true;
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  return pullGoogleDriveCore({ silent: true, render: options.render === true });
 }
 
 function pullGoogleSheetIfStale(maxAgeMs = 15000) {
@@ -5088,7 +5101,6 @@ function pullGoogleSheetIfStale(maxAgeMs = 15000) {
 }
 
 function queueGoogleDriveAutoSync(reason = "data-change") {
-  if (!isGoogleDriveAutoSyncEnabled()) return;
   if (!getDriveWebhookUrl()) return;
   window.clearTimeout(driveAutoSyncTimer);
   driveAutoSyncTimer = window.setTimeout(() => {
@@ -5101,7 +5113,7 @@ function openGoogleDriveSyncSetup() {
   const inlineUrl = String(inlineInput?.value || "").trim();
   if (inlineInput && inlineUrl) {
     const previewPayload = buildGoogleDrivePayload("manual-setup");
-    const ok = confirm(`현재 입력된 URL로 구글드라이브 자동연동을 시작합니다.
+    const ok = confirm(`현재 입력된 URL로 구글시트 자동동기화을 시작합니다.
 
 전송 예정: ${googleDriveCountsLabel(previewPayload)}
 
@@ -5132,7 +5144,7 @@ function submitDriveSyncForm(form) {
     if (!ok) return;
   }
   const previewPayload = buildGoogleDrivePayload("manual-setup");
-  const ok = confirm(`구글드라이브 자동연동을 시작합니다.
+  const ok = confirm(`구글시트 자동동기화을 시작합니다.
 
 전송 예정: ${googleDriveCountsLabel(previewPayload)}
 
@@ -5161,7 +5173,7 @@ function resetGoogleDriveWebhookUrl() {
   localStorage.removeItem(DRIVE_WEBHOOK_STORAGE_KEY);
   localStorage.removeItem(DRIVE_LAST_SYNC_STORAGE_KEY);
   setGoogleDriveAutoSyncEnabled(false);
-  toast("구글드라이브 연동 URL을 초기화했습니다. 자동저장도 꺼졌습니다.");
+  toast("구글시트 URL을 재설정했습니다.");
   render();
 }
 
@@ -5388,8 +5400,22 @@ window.addEventListener("hashchange", () => {
   render();
 });
 
-render();
-bootstrapGoogleSheetSource({ silent: true, render: true });
+function renderGoogleSheetLoading() {
+  const app = document.getElementById("app");
+  if (!app) return;
+  app.innerHTML = `<main class="app-shell">${appHeader()}<section class="section"><div class="panel sync-loading-panel"><span class="eyebrow">구글시트 동기화</span><h1>최신 신청자 데이터를 불러오는 중입니다.</h1><p>모바일, 다른 노트북, 다른 브라우저에서도 같은 구글시트 원본 데이터를 먼저 불러온 뒤 화면을 표시합니다.</p></div></section></main>`;
+}
+
+localStorage.setItem(DRIVE_AUTO_SYNC_STORAGE_KEY, "true");
+if (!localStorage.getItem(DRIVE_WEBHOOK_STORAGE_KEY) && DEFAULT_DRIVE_WEBHOOK_URL) {
+  localStorage.setItem(DRIVE_WEBHOOK_STORAGE_KEY, DEFAULT_DRIVE_WEBHOOK_URL);
+}
+
+renderGoogleSheetLoading();
+bootstrapGoogleSheetSource({ silent: true, render: false }).finally(() => {
+  googleSheetInitialReady = true;
+  render();
+});
 
 window.addEventListener("focus", () => {
   pullGoogleSheetIfStale(15000);
@@ -5410,7 +5436,6 @@ window.setInterval(() => {
 
 window.setInterval(() => {
   if (!isAdminAuthed()) return;
-  if (!isGoogleDriveAutoSyncEnabled()) return;
   if (!getDriveWebhookUrl()) return;
   syncGoogleDriveCore({ silent: true, prompt: false, reason: "interval" });
 }, 60000);

@@ -1,4 +1,4 @@
-const SPREADSHEET_ID = '여기에_구글시트_ID를_넣으세요';
+const SPREADSHEET_ID = '1r3StMV26oHR2I5COtd3jgCxrFBK9F8W7bzvSPJCNnQI';
 const TZ = 'Asia/Seoul';
 const BRAND = {
   navy: '#1f2937',
