@@ -2379,7 +2379,7 @@ function adminReservations() {
         <select class="select" id="reservationAttendanceFilter" aria-label="참석여부"><option value="">참석여부: 전체</option><option value="applied">신청</option><option value="attended">참석</option><option value="unattended">미참석</option></select>
         <select class="select" id="reservationDatePreset" aria-label="날짜"><option value="">전체날짜</option>${dateOptions}</select>
         <input class="input" id="reservationDateFilter" type="date" aria-label="날짜 직접 선택" />
-        <button class="btn btn-outline" type="button" data-action="clear-reservation-filter">필터 초기화</button>
+        <button class="btn btn-outline" type="button" data-action="clear-reservation-filter">전체 보기</button>
       </section>
       ${reservationSmsSelectMode ? `
         <section class="bulk-sms-panel" aria-label="예약 문자 일괄 발송">
@@ -2624,7 +2624,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=89">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=90">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -2846,7 +2846,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=89">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=90">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -3081,18 +3081,25 @@ function hydrateRoute(route, sub) {
   }
   if (route === "admin" && sub === "reservations" && isAdminAuthed()) {
     updateReservationTable();
-    ["reservationSearch", "reservationScreeningFilter", "reservationAttendanceFilter", "reservationDatePreset", "reservationDateFilter"].forEach((id) => {
-      document.getElementById(id)?.addEventListener("input", updateReservationTable);
-      document.getElementById(id)?.addEventListener("change", updateReservationTable);
-    });
-    document.getElementById("reservationDatePreset")?.addEventListener("change", () => {
-      const direct = document.getElementById("reservationDateFilter");
-      if (direct) direct.value = "";
+    document.getElementById("reservationSearch")?.addEventListener("input", updateReservationTable);
+    document.getElementById("reservationScreeningFilter")?.addEventListener("change", (event) => {
+      if (!event.target.value) return clearReservationFilters();
       updateReservationTable();
     });
-    document.getElementById("reservationDateFilter")?.addEventListener("change", () => {
+    document.getElementById("reservationAttendanceFilter")?.addEventListener("change", (event) => {
+      if (!event.target.value) return clearReservationFilters();
+      updateReservationTable();
+    });
+    document.getElementById("reservationDatePreset")?.addEventListener("change", (event) => {
+      const direct = document.getElementById("reservationDateFilter");
+      if (direct) direct.value = "";
+      if (!event.target.value) return clearReservationFilters();
+      updateReservationTable();
+    });
+    document.getElementById("reservationDateFilter")?.addEventListener("change", (event) => {
       const preset = document.getElementById("reservationDatePreset");
       if (preset) preset.value = "";
+      if (!event.target.value) return updateReservationTable();
       updateReservationTable();
     });
   }
@@ -3121,6 +3128,14 @@ function updateScreeningList() {
     return matchSearch && matchVenue && matchDate && matchSeat;
   });
   list.innerHTML = filtered.length ? filtered.map(screeningCard).join("") : `<div class="empty" style="grid-column:1/-1;">조건에 맞는 상영작이 없습니다.</div>`;
+}
+
+function clearReservationFilters() {
+  ["reservationSearch", "reservationScreeningFilter", "reservationAttendanceFilter", "reservationDatePreset", "reservationDateFilter"].forEach((fieldId) => {
+    const el = document.getElementById(fieldId);
+    if (el) el.value = "";
+  });
+  updateReservationTable();
 }
 
 function updateReservationTable() {
@@ -4722,13 +4737,7 @@ document.addEventListener("click", (event) => {
   if (action === "send-sms") sendReservationSmsById(id);
   if (action === "open-single-notice-sms") openSingleNoticeSmsModal(id);
   if (action === "delete-reservation") deleteReservation(id);
-  if (action === "clear-reservation-filter") {
-    ["reservationSearch", "reservationScreeningFilter", "reservationAttendanceFilter", "reservationDatePreset", "reservationDateFilter"].forEach((fieldId) => {
-      const el = document.getElementById(fieldId);
-      if (el) el.value = "";
-    });
-    updateReservationTable();
-  }
+  if (action === "clear-reservation-filter") clearReservationFilters();
   if (action === "export-reservations") exportReservations();
   if (action === "export-screenings") exportScreenings();
   if (action === "export-stats") exportStats();

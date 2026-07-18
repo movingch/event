@@ -3668,3 +3668,51 @@ th, td {
 @media (min-width: 721px) {
   .admin-top-actions .btn-danger { margin-left: 6px; }
 }
+
+/* v90: 신청자명단 필터 한 줄 압축 및 전체 보기 동작 보강 */
+.reservation-filters {
+  display: grid !important;
+  grid-template-columns: minmax(110px, .75fr) minmax(170px, 1.05fr) minmax(105px, .62fr) minmax(105px, .62fr) minmax(126px, .68fr) 88px !important;
+  gap: 6px !important;
+  align-items: center !important;
+  margin: 10px 0 12px !important;
+}
+.reservation-filters .input,
+.reservation-filters .select,
+.reservation-filters .btn {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 36px !important;
+  height: 36px !important;
+  padding: 6px 8px !important;
+  border-radius: 11px !important;
+  font-size: 12px !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+}
+.reservation-filters .btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: 850 !important;
+}
+@media (max-width: 980px) {
+  .reservation-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 560px) {
+  .reservation-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+  }
+  .reservation-filters .input,
+  .reservation-filters .select,
+  .reservation-filters .btn {
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 5px 6px !important;
+    border-radius: 10px !important;
+    font-size: 11px !important;
+  }
+}
