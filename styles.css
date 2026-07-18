@@ -3798,3 +3798,75 @@ th, td {
     min-height: 48px;
   }
 }
+
+/* v94 만족도조사 상세통계 */
+.survey-detail-stats-card { margin-top: 18px; }
+.survey-score-grid,
+.survey-question-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 16px 0 18px;
+}
+.survey-score-card {
+  border: 1px solid rgba(96, 70, 50, 0.14);
+  border-radius: 18px;
+  background: #fffaf2;
+  padding: 16px;
+  box-shadow: 0 10px 22px rgba(55, 39, 24, 0.06);
+}
+.survey-score-card h3 { margin: 0 0 10px; font-size: 1.02rem; }
+.survey-big-score {
+  font-size: 2.4rem;
+  line-height: 1;
+  font-weight: 900;
+  color: #b33f2f;
+  margin-bottom: 12px;
+}
+.survey-rating-bars,
+.survey-choice-bars { display: grid; gap: 8px; }
+.survey-rating-row,
+.survey-choice-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 42px;
+  gap: 8px;
+  align-items: center;
+  font-size: .86rem;
+}
+.survey-choice-row { grid-template-columns: minmax(86px, .8fr) 1fr 42px; }
+.survey-rating-label { color: #6d6259; font-weight: 700; }
+.survey-rating-track {
+  display: block;
+  min-height: 12px;
+  background: #efe1d2;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.survey-rating-fill {
+  display: block;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #b33f2f, #e4a33c);
+}
+.compact-section-title { margin-top: 18px; }
+.survey-comment-table td { vertical-align: top; line-height: 1.45; }
+.survey-comment-table th:nth-child(1), .survey-comment-table td:nth-child(1) { width: 18%; }
+.survey-comment-table th:nth-child(2), .survey-comment-table td:nth-child(2) { width: 10%; }
+.survey-comment-table th:nth-child(5), .survey-comment-table td:nth-child(5) { width: 14%; }
+.compact-empty { padding: 10px; font-size: .9rem; }
+@media (max-width: 720px) {
+  .survey-score-grid,
+  .survey-question-stat-grid { grid-template-columns: 1fr; }
+  .survey-score-card { padding: 14px; }
+  .survey-big-score { font-size: 2rem; }
+  .survey-choice-row { grid-template-columns: 1fr; gap: 4px; }
+  .survey-rating-row { grid-template-columns: 42px 1fr 38px; }
+}
+@media print {
+  .survey-score-grid,
+  .survey-question-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .survey-score-card { box-shadow: none; padding: 8px; break-inside: avoid; }
+  .survey-big-score { font-size: 1.5rem; }
+  .survey-rating-row, .survey-choice-row { font-size: 8px; gap: 4px; }
+  .survey-rating-track, .survey-rating-fill { min-height: 8px; height: 8px; }
+}

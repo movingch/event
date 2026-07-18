@@ -2494,6 +2494,128 @@ function reservationTable(reservations, options = {}) {
 }
 
 
+
+function surveyAnswerValue(response, keys = []) {
+  const answers = response?.answers || {};
+  for (const key of keys) {
+    if (answers[key] != null && String(answers[key]).trim() !== "") return answers[key];
+    if (response && response[key] != null && String(response[key]).trim() !== "") return response[key];
+  }
+  return "";
+}
+
+function surveyRatingValue(response, keys = []) {
+  const value = Number(surveyAnswerValue(response, keys));
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function surveyAverage(values) {
+  const numbers = values.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  if (!numbers.length) return "-";
+  return (numbers.reduce((sum, n) => sum + n, 0) / numbers.length).toFixed(1);
+}
+
+function surveyResponseList() {
+  return Array.isArray(state.surveyResponses) ? state.surveyResponses : [];
+}
+
+function surveyRatingDistribution(responses, keys) {
+  const counts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  responses.forEach((response) => {
+    const rating = Math.round(surveyRatingValue(response, keys));
+    if (counts[rating] != null) counts[rating] += 1;
+  });
+  return counts;
+}
+
+function surveyRatingBarsHtml(responses, keys) {
+  const counts = surveyRatingDistribution(responses, keys);
+  const max = Math.max(1, ...Object.values(counts));
+  return `
+    <div class="survey-rating-bars">
+      ${[5,4,3,2,1].map((score) => `
+        <div class="survey-rating-row">
+          <span class="survey-rating-label">${score}점</span>
+          <span class="survey-rating-track"><span class="survey-rating-fill" style="width:${Math.max(4, Math.round((counts[score] / max) * 100))}%"></span></span>
+          <strong>${counts[score]}건</strong>
+        </div>
+      `).join("")}
+    </div>`;
+}
+
+function surveyChoiceStats(responses, question) {
+  const choices = String(question.choices || "").split(",").map((item) => item.trim()).filter(Boolean);
+  const counts = new Map(choices.map((choice) => [choice, 0]));
+  responses.forEach((response) => {
+    const raw = surveyAnswerValue(response, [question.id, question.title]);
+    const values = Array.isArray(raw) ? raw : String(raw || "").split(/[,|]/).map((item) => item.trim()).filter(Boolean);
+    values.forEach((value) => counts.set(value, (counts.get(value) || 0) + 1));
+  });
+  return [...counts.entries()].map(([name, count]) => ({ name, count })).filter((item) => item.name);
+}
+
+function surveyChoiceBarsHtml(rows) {
+  if (!rows.length) return `<div class="empty compact-empty">응답이 없습니다.</div>`;
+  const max = Math.max(1, ...rows.map((row) => row.count));
+  return `<div class="survey-choice-bars">${rows.map((row) => `
+    <div class="survey-choice-row">
+      <span>${esc(row.name)}</span>
+      <span class="survey-rating-track"><span class="survey-rating-fill" style="width:${Math.max(4, Math.round((row.count / max) * 100))}%"></span></span>
+      <strong>${row.count}건</strong>
+    </div>`).join("")}</div>`;
+}
+
+function surveyDetailedStatsSection() {
+  const responses = surveyResponseList();
+  const dispatches = Array.isArray(state.surveyDispatches) ? state.surveyDispatches : [];
+  const attendedTotal = (state.reservations || []).filter((r) => r.attended === true).reduce((sum, r) => sum + Number(r.attendedSeats || r.seats || 1), 0);
+  const sentTotal = dispatches.filter((d) => !String(d.reservationId || "").startsWith("test-")).length;
+  const responseRate = sentTotal ? `${Math.round((responses.length / sentTotal) * 100)}%` : "-";
+  const overallAvg = surveyAverage(responses.map((r) => surveyRatingValue(r, ["q-overall", "overallRating", "전체만족도"])));
+  const venueAvg = surveyAverage(responses.map((r) => surveyRatingValue(r, ["q-venue", "venueRating", "상영장소만족도"])));
+  const guideAvg = surveyAverage(responses.map((r) => surveyRatingValue(r, ["q-guide", "guideRating", "진행안내만족도"])));
+  const returnAvg = surveyAverage(responses.map((r) => surveyRatingValue(r, ["q-return", "returnIntent", "재참여의향"])));
+  const activeQuestions = (state.surveyQuestions || defaultSurveyQuestions()).filter((q) => q.enabled !== false).sort((a,b) => Number(a.order || 0) - Number(b.order || 0));
+  const textQuestions = activeQuestions.filter((q) => q.type === "text");
+  const latestComments = responses.slice().reverse().slice(0, 20);
+  return `
+    <section class="card survey-detail-stats-card print-keep">
+      <div class="section-title">
+        <div>
+          <h2>만족도조사 응답 통계</h2>
+          <p>관람 후 설문 응답을 수치, 그래프, 주관식 의견으로 확인합니다. 구글시트 만족도_응답·만족도_통계 탭에도 함께 기록됩니다.</p>
+        </div>
+        <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${responses.length}건</span>
+      </div>
+      <div class="metric-grid survey-metric-grid">
+        <div class="metric-card"><div class="metric-label">응답수</div><div class="metric-value">${responses.length}</div><div class="metric-note">설문 제출 기준</div></div>
+        <div class="metric-card"><div class="metric-label">문자 발송</div><div class="metric-value">${sentTotal}</div><div class="metric-note">테스트 제외 발송 기록</div></div>
+        <div class="metric-card"><div class="metric-label">응답률</div><div class="metric-value">${responseRate}</div><div class="metric-note">발송 대비 응답</div></div>
+        <div class="metric-card"><div class="metric-label">전체 만족도</div><div class="metric-value">${overallAvg}</div><div class="metric-note">5점 만점 평균</div></div>
+      </div>
+      <div class="survey-score-grid">
+        <div class="survey-score-card"><h3>전체 만족도</h3><div class="survey-big-score">${overallAvg}</div>${surveyRatingBarsHtml(responses, ["q-overall", "overallRating", "전체만족도"])}</div>
+        <div class="survey-score-card"><h3>상영 장소/환경</h3><div class="survey-big-score">${venueAvg}</div>${surveyRatingBarsHtml(responses, ["q-venue", "venueRating", "상영장소만족도"])}</div>
+        <div class="survey-score-card"><h3>진행/안내</h3><div class="survey-big-score">${guideAvg}</div>${surveyRatingBarsHtml(responses, ["q-guide", "guideRating", "진행안내만족도"])}</div>
+        <div class="survey-score-card"><h3>재참여 의향</h3><div class="survey-big-score">${returnAvg}</div>${surveyRatingBarsHtml(responses, ["q-return", "returnIntent", "재참여의향"])}</div>
+      </div>
+      <div class="section-title compact-section-title"><div><h3>영화별 만족도 응답 현황</h3><p>각 영화별 발송·응답·평균 점수를 확인합니다.</p></div></div>
+      ${surveyResponseStatsTable()}
+      <div class="survey-question-stat-grid">
+        ${activeQuestions.filter((q) => ["single", "multiple"].includes(q.type)).map((q) => `
+          <div class="survey-score-card"><h3>${esc(q.title)}</h3>${surveyChoiceBarsHtml(surveyChoiceStats(responses, q))}</div>
+        `).join("")}
+      </div>
+      <div class="section-title compact-section-title"><div><h3>최근 주관식 응답</h3><p>좋았던 점과 개선 의견을 한눈에 확인합니다.</p></div></div>
+      ${responses.length ? `<div class="table-wrap survey-comment-table-wrap"><table class="survey-comment-table"><thead><tr><th>영화</th><th>응답자</th><th>좋았던 점</th><th>개선 의견</th><th>응답일</th></tr></thead><tbody>${latestComments.map((r) => {
+        const good = surveyAnswerValue(r, ["q-good", "goodComment", "좋았던점"]);
+        const improve = surveyAnswerValue(r, ["q-improve", "improveComment", "개선의견"]);
+        const fallbackTexts = textQuestions.map((q) => surveyAnswerValue(r, [q.id, q.title])).filter(Boolean).join(" / ");
+        return `<tr><td>${esc(cleanMovieTitle(r.movieTitle || ""))}</td><td>${esc(r.name || "익명")}</td><td>${esc(good || fallbackTexts || "-")}</td><td>${esc(improve || "-")}</td><td>${esc(formatDateTime(r.createdAt || r.submittedAt || r.timestamp || ""))}</td></tr>`;
+      }).join("")}</tbody></table></div>` : `<div class="empty">아직 만족도조사 응답이 없습니다. 테스트 링크를 열어 응답을 저장하면 이곳에 표시됩니다.</div>`}
+    </section>`;
+}
+
 function adminStats() {
   const byMovie = groupByMovie();
   const byVenue = groupByVenue();
@@ -2522,6 +2644,7 @@ function adminStats() {
         <div class="metric-card"><div class="metric-label">참석</div><div class="metric-value">${actualAttendees(getOpeningScreening().id)}</div><div class="metric-note">현장 참석 확인 기준</div></div>
       </div>
     </section>` : ""}
+    ${surveyDetailedStatsSection()}
   `;
 }
 
@@ -2641,7 +2764,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=91">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=94">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -2785,16 +2908,6 @@ function adminSurvey() {
       </section>
     </section>
 
-    <section class="card survey-test-card">
-      <div class="section-title">
-        <div>
-          <h3>만족도조사 테스트</h3>
-          <p>운영 전에 설문 링크가 열리는지, 문자 발송과 구글시트 기록이 되는지 확인합니다. 테스트 기록은 실제 응답과 구분되도록 이름 뒤에 TEST가 붙습니다.</p>
-        </div>
-        <span class="badge ${settings.enabled ? "badge-ok" : ""}">테스트 전 설문 ${surveySettingLabel(settings.enabled)}</span>
-      </div>
-      ${surveyTestPanelHtml()}
-    </section>
 
     <section class="card">
       <h3>전체 설정</h3>
@@ -2877,6 +2990,17 @@ function adminSurvey() {
         <h3>최근 문자 발송 기록</h3>
         ${dispatchRows.length ? `<div class="roster-list">${dispatchRows.map((d) => `<div class="roster-item"><strong>${esc(d.name || "이름 없음")} · ${esc(d.status)}</strong><span>${esc(cleanMovieTitle(d.movieTitle || ""))} · ${esc(d.sentAt ? formatDateTime(d.sentAt) : d.createdAt ? formatDateTime(d.createdAt) : "")}</span></div>`).join("")}</div>` : `<div class="empty">아직 설문 문자 발송 기록이 없습니다.</div>`}
       </div>
+    </section>
+
+    <section class="card survey-test-card">
+      <div class="section-title">
+        <div>
+          <h3>만족도조사 테스트</h3>
+          <p>운영 전에 설문 링크가 열리는지, 문자 발송과 구글시트 기록이 되는지 확인합니다. 테스트 기록은 실제 응답과 구분되도록 이름 뒤에 TEST가 붙습니다.</p>
+        </div>
+        <span class="badge ${settings.enabled ? "badge-ok" : ""}">테스트 전 설문 ${surveySettingLabel(settings.enabled)}</span>
+      </div>
+      ${surveyTestPanelHtml()}
     </section>
   `;
 }
@@ -2987,7 +3111,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=91">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=94">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
