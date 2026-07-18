@@ -1155,7 +1155,7 @@ function getTotals() {
 function appHeader() {
   return `
     <header class="header">
-      <a class="logo" href="/?v=116&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
+      <a class="logo" href="/?v=118&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
         <div class="logo-mark"><img src="assets/munae-horse-logo.png" alt="머내마을영화제 말 캐릭터 로고"></div>
         <div>
           <div class="logo-title">제9회 머내마을영화제</div>
@@ -1167,7 +1167,7 @@ function appHeader() {
         <a href="#/apply">영화 신청</a>
         <a href="#/donate">후원하기</a>
         <a href="#/staff" class="staff-link utility-link">STAFF</a>
-        <a href="/admin?v=116&fresh=1" class="primary-link admin-link utility-link">ADMIN</a>
+        <a href="/admin?v=118&fresh=1" class="primary-link admin-link utility-link">ADMIN</a>
       </nav>
     </header>
   `;
@@ -1178,13 +1178,31 @@ function adminHashParts() {
   const parts = hash.split("/").filter(Boolean);
   if (!isAdminRoutePath()) return { route: parts[0] || "", sub: parts[1] || "" };
   if (!parts.length) return { route: "admin", sub: "overview" };
-  // v115: /admin, /adminor 안에서는 #/stats 처럼 메뉴명만 있어도 관리 메뉴로 해석합니다.
-  // 과거 주소 #/admin/stats 도 그대로 호환합니다.
-  if (parts[0] === "admin" || parts[0] === "adminor") return { route: "admin", sub: parts[1] || "overview" };
+  // v118: /admin, /adminor 내부에서는 해시가 반드시 메뉴명 하나로만 해석됩니다.
+  // 과거/캐시 주소(#/admin/surveyView, #/adminor/surveyView)는 즉시 같은 메뉴로 호환 처리합니다.
+  if (["admin", "adminor"].includes(parts[0])) return { route: "admin", sub: parts[1] || "overview" };
   return { route: "admin", sub: parts[0] || "overview" };
 }
 
+function canonicalizeAdminHash() {
+  if (!isAdminRoutePath()) return false;
+  const raw = window.location.hash || "";
+  const hash = raw.replace(/^#\/?/, "");
+  const parts = hash.split("/").filter(Boolean);
+  if (!parts.length) return false;
+  const adminPrefixes = ["admin", "adminor"];
+  if (!adminPrefixes.includes(parts[0])) return false;
+  const nextTab = parts[1] || "overview";
+  const cleanHash = `#/${nextTab}`;
+  if (raw !== cleanHash) {
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${cleanHash}`);
+    return true;
+  }
+  return false;
+}
+
 function render() {
+  canonicalizeAdminHash();
   const hash = window.location.hash.replace(/^#\/?/, "");
   const [rawRoute = "", rawSub = ""] = hash.split("/");
   const adminParts = adminHashParts();
@@ -1462,7 +1480,7 @@ function renderOpeningTicketing() {
           <h2>개막작 신청 현황</h2>
           <p>개막작 신청과 일반 신청을 구분해 보여줍니다. 실제 운영 일정과 정원은 관리자 대시보드에서 수정할 수 있습니다.</p>
         </div>
-        <a class="btn btn-outline" href="#/admin/opening">관리자 설정</a>
+        <a class="btn btn-outline" href="#/opening">관리자 설정</a>
       </div>
       <div class="opening-summary-grid">
         <div class="metric-card"><div class="metric-label">개막작 신청</div><div class="metric-value">${stats.earlybirdSeats}</div><div class="metric-note">신청 인원</div></div>
@@ -2000,8 +2018,8 @@ function renderAdminLogin() {
 function adminTabLink(tab, label, active) {
   const labelEsc = esc(label);
   const tabEsc = esc(tab);
-  // v115: /admin(일반)과 /adminor(마스타) 안에서는 메뉴 hash를 단순화해 라우트 꼬임을 막습니다.
-  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="#/${tabEsc}" data-admin-tab="${tabEsc}" role="button">${labelEsc}</a>`;
+  // v118: 관리자 내부 메뉴는 /admin 또는 /adminor 경로 + #/메뉴명 규칙만 사용합니다.
+  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="#/${tabEsc}" data-admin-tab="${tabEsc}" data-admin-href="#/${tabEsc}" role="button">${labelEsc}</a>`;
 }
 
 function renderAdminPanel(active) {
@@ -2641,6 +2659,8 @@ function surveyChoiceBarsHtml(rows) {
 
 function surveyDetailedStatsSection() {
   const responses = surveyResponseList();
+  // v118: 이전 배포/캐시에서 남아 있던 allResponses 참조가 있어도 상세통계가 죽지 않도록 같은 스코프에서 보장합니다.
+  const allResponses = responses;
   const dispatches = Array.isArray(state.surveyDispatches) ? state.surveyDispatches : [];
   const attendedTotal = (state.reservations || []).filter((r) => r.attended === true).reduce((sum, r) => sum + Number(r.attendedSeats || r.seats || 1), 0);
   const sentTotal = dispatches.length;
@@ -2659,7 +2679,7 @@ function surveyDetailedStatsSection() {
           <h2>만족도조사 응답 통계</h2>
           <p>관람 후 설문 응답을 수치, 그래프, 주관식 의견으로 확인합니다. 구글시트 만족도_응답·만족도_통계 탭에도 함께 기록됩니다.</p>
         </div>
-        <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${allResponses.length}건</span>
+        <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${responses.length}건</span>
       </div>
       <div class="metric-grid survey-metric-grid">
         <div class="metric-card"><div class="metric-label">응답수</div><div class="metric-value">${responses.length}</div><div class="metric-note">설문 제출 기준</div></div>
@@ -2838,7 +2858,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=116">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=118">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3230,7 +3250,7 @@ function adminSurveyView() {
           <h2>만족도조사현황</h2>
           <p>설문 수신 명단, 응답 목록, 실제 응답 내용을 일반관리자도 확인할 수 있습니다. 테스트 응답도 통계에 포함됩니다.</p>
         </div>
-        <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${allResponses.length}건</span>
+        <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${responses.length}건</span>
       </div>
       ${surveyDetailedStatsSection()}
     </section>
@@ -3430,7 +3450,7 @@ function adminBackup() {
               <button class="btn btn-dark" type="button" data-action="force-google-backup-from-supabase">Supabase 최신 데이터를 구글시트로 강제 백업</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=116">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=118">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -5376,7 +5396,6 @@ async function postSupabaseGoogleBackup(reason = "server-supabase-auto") {
 }
 
 async function runGoogleBackupPipeline(reason = "background") {
-  if (!getDriveWebhookUrl()) return false;
   if (googleBackupInFlight) {
     googleBackupPendingReason = reason || "pending-google-backup";
     return false;
@@ -5405,7 +5424,8 @@ async function runGoogleBackupPipeline(reason = "background") {
 }
 
 function scheduleGoogleBackupSoon(reason = "background") {
-  if (!getDriveWebhookUrl()) return;
+  // v118: 자동백업은 강제백업과 같은 서버 Supabase 원본 백업을 우선 사용하므로,
+  // 브라우저의 구글 URL 설정이 비어 있어도 예약합니다. URL은 Vercel 환경변수에서 처리됩니다.
   if (googleBackupSoonTimer) window.clearTimeout(googleBackupSoonTimer);
   googleBackupSoonTimer = window.setTimeout(() => {
     googleBackupSoonTimer = null;
@@ -5725,12 +5745,13 @@ function todayFile() {
 
 function goAdminTab(tab) {
   if (!isAdminAuthed()) {
-    window.location.hash = "#/overview";
-    render();
+    const nextHash = "#/overview";
+    if (window.location.hash === nextHash) render();
+    else window.location.hash = nextHash;
     return;
   }
   const safeTab = allowedAdminTabsForMode(adminMode()).includes(tab) ? tab : "overview";
-  const nextHash = `#/admin/${safeTab}`;
+  const nextHash = `#/${safeTab}`;
   if (window.location.hash === nextHash) render();
   else window.location.hash = nextHash;
 }
@@ -5759,7 +5780,7 @@ document.addEventListener("click", (event) => {
   const id = button.dataset.id;
   if (action === "go-home") {
     event.preventDefault();
-    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=116&fresh=1";
+    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=118&fresh=1";
     else { window.location.hash = "#/"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     return;
   }
@@ -5818,7 +5839,7 @@ document.addEventListener("click", (event) => {
   if (action === "clear-survey-responses") clearSurveyResponses();
   if (action === "print") window.print();
   if (action === "print-admin-report") printAdminReport();
-  if (action === "edit-screening") { selectedScreeningId = id; window.location.hash = "#/admin/screenings"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  if (action === "edit-screening") { selectedScreeningId = id; window.location.hash = "#/screenings"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
   if (action === "cancel-edit") { selectedScreeningId = null; render(); }
   if (action === "delete-screening") deleteScreening(id);
   if (action === "save-master-staff-pin") saveMasterStaffPin();
@@ -5904,7 +5925,7 @@ document.addEventListener("change", (event) => {
 
 window.addEventListener("hashchange", () => {
   const hash = window.location.hash.replace(/^#\/?/, "");
-  if (!hash.startsWith("admin/screenings")) selectedScreeningId = null;
+  if (!["screenings", "admin/screenings", "adminor/screenings"].some((prefix) => hash.startsWith(prefix))) selectedScreeningId = null;
   render();
 });
 
