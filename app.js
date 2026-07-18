@@ -2629,7 +2629,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=77">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=87">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -2851,7 +2851,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=77">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=87">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
