@@ -1155,7 +1155,7 @@ function getTotals() {
 function appHeader() {
   return `
     <header class="header">
-      <a class="logo" href="/?v=112&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
+      <a class="logo" href="/?v=113&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
         <div class="logo-mark"><img src="assets/munae-horse-logo.png" alt="머내마을영화제 말 캐릭터 로고"></div>
         <div>
           <div class="logo-title">제9회 머내마을영화제</div>
@@ -1983,7 +1983,8 @@ function renderAdminLogin() {
 
 function adminTabLink(tab, label, active) {
   const labelEsc = esc(label);
-  return `<button class="admin-tab ${tab === active ? "active" : ""}" type="button" data-action="admin-tab" data-admin-tab="${esc(tab)}">${labelEsc}</button>`;
+  const tabEsc = esc(tab);
+  return `<a class="admin-tab ${tab === active ? "active" : ""}" href="#/admin/${tabEsc}" data-admin-tab="${tabEsc}">${labelEsc}</a>`;
 }
 
 function adminTopReportActions(active) {
@@ -3073,6 +3074,19 @@ function adminSurvey() {
       </div>
     </section>
 
+    <section class="card survey-admin-danger-card">
+      <div class="section-head compact-head">
+        <div>
+          <h3>만족도조사 기록 관리</h3>
+          <p>수신 명단, 문자발송 기록, 응답 현황을 Supabase 원본 기준으로 초기화합니다. 구글시트는 이후 자동 백업으로 같은 상태를 따라갑니다.</p>
+        </div>
+      </div>
+      <div class="cta-row">
+        <button class="btn btn-danger" type="button" data-action="clear-survey-dispatches">만족도 수신·문자발송내역 초기화</button>
+        <button class="btn btn-danger" type="button" data-action="clear-survey-responses">만족도 응답현황 초기화</button>
+      </div>
+    </section>
+
     <section class="card survey-test-card">
       <div class="section-title">
         <div>
@@ -3227,6 +3241,38 @@ function deleteSurveyDispatch(id) {
   postSupabaseState("delete-survey-dispatch", { skipGoogleBackup: true }).then(() => scheduleGoogleBackupSoon("delete-survey-dispatch")).catch((error) => console.warn("만족도 발송 기록 삭제 동기화 실패", error));
   render();
   toast("만족도조사 발송 기록을 삭제했습니다.");
+}
+
+function clearSurveyDispatches() {
+  if (!isMasterAdminAuthed()) return toast("마스타관리자만 초기화할 수 있습니다.");
+  const count = Array.isArray(state.surveyDispatches) ? state.surveyDispatches.length : 0;
+  if (!confirm(`만족도조사 수신 명단과 문자발송내역 ${count}건을 모두 초기화할까요?\n응답 내용은 삭제되지 않습니다.`)) return;
+  state.surveyDispatches = [];
+  persist({ autoSync: false });
+  postSupabaseState("clear-survey-dispatches", { skipGoogleBackup: true })
+    .then(() => scheduleGoogleBackupSoon("clear-survey-dispatches"))
+    .catch((error) => console.warn("만족도 발송내역 초기화 동기화 실패", error));
+  render();
+  toast("만족도조사 수신·문자발송내역을 초기화했습니다.");
+}
+
+function clearSurveyResponses() {
+  if (!isMasterAdminAuthed()) return toast("마스타관리자만 초기화할 수 있습니다.");
+  const count = Array.isArray(state.surveyResponses) ? state.surveyResponses.length : 0;
+  if (!confirm(`만족도조사 응답현황 ${count}건을 모두 초기화할까요?\n발송 기록은 유지되며 응답 여부 표시는 미응답으로 돌아갑니다.`)) return;
+  state.surveyResponses = [];
+  state.surveyDispatches = (state.surveyDispatches || []).map((dispatch) => {
+    const next = { ...dispatch };
+    delete next.respondedAt;
+    if (String(next.status || "").includes("응답")) next.status = next.sentAt ? "발송완료" : (next.test ? "테스트생성" : "발송대기");
+    return next;
+  });
+  persist({ autoSync: false });
+  postSupabaseState("clear-survey-responses", { skipGoogleBackup: true })
+    .then(() => scheduleGoogleBackupSoon("clear-survey-responses"))
+    .catch((error) => console.warn("만족도 응답현황 초기화 동기화 실패", error));
+  render();
+  toast("만족도조사 응답현황을 초기화했습니다.");
 }
 
 function surveyResponseStatsTable() {
@@ -5178,6 +5224,8 @@ const DRIVE_LAST_PULL_STORAGE_KEY = "munae9DriveLastPullAt";
 const DEFAULT_DRIVE_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwc18Y1SArlzYkXfnw1so5SsFKUMg3v9-RgJagkvgihNgEqRuS-eJtM7fKpMfgqrnyE/exec";
 let driveAutoSyncTimer = null;
 let googleBackupSoonTimer = null;
+let googleBackupInFlight = false;
+let googleBackupPendingReason = "";
 let googleSheetSourceLoaded = false;
 let googleSheetPulling = false;
 let googleSheetLastError = "";
@@ -5268,11 +5316,32 @@ function queueGoogleSheetBackupRetries(reason = "data-change") {
   clearGoogleBackupRetries();
   [2500, 15000, 60000].forEach((delay, index) => {
     const timer = window.setTimeout(async () => {
-      const ok = await syncGoogleDriveCore({ silent: true, prompt: false, reason: `${reason}-retry-${index + 1}`, allowZeroApplicants: false });
+      const ok = await runGoogleBackupPipeline(`${reason}-retry-${index + 1}`);
       if (ok) clearGoogleBackupRetries();
     }, delay);
     googleBackupRetryTimers.push(timer);
   });
+}
+
+async function runGoogleBackupPipeline(reason = "background") {
+  if (!getDriveWebhookUrl()) return false;
+  if (googleBackupInFlight) {
+    googleBackupPendingReason = reason || "pending-google-backup";
+    return false;
+  }
+  googleBackupInFlight = true;
+  try {
+    const ok = await syncGoogleDriveCore({ silent: true, prompt: false, reason, allowZeroApplicants: false });
+    if (!ok) queueGoogleSheetBackupRetries(reason);
+    return ok;
+  } finally {
+    googleBackupInFlight = false;
+    if (googleBackupPendingReason) {
+      const nextReason = googleBackupPendingReason;
+      googleBackupPendingReason = "";
+      window.setTimeout(() => runGoogleBackupPipeline(`${nextReason}-pending`), 350);
+    }
+  }
 }
 
 function scheduleGoogleBackupSoon(reason = "background") {
@@ -5280,8 +5349,8 @@ function scheduleGoogleBackupSoon(reason = "background") {
   if (googleBackupSoonTimer) window.clearTimeout(googleBackupSoonTimer);
   googleBackupSoonTimer = window.setTimeout(() => {
     googleBackupSoonTimer = null;
-    syncGoogleDriveCore({ silent: true, prompt: false, reason, allowZeroApplicants: false });
-  }, 900);
+    runGoogleBackupPipeline(reason);
+  }, 500);
   queueGoogleSheetBackupRetries(reason);
 }
 
@@ -5307,7 +5376,7 @@ async function forceBackupSupabaseToGoogleSheet() {
 async function postGoogleDrivePayload(url, payload) {
   // v111: 구글시트 백업은 원본 저장을 막으면 안 됩니다. 오래 걸리면 실패로 기록하고 자동 재시도합니다.
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  const timeout = window.setTimeout(() => controller.abort(), 45000);
   let response;
   try {
     response = await fetch("/api/google-drive-sync", {
@@ -5608,9 +5677,9 @@ document.addEventListener("click", (event) => {
     return;
   }
   const adminTabAnchor = event.target.closest("[data-admin-tab]");
-  if (adminTabAnchor && !event.target.closest("[data-action]")) {
+  if (adminTabAnchor) {
     event.preventDefault();
-    const tab = adminTabAnchor.dataset.adminTab || "overview";
+    const tab = adminTabAnchor.dataset.adminTab || adminTabAnchor.dataset.tab || "overview";
     goAdminTab(tab);
     return;
   }
@@ -5625,7 +5694,7 @@ document.addEventListener("click", (event) => {
   const id = button.dataset.id;
   if (action === "go-home") {
     event.preventDefault();
-    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=112&fresh=1";
+    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=113&fresh=1";
     else { window.location.hash = "#/"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     return;
   }
@@ -5680,6 +5749,8 @@ document.addEventListener("click", (event) => {
   if (action === "send-survey-test-sms") createSurveyTestLink({ sendSms: true });
   if (action === "delete-survey-response") deleteSurveyResponse(id);
   if (action === "delete-survey-dispatch") deleteSurveyDispatch(id);
+  if (action === "clear-survey-dispatches") clearSurveyDispatches();
+  if (action === "clear-survey-responses") clearSurveyResponses();
   if (action === "print") window.print();
   if (action === "print-admin-report") printAdminReport();
   if (action === "edit-screening") { selectedScreeningId = id; window.location.hash = "#/admin/screenings"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
