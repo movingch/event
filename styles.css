@@ -3500,3 +3500,64 @@ th, td {
     font-size: 10px;
   }
 }
+
+/* v86: 후원 카드 단일 CTA, 모바일 관람신청/신청완료 버튼 확대 */
+.hero-donate-only {
+  justify-content: flex-start;
+}
+.hero-donate-btn {
+  min-width: 132px;
+  min-height: 48px;
+  padding: 13px 24px;
+}
+.screening-card[data-screening-card] {
+  cursor: pointer;
+}
+.screening-card[data-screening-card]:active {
+  transform: translateY(1px);
+}
+.booking-submit-btn {
+  min-width: 150px;
+  min-height: 52px;
+  padding: 14px 24px;
+  font-size: 16px;
+  border-radius: 16px;
+}
+@media (max-width: 640px) {
+  .hero-donate-only .hero-donate-btn {
+    width: 100%;
+    min-height: 58px;
+    font-size: 18px;
+    border-radius: 18px;
+  }
+  .screening-card-actions.compact-actions {
+    align-items: stretch;
+  }
+  .compact-book-btn {
+    min-height: 46px !important;
+    padding: 10px 8px !important;
+    border-radius: 13px !important;
+    font-size: 13px !important;
+    font-weight: 950 !important;
+  }
+  .compact-staff-btn {
+    min-height: 38px !important;
+    align-self: center;
+  }
+  #bookingModal .form-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  #bookingModal .form-actions .btn {
+    width: 100%;
+  }
+  #bookingModal .booking-submit-btn {
+    min-height: 58px;
+    font-size: 18px;
+    border-radius: 18px;
+  }
+  #bookingModal .modal-body {
+    padding: 18px 16px 20px;
+  }
+}

@@ -1185,9 +1185,8 @@ function renderGeneralHome() {
           <div class="eyebrow">순수 주민주도영화제 · ${esc(festivalPeriodLabel())}</div>
           <h1>마을 주민이 직접 만드는 영화제에 함께해주세요.</h1>
           <p>${esc(DONATION_MESSAGE)}</p>
-          <div class="cta-row">
-            <a class="btn btn-light" href="#/apply">영화 신청하기</a>
-            <a class="btn btn-primary" href="#/donate">후원하기</a>
+          <div class="cta-row hero-donate-only">
+            <a class="btn btn-primary hero-donate-btn" href="#/donate">후원하기</a>
           </div>
         </div>
 
@@ -2981,7 +2980,7 @@ function openOpeningBooking(screening) {
       </div>
       <p class="help">개막식 신청은 현장 안내에 따라 입장합니다.</p>
       <div class="form-actions">
-        <button class="btn btn-dark" type="submit">개막작 신청 완료</button>
+        <button class="btn btn-dark booking-submit-btn" type="submit">개막작 신청 완료</button>
         <button class="btn btn-outline" type="button" data-action="close-modal">취소</button>
       </div>
     </form>
@@ -3042,7 +3041,7 @@ function openBooking(screeningId) {
         <span>주민들이 직접 만드는 영화제가 계속 이어질 수 있도록 작은 후원의 손길을 보태주세요.</span>
       </div>
       <div class="form-actions">
-        <button class="btn btn-dark" type="submit">신청 완료</button>
+        <button class="btn btn-dark booking-submit-btn" type="submit">신청 완료</button>
         <button class="btn btn-outline" type="button" data-action="close-modal">취소</button>
       </div>
     </form>
@@ -4592,6 +4591,11 @@ document.addEventListener("click", (event) => {
     event.preventDefault();
     const tab = adminTabAnchor.dataset.adminTab || "overview";
     goAdminTab(tab);
+    return;
+  }
+  const screeningCardForBooking = event.target.closest("[data-screening-card]");
+  if (screeningCardForBooking && !event.target.closest("button, input, select, textarea, a, label")) {
+    openBooking(screeningCardForBooking.dataset.screeningCard);
     return;
   }
   const button = event.target.closest("[data-action]");
