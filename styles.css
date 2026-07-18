@@ -3633,3 +3633,38 @@ th, td {
   body.admin-print-mode .reservation-table .col-note { width: 18% !important; }
   body.admin-print-mode .reservation-table .col-manage { display: none !important; }
 }
+
+/* v89: 관리자 공통 저장/출력 버튼 한 줄 정렬 */
+.admin-top-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+.admin-top-actions .btn {
+  min-height: 40px;
+  padding: 10px 15px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .admin-top-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .admin-top-actions .btn {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 7px;
+    font-size: 12px;
+  }
+  .section-title:has(.admin-top-actions) {
+    align-items: stretch;
+  }
+}
+@media (min-width: 721px) {
+  .admin-top-actions .btn-danger { margin-left: 6px; }
+}

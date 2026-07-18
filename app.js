@@ -1877,7 +1877,7 @@ function renderAdmin(tab) {
         <p>상영관 관리, 신청자 명단, 정원 초과 여부, 실제 참석 현황, 통계와 백업을 관리합니다.</p>
       </div>
       <div class="cta-row admin-top-actions">
-        <button class="btn btn-danger" type="button" data-action="admin-logout">로그아웃</button>
+        ${adminTopReportActions(active)}
       </div>
     </section>
     <section class="admin-layout">
@@ -1931,21 +1931,20 @@ function adminTabLink(tab, label, active) {
   return `<a class="admin-tab ${tab === active ? "active" : ""}" href="${href}" data-admin-tab="${esc(tab)}">${labelEsc}</a>`;
 }
 
+function adminTopReportActions(active) {
+  const reportTabs = ["overview", "reservations", "stats"];
+  const reportButtons = reportTabs.includes(active) ? `
+    <button class="btn btn-dark" type="button" data-action="export-stats">통계엑셀저장</button>
+    <button class="btn btn-outline" type="button" data-action="export-reservations">신청자엑셀저장</button>
+    <button class="btn btn-primary" type="button" data-action="print-admin-report">인쇄PDF저장</button>
+  ` : "";
+  return `${reportButtons}<button class="btn btn-danger" type="button" data-action="admin-logout">로그아웃</button>`;
+}
+
 function adminOverview() {
   const totals = getTotals();
   const risky = sortedScreenings().filter((s) => statusInfo(s).className !== "ok");
   return `
-    <section class="card admin-report-tools screen-only">
-      <div class="section-title compact-title">
-        <div><h2>운영요약 저장·출력</h2><p>운영요약 화면 기준으로 통계와 신청자 자료를 저장하거나 A4 인쇄/PDF로 저장합니다.</p></div>
-        <div class="cta-row report-action-row">
-          <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
-          <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
-          <button class="btn btn-primary" type="button" data-action="print-admin-report">인쇄/PDF저장</button>
-        </div>
-      </div>
-    </section>
-
     <section class="metric-grid">
       <div class="metric-card"><div class="metric-label">총 신청 건수</div><div class="metric-value">${totals.totalApplicationCount}</div><div class="metric-note">신청 인원 ${totals.totalAppliedSeats}명</div></div>
       <div class="metric-card"><div class="metric-label">신청 인원</div><div class="metric-value">${totals.totalAppliedSeats}</div><div class="metric-note">신청 ${totals.totalApplicationCount}건 · 신청률 ${totals.occupancy}%</div></div>
@@ -1965,7 +1964,6 @@ function adminOverview() {
           <h2>영화별 신청·참석 현황</h2>
           <p>영화별 신청, 참석, 미참석 인원을 함께 확인하세요.</p>
         </div>
-        <button class="btn btn-outline" type="button" data-action="export-stats">통계 엑셀저장</button>
       </div>
       ${screeningTable(sortedScreenings(), { compact: false })}
     </section>
@@ -2373,8 +2371,6 @@ function adminReservations() {
         </div>
         <div class="cta-row">
           <button class="btn btn-primary" type="button" data-action="toggle-bulk-sms">문자전송하기</button>
-          <button class="btn btn-dark" type="button" data-action="print-admin-report">인쇄/PDF저장</button>
-          <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
         </div>
       </div>
       <section class="filters reservation-filters" aria-label="신청자 필터">
@@ -2509,17 +2505,6 @@ function adminStats() {
         <div class="metric-card"><div class="metric-label">참석</div><div class="metric-value">${actualAttendees(getOpeningScreening().id)}</div><div class="metric-note">현장 참석 확인 기준</div></div>
       </div>
     </section>` : ""}
-
-    <section class="card">
-      <div class="section-title">
-        <div><h2>운영용 통계 내보내기</h2><p>보고서 작성, 공유, 현장 체크인 명단 준비에 활용하세요.</p></div>
-      </div>
-      <div class="cta-row export-action-row">
-        <button class="btn btn-dark" type="button" data-action="export-stats">통계 엑셀저장</button>
-        <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
-        <button class="btn btn-primary" type="button" data-action="print-admin-report">인쇄/PDF저장</button>
-      </div>
-    </section>
   `;
 }
 
@@ -2639,7 +2624,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=88">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=89">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -2861,7 +2846,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글드라이브 연동</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=88">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=89">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -4035,6 +4020,55 @@ function rowsToCsv(rows) {
   return "\ufeff" + rows.map((row) => row.map(csvEscape).join(",")).join("\n");
 }
 
+function excelCell(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function rowsToExcelHtml(title, rows, options = {}) {
+  const generatedAt = formatDateTime(new Date().toISOString());
+  const maxCols = Math.max(1, ...rows.map((row) => Array.isArray(row) ? row.length : 1));
+  const subtitle = options.subtitle || "제9회 머내마을영화제 운영자료";
+  const bodyRows = rows.map((row, rowIndex) => {
+    const cells = Array.isArray(row) ? row : [row];
+    const nonEmpty = cells.filter((cell) => String(cell ?? "").trim() !== "");
+    if (!nonEmpty.length) return `<tr class="blank-row"><td colspan="${maxCols}">&nbsp;</td></tr>`;
+    if (nonEmpty.length === 1 && cells.length <= 2 && rowIndex > 0) {
+      return `<tr class="section-row"><td colspan="${maxCols}">${excelCell(nonEmpty[0])}</td></tr>`;
+    }
+    const tag = rowIndex === 0 ? "th" : "td";
+    return `<tr>${Array.from({ length: maxCols }, (_, index) => `<${tag}>${excelCell(cells[index] ?? "")}</${tag}>`).join("")}</tr>`;
+  }).join("\n");
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page { margin: 12mm; }
+  body { font-family: Arial, 'Malgun Gothic', sans-serif; color: #1d1915; }
+  .doc-title { font-size: 22px; font-weight: 800; margin: 0 0 4px; }
+  .doc-subtitle { font-size: 12px; color: #6d6259; margin: 0 0 14px; }
+  table { border-collapse: collapse; width: 100%; table-layout: auto; }
+  th { background: #2b221d; color: #fff; font-weight: 800; text-align: center; }
+  td, th { border: 1px solid #d8cabd; padding: 7px 8px; font-size: 11px; line-height: 1.35; vertical-align: middle; mso-number-format:'\@'; }
+  td { background: #fffdf8; }
+  tr:nth-child(even) td { background: #faf4ea; }
+  .section-row td { background: #b33f2f; color: #fff; font-size: 14px; font-weight: 800; padding: 9px 8px; }
+  .blank-row td { border: 0; background: #fff; height: 8px; padding: 0; }
+  @media print { body { margin: 0; } .doc-title { font-size: 18px; } td, th { font-size: 9px; padding: 4px 5px; } }
+</style>
+</head>
+<body>
+  <h1 class="doc-title">${excelCell(title)}</h1>
+  <p class="doc-subtitle">${excelCell(subtitle)} · 생성시각 ${excelCell(generatedAt)}</p>
+  <table>${bodyRows}</table>
+</body>
+</html>`;
+}
+
 function buildReservationRows() {
   const rows = [["예약번호", "상태", "후원자명/입금자명", "참석여부", "참석처리일", "영화", "상영관", "상영시간", "신청자", "연락처", "이메일", "문자수신동의", "문자상태", "문자발송일", "문자요청ID", "신청인원", "실제참석인원", "신청일", "메모"]];
   state.reservations.forEach((reservation) => {
@@ -4091,15 +4125,18 @@ function buildStatsRows() {
 }
 
 function exportReservations() {
-  downloadFile(`munae9_reservations_${todayFile()}.csv`, rowsToCsv(buildReservationRows()), "text/csv;charset=utf-8");
+  const html = rowsToExcelHtml("신청자 명단", buildReservationRows(), { subtitle: "현장 확인·공유용 신청자 명단" });
+  downloadFile(`munae9_reservations_${todayFile()}.xls`, "\ufeff" + html, "application/vnd.ms-excel;charset=utf-8");
 }
 
 function exportScreenings() {
-  downloadFile(`munae9_screenings_${todayFile()}.csv`, rowsToCsv(buildScreeningRows()), "text/csv;charset=utf-8");
+  const html = rowsToExcelHtml("상영관·영화 목록", buildScreeningRows(), { subtitle: "상영관·영화 운영자료" });
+  downloadFile(`munae9_screenings_${todayFile()}.xls`, "\ufeff" + html, "application/vnd.ms-excel;charset=utf-8");
 }
 
 function exportStats() {
-  downloadFile(`munae9_stats_${todayFile()}.csv`, rowsToCsv(buildStatsRows()), "text/csv;charset=utf-8");
+  const html = rowsToExcelHtml("운영 통계", buildStatsRows(), { subtitle: "신청·참석·미참석 통계자료" });
+  downloadFile(`munae9_stats_${todayFile()}.xls`, "\ufeff" + html, "application/vnd.ms-excel;charset=utf-8");
 }
 
 function printAdminReport() {
