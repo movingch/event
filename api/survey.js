@@ -21,6 +21,69 @@ function setCors(req, res) {
   }
 }
 
+
+function env(name) {
+  return String(process.env[name] || '').trim();
+}
+
+function supabaseConfig() {
+  const url = env('SUPABASE_URL').replace(/\/$/, '');
+  const key = env('SUPABASE_SERVICE_ROLE_KEY') || env('SUPABASE_SECRET_KEY') || env('SUPABASE_ANON_KEY');
+  return { url, key, configured: Boolean(url && key) };
+}
+
+async function supabaseFetch(path, options = {}) {
+  const cfg = supabaseConfig();
+  if (!cfg.configured) return null;
+  const response = await fetch(`${cfg.url}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      apikey: cfg.key,
+      Authorization: `Bearer ${cfg.key}`,
+      'Content-Type': 'application/json; charset=utf-8',
+      ...(options.headers || {})
+    },
+    cache: 'no-store'
+  });
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (error) { data = text; }
+  if (!response.ok) throw new Error(typeof data === 'object' && data?.message ? data.message : `Supabase 요청 실패: ${response.status}`);
+  return data;
+}
+
+async function readSupabaseState() {
+  const rows = await supabaseFetch('festival_state?key=eq.main&select=key,state,updated_at&limit=1', { method: 'GET' });
+  const row = Array.isArray(rows) ? rows[0] : null;
+  return row?.state && typeof row.state === 'object' ? row.state : {};
+}
+
+async function writeSupabaseState(state) {
+  return supabaseFetch('festival_state', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+    body: JSON.stringify([{ key: 'main', state, updated_at: new Date().toISOString() }])
+  });
+}
+
+function responseKey(response) {
+  return String(response?.id || response?.token || response?.reservationId || '');
+}
+
+async function appendSurveyResponseToSupabase(response) {
+  if (!supabaseConfig().configured || !response || typeof response !== 'object') return { skipped: true, reason: 'NO_SUPABASE' };
+  const state = await readSupabaseState();
+  const list = Array.isArray(state.surveyResponses) ? state.surveyResponses : [];
+  const key = responseKey(response);
+  const enriched = { id: response.id || response.token || `survey-${Date.now()}`, ...response, createdAt: response.createdAt || response.submittedAt || new Date().toISOString(), status: response.status || '응답완료' };
+  const next = key ? list.filter((item) => responseKey(item) !== key) : list.slice();
+  next.push(enriched);
+  state.surveyResponses = next;
+  state.lastUpdated = new Date().toISOString();
+  await writeSupabaseState(state);
+  return { ok: true, count: next.length };
+}
+
 function decodeWebhook(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -56,14 +119,21 @@ module.exports = async function handler(req, res) {
       if (!/^https:\/\/script\.google\.com\/macros\/s\//.test(webhookUrl) || !webhookUrl.endsWith('/exec')) {
         return sendJson(res, 400, { ok: false, message: '설문 연동 URL을 확인할 수 없습니다.' });
       }
-      const payload = { type: 'survey-response', response: body.response || {} };
+      const surveyResponse = body.response || {};
+      const payload = { type: 'survey-response', response: surveyResponse };
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
       const data = await response.json().catch(() => ({}));
-      return sendJson(res, response.ok ? 200 : response.status || 500, data);
+      let supabaseUpdate = { skipped: true };
+      try {
+        supabaseUpdate = await appendSurveyResponseToSupabase(surveyResponse);
+      } catch (supabaseError) {
+        supabaseUpdate = { ok: false, message: supabaseError && supabaseError.message ? supabaseError.message : String(supabaseError) };
+      }
+      return sendJson(res, response.ok ? 200 : response.status || 500, { ...(data || {}), supabaseUpdate });
     }
 
     return sendJson(res, 405, { ok: false, message: 'GET 또는 POST만 허용됩니다.' });

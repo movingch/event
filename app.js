@@ -1911,7 +1911,7 @@ function adminMode() {
 }
 
 function allowedAdminTabsForMode(mode = adminMode()) {
-  const common = ["overview", "reservations", "stats", "staff", "opening", "screenings"];
+  const common = ["overview", "reservations", "stats", "surveyView", "staff", "opening", "screenings"];
   return mode === "master" ? [...common, "survey", "backup"] : common;
 }
 
@@ -1936,6 +1936,7 @@ function renderAdmin(tab) {
         ${adminTabLink("overview", "운영요약", active)}
         ${adminTabLink("reservations", "신청자명단", active)}
         ${adminTabLink("stats", "상세통계", active)}
+        ${adminTabLink("surveyView", "만족도조사보기", active)}
         ${adminTabLink("staff", "STAFF 관리", active)}
         ${adminTabLink("opening", "개막작관리", active)}
         ${adminTabLink("screenings", "상영관, 영화 관리", active)}
@@ -1948,6 +1949,7 @@ function renderAdmin(tab) {
         ${active === "screenings" ? adminScreenings() : ""}
         ${active === "reservations" ? adminReservations() : ""}
         ${active === "stats" ? adminStats() : ""}
+        ${active === "surveyView" ? adminSurveyView() : ""}
         ${active === "staff" ? adminStaffManagement() : ""}
         ${active === "survey" ? adminSurvey() : ""}
         ${active === "backup" ? adminBackup() : ""}
@@ -2606,7 +2608,7 @@ function surveyDetailedStatsSection() {
   const responses = surveyResponseList();
   const dispatches = Array.isArray(state.surveyDispatches) ? state.surveyDispatches : [];
   const attendedTotal = (state.reservations || []).filter((r) => r.attended === true).reduce((sum, r) => sum + Number(r.attendedSeats || r.seats || 1), 0);
-  const sentTotal = dispatches.filter((d) => !String(d.reservationId || "").startsWith("test-")).length;
+  const sentTotal = dispatches.length;
   const responseRate = sentTotal ? `${Math.round((responses.length / sentTotal) * 100)}%` : "-";
   const overallAvg = surveyAverage(responses.map((r) => surveyRatingValue(r, ["q-overall", "overallRating", "전체만족도"])));
   const venueAvg = surveyAverage(responses.map((r) => surveyRatingValue(r, ["q-venue", "venueRating", "상영장소만족도"])));
@@ -3040,6 +3042,115 @@ function adminSurvey() {
       ${surveyTestPanelHtml()}
     </section>
   `;
+}
+
+
+function surveyQuestionTitleMap() {
+  const map = new Map();
+  (state.surveyQuestions || defaultSurveyQuestions()).forEach((q) => {
+    map.set(String(q.id || ""), q.title || q.id || "문항");
+  });
+  return map;
+}
+
+function surveyResponseAnswersHtml(response) {
+  const answers = response?.answers || {};
+  const titleMap = surveyQuestionTitleMap();
+  const entries = Object.entries(answers).filter(([, value]) => value != null && String(Array.isArray(value) ? value.join(", ") : value).trim() !== "");
+  if (!entries.length) return `<div class="empty compact-empty">응답 내용이 없습니다.</div>`;
+  return `<div class="survey-answer-list">${entries.map(([key, value]) => {
+    const label = titleMap.get(String(key)) || key;
+    const text = Array.isArray(value) ? value.join(", ") : value;
+    return `<div class="survey-answer-item"><strong>${esc(label)}</strong><span>${esc(text)}</span></div>`;
+  }).join("")}</div>`;
+}
+
+function surveyResponseRow(response, index) {
+  const submitted = response.submittedAt || response.createdAt || response.timestamp || "";
+  const isTest = String(response.reservationId || "").startsWith("test-") || String(response.name || "").includes("TEST") || String(response.token || "").includes("test");
+  const overall = surveyRatingValue(response, ["q-overall", "overallRating", "전체만족도"]);
+  return `<tr>
+    <td>${index + 1}</td>
+    <td>${isTest ? '<span class="badge">TEST</span>' : '<span class="badge badge-ok">실제</span>'}</td>
+    <td><strong>${esc(response.name || "익명")}</strong><br><small>${esc(response.phone || response.contact || "")}</small></td>
+    <td>${esc(cleanMovieTitle(response.movieTitle || ""))}<br><small>${esc(response.venue || "")}</small></td>
+    <td>${overall || "-"}</td>
+    <td>${esc(formatDateTime(submitted))}</td>
+    <td>${surveyResponseAnswersHtml(response)}</td>
+    <td><button class="btn btn-danger btn-small" type="button" data-action="delete-survey-response" data-id="${esc(response.id || response.token || response.reservationId || submitted)}">삭제</button></td>
+  </tr>`;
+}
+
+function surveyDispatchRow(dispatch, index) {
+  const sentAt = dispatch.sentAt || dispatch.createdAt || "";
+  const isTest = String(dispatch.reservationId || "").startsWith("test-") || String(dispatch.name || "").includes("TEST");
+  const responded = (state.surveyResponses || []).some((r) => r.token === dispatch.token || r.reservationId === dispatch.reservationId);
+  return `<tr>
+    <td>${index + 1}</td>
+    <td>${isTest ? '<span class="badge">TEST</span>' : '<span class="badge badge-ok">실제</span>'}</td>
+    <td><strong>${esc(dispatch.name || "이름 없음")}</strong><br><small>${esc(dispatch.phone || "")}</small></td>
+    <td>${esc(cleanMovieTitle(dispatch.movieTitle || ""))}<br><small>${esc(dispatch.venue || "")}</small></td>
+    <td>${esc(dispatch.status || "발송기록")}</td>
+    <td>${responded ? '<span class="badge badge-ok">응답완료</span>' : '<span class="badge">미응답</span>'}</td>
+    <td>${esc(formatDateTime(sentAt))}</td>
+    <td><button class="btn btn-danger btn-small" type="button" data-action="delete-survey-dispatch" data-id="${esc(dispatch.id || dispatch.token || dispatch.reservationId || sentAt)}">삭제</button></td>
+  </tr>`;
+}
+
+function adminSurveyView() {
+  const responses = (state.surveyResponses || []).slice().reverse();
+  const dispatches = (state.surveyDispatches || []).slice().reverse();
+  return `
+    <section class="card survey-view-card">
+      <div class="section-title">
+        <div>
+          <h2>만족도조사보기</h2>
+          <p>설문을 받은 명단, 응답 목록, 실제 응답 내용을 일반관리자도 확인할 수 있습니다. 테스트 응답도 통계에 포함됩니다.</p>
+        </div>
+        <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${responses.length}건</span>
+      </div>
+      ${surveyDetailedStatsSection()}
+    </section>
+    <section class="card survey-response-list-card">
+      <div class="section-title">
+        <div><h3>만족도조사 응답 목록</h3><p>제출된 설문 내용 전체를 확인하고, 잘못 들어온 테스트 또는 중복 응답은 삭제할 수 있습니다.</p></div>
+      </div>
+      ${responses.length ? `<div class="table-wrap survey-response-table-wrap"><table class="survey-response-table"><thead><tr><th>No</th><th>구분</th><th>응답자</th><th>영화/장소</th><th>전체</th><th>응답일</th><th>응답 내용</th><th>관리</th></tr></thead><tbody>${responses.map(surveyResponseRow).join("")}</tbody></table></div>` : `<div class="empty">아직 만족도조사 응답이 없습니다.</div>`}
+    </section>
+    <section class="card survey-dispatch-list-card">
+      <div class="section-title">
+        <div><h3>만족도조사 수신/발송 명단</h3><p>만족도조사 문자를 받은 대상과 응답 여부를 확인합니다. 테스트 발송도 함께 표시됩니다.</p></div>
+        <span class="badge">발송 ${dispatches.length}건</span>
+      </div>
+      ${dispatches.length ? `<div class="table-wrap"><table><thead><tr><th>No</th><th>구분</th><th>수신자</th><th>영화/장소</th><th>발송상태</th><th>응답상태</th><th>발송일</th><th>관리</th></tr></thead><tbody>${dispatches.map(surveyDispatchRow).join("")}</tbody></table></div>` : `<div class="empty">아직 만족도조사 발송 기록이 없습니다.</div>`}
+    </section>
+  `;
+}
+
+function deleteSurveyResponse(id) {
+  const target = String(id || "");
+  if (!target) return;
+  const list = state.surveyResponses || [];
+  const item = list.find((r) => String(r.id || r.token || r.reservationId || r.submittedAt || r.createdAt || "") === target);
+  const label = item?.name ? `${item.name}님의 응답` : "선택한 응답";
+  if (!confirm(`${label}을 삭제할까요?\n삭제 후 Supabase와 구글시트 백업에도 반영됩니다.`)) return;
+  state.surveyResponses = list.filter((r) => String(r.id || r.token || r.reservationId || r.submittedAt || r.createdAt || "") !== target);
+  persist();
+  render();
+  toast("만족도조사 응답을 삭제했습니다.");
+}
+
+function deleteSurveyDispatch(id) {
+  const target = String(id || "");
+  if (!target) return;
+  const list = state.surveyDispatches || [];
+  const item = list.find((d) => String(d.id || d.token || d.reservationId || d.sentAt || d.createdAt || "") === target);
+  const label = item?.name ? `${item.name}님의 발송 기록` : "선택한 발송 기록";
+  if (!confirm(`${label}을 삭제할까요?\n발송 기록만 삭제되며, 이미 제출된 응답은 별도로 삭제해야 합니다.`)) return;
+  state.surveyDispatches = list.filter((d) => String(d.id || d.token || d.reservationId || d.sentAt || d.createdAt || "") !== target);
+  persist();
+  render();
+  toast("만족도조사 발송 기록을 삭제했습니다.");
 }
 
 function surveyResponseStatsTable() {
@@ -5301,6 +5412,8 @@ document.addEventListener("click", (event) => {
   }
   if (action === "create-survey-test-link") createSurveyTestLink({ sendSms: false });
   if (action === "send-survey-test-sms") createSurveyTestLink({ sendSms: true });
+  if (action === "delete-survey-response") deleteSurveyResponse(id);
+  if (action === "delete-survey-dispatch") deleteSurveyDispatch(id);
   if (action === "print") window.print();
   if (action === "print-admin-report") printAdminReport();
   if (action === "edit-screening") { selectedScreeningId = id; window.location.hash = "#/admin/screenings"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
@@ -5393,19 +5506,17 @@ window.addEventListener("hashchange", () => {
 });
 
 function renderSupabaseLoading() {
-  const app = document.getElementById("app");
-  if (!app) return;
-  app.innerHTML = `<main class="app-shell">${appHeader()}<section class="section"><div class="panel sync-loading-panel"><span class="eyebrow">Supabase 원본 동기화</span><h1>Supabase 원본 데이터를 불러오는 중입니다.</h1><p>이 화면은 구글시트가 아니라 Supabase 원본 DB를 확인한 뒤 표시됩니다. 구글시트는 저장 후 따라가는 백업/출력용입니다.</p></div></section></main>`;
+  // v104: 사용자가 화면을 열 때 데이터 불러오기 안내가 튀지 않도록 조용히 동기화합니다.
+  render();
 }
 
 if (!localStorage.getItem(DRIVE_WEBHOOK_STORAGE_KEY) && DEFAULT_DRIVE_WEBHOOK_URL) {
   localStorage.setItem(DRIVE_WEBHOOK_STORAGE_KEY, DEFAULT_DRIVE_WEBHOOK_URL);
 }
 
-renderSupabaseLoading();
-bootstrapPrimaryDataSource({ render: false }).finally(() => {
+render();
+bootstrapPrimaryDataSource({ render: true }).finally(() => {
   googleSheetInitialReady = true;
-  render();
 });
 
 window.addEventListener("focus", () => {
