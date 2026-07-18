@@ -2801,7 +2801,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=102">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=103">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3160,7 +3160,7 @@ function adminBackup() {
               <button class="btn btn-primary" type="submit">구글시트 백업 실행</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=102">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=103">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -4740,6 +4740,22 @@ async function postSupabaseState(reason = "auto") {
     supabaseConfigured = true;
     supabaseLastPushAt = Date.now();
     supabaseLastError = "";
+    // v103: Supabase 저장 후 구글시트 백업이 서버 환경변수 문제 등으로 건너뛰거나 실패하면
+    // 브라우저에서 같은 payload를 한 번 더 직접 백업 요청합니다. 구글시트는 원본이 아니라 백업 대상입니다.
+    const backup = data?.googleBackup || {};
+    if (googlePayload && (!backup || backup.skipped || backup.ok === false)) {
+      try {
+        const backupUrl = typeof getDriveWebhookUrl === "function" ? getDriveWebhookUrl() : "";
+        if (backupUrl) {
+          await postGoogleDrivePayload(backupUrl, googlePayload);
+          setDriveLastSyncNow();
+        }
+      } catch (backupError) {
+        console.warn("구글시트 백업 재시도 실패", backupError);
+      }
+    } else if (googlePayload && backup && backup.ok) {
+      setDriveLastSyncNow();
+    }
     return true;
   } catch (error) {
     console.warn("Supabase 저장 실패", error);
@@ -4856,7 +4872,7 @@ function queueSupabaseAutoSync(reason = "data-change") {
   window.clearTimeout(supabaseAutoSyncTimer);
   supabaseAutoSyncTimer = window.setTimeout(async () => {
     const ok = await postSupabaseState(reason);
-    // v102: Supabase 원본 저장 실패 시 구글시트를 원본/대체 저장소로 사용하지 않습니다.
+    // v103: Supabase 원본 저장 실패 시 구글시트를 원본/대체 저장소로 사용하지 않습니다.
     if (!ok && !supabaseConfigured) console.warn("Supabase 저장 실패: 구글시트 대체 저장은 비활성화되었습니다.");
   }, 700);
 }
@@ -5040,7 +5056,7 @@ async function syncGoogleDriveCore(options = {}) {
 }
 
 
-// v102: 구글시트는 Supabase 원본의 백업 대상입니다.
+// v103: 구글시트는 Supabase 원본의 백업 대상입니다.
 // 아래 구글시트 읽기/강제 불러오기 기능은 운영 중 데이터 충돌을 막기 위해 완전히 비활성화합니다.
 async function readGoogleDriveData(url) {
   console.warn("구글시트 읽기는 비활성화되었습니다. 운영 원본은 Supabase입니다.");
@@ -5058,7 +5074,7 @@ function driveReservationKey(reservation = {}) {
 }
 
 function driveDataToState(driveData = {}) {
-  // 과거 구글시트 원본 모드 호환 함수입니다. v102부터 화면 데이터에는 적용하지 않습니다.
+  // 과거 구글시트 원본 모드 호환 함수입니다. v103부터 화면 데이터에는 적용하지 않습니다.
   return normalizeState({});
 }
 
@@ -5379,7 +5395,7 @@ window.addEventListener("hashchange", () => {
 function renderSupabaseLoading() {
   const app = document.getElementById("app");
   if (!app) return;
-  app.innerHTML = `<main class="app-shell">${appHeader()}<section class="section"><div class="panel sync-loading-panel"><span class="eyebrow">Supabase 원본 동기화</span><h1>최신 신청자 데이터를 불러오는 중입니다.</h1><p>모바일, 다른 노트북, 다른 브라우저에서도 같은 Supabase 원본 데이터를 먼저 불러온 뒤 화면을 표시합니다. Supabase가 비어 있으면 마스타관리자 백업·연동에서 강제 이전을 한 번 실행하세요.</p></div></section></main>`;
+  app.innerHTML = `<main class="app-shell">${appHeader()}<section class="section"><div class="panel sync-loading-panel"><span class="eyebrow">Supabase 원본 동기화</span><h1>Supabase 원본 데이터를 불러오는 중입니다.</h1><p>이 화면은 구글시트가 아니라 Supabase 원본 DB를 확인한 뒤 표시됩니다. 구글시트는 저장 후 따라가는 백업/출력용입니다.</p></div></section></main>`;
 }
 
 if (!localStorage.getItem(DRIVE_WEBHOOK_STORAGE_KEY) && DEFAULT_DRIVE_WEBHOOK_URL) {

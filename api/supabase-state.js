@@ -9,6 +9,8 @@ function env(name) {
   return String(process.env[name] || '').trim();
 }
 
+const DEFAULT_GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwc18Y1SArlzYkXfnw1so5SsFKUMg3v9-RgJagkvgihNgEqRuS-eJtM7fKpMfgqrnyE/exec';
+
 function supabaseConfig() {
   const url = env('SUPABASE_URL').replace(/\/$/, '');
   const key = env('SUPABASE_SERVICE_ROLE_KEY') || env('SUPABASE_SECRET_KEY') || env('SUPABASE_ANON_KEY');
@@ -60,7 +62,7 @@ async function writeState(state) {
 }
 
 async function backupToGoogleSheet(googlePayload, webhookUrl) {
-  const url = String(webhookUrl || env('GOOGLE_APPS_SCRIPT_URL') || '').trim();
+  const url = String(webhookUrl || env('GOOGLE_APPS_SCRIPT_URL') || DEFAULT_GOOGLE_APPS_SCRIPT_URL || '').trim();
   if (!url || !googlePayload) return { skipped: true, reason: 'NO_GOOGLE_BACKUP_CONFIG' };
   const upstream = await fetch(url, {
     method: 'POST',
@@ -71,7 +73,7 @@ async function backupToGoogleSheet(googlePayload, webhookUrl) {
   const text = await upstream.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch (error) { data = text.slice(0, 500); }
-  if (!upstream.ok) return { ok: false, status: upstream.status, data };
+  if (!upstream.ok || (data && typeof data === 'object' && data.ok === false)) return { ok: false, status: upstream.status, data };
   return { ok: true, data };
 }
 
