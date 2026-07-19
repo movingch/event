@@ -18,6 +18,48 @@
   --focus: 0 0 0 4px rgba(179, 63, 47, 0.18);
 }
 
+/* v140: 마스타관리자 후원자 관리 및 안전한 전체 초기화 */
+.donor-management-card,
+.donor-reset-card {
+  display: grid;
+  gap: 16px;
+}
+
+.donor-management-table-wrap table {
+  min-width: 940px;
+}
+
+.donor-reset-card {
+  border-color: rgba(179, 38, 30, .28);
+  background: linear-gradient(135deg, rgba(179, 38, 30, .055), rgba(255, 250, 242, .96));
+}
+
+.donor-reset-warning {
+  border: 1px solid rgba(179, 38, 30, .24);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, .76);
+  color: var(--ink);
+}
+
+.donor-reset-warning strong {
+  display: inline-block;
+  margin-bottom: 5px;
+  color: var(--danger);
+}
+
+.donor-reset-warning p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: .48;
+  transform: none !important;
+}
+
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {

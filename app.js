@@ -1245,15 +1245,15 @@ function getTotals() {
 
 function adminPageHref(tab = "overview", master = false) {
   const localHost = ["127.0.0.1", "localhost"].includes(window.location.hostname);
-  if (localHost) return `/?v=139&fresh=1&${master ? "masterPreview" : "adminPreview"}=1#/${tab}`;
-  return `/${master ? "adminor" : "admin"}?v=139&fresh=1#/${tab}`;
+  if (localHost) return `/?v=140&fresh=1&${master ? "masterPreview" : "adminPreview"}=1#/${tab}`;
+  return `/${master ? "adminor" : "admin"}?v=140&fresh=1#/${tab}`;
 }
 
 function appHeader() {
   const adminHref = adminPageHref();
   return `
     <header class="header">
-      <a class="logo" href="/?v=139&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
+      <a class="logo" href="/?v=140&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
         <div class="logo-mark"><img src="assets/munae-horse-logo.png" alt="머내마을영화제 말 캐릭터 로고"></div>
         <div>
           <div class="logo-title">제9회 머내마을영화제</div>
@@ -1262,9 +1262,9 @@ function appHeader() {
       </a>
       <nav class="nav" aria-label="주요 메뉴">
         <a href="https://www.meonaeff.com/" target="_blank" rel="noopener noreferrer" class="festival-home-link">머내마을영화제 홈페이지</a>
-        <a href="/?v=139&fresh=1#/apply">영화 신청</a>
-        <a href="/?v=139&fresh=1#/donate">후원하기</a>
-        <a href="/?v=139&fresh=1#/staff" class="staff-link utility-link">STAFF</a>
+        <a href="/?v=140&fresh=1#/apply">영화 신청</a>
+        <a href="/?v=140&fresh=1#/donate">후원하기</a>
+        <a href="/?v=140&fresh=1#/staff" class="staff-link utility-link">STAFF</a>
         <a href="${esc(adminHref)}" class="primary-link admin-link utility-link">ADMIN</a>
       </nav>
     </header>
@@ -2088,7 +2088,7 @@ function adminMode() {
 
 function allowedAdminTabsForMode(mode = adminMode()) {
   const common = ["overview", "reservations", "stats", "surveyView", "staff", "opening", "screenings"];
-  return mode === "master" ? [...common, "survey", "backup"] : common;
+  return mode === "master" ? [...common, "donors", "survey", "backup"] : common;
 }
 
 function renderAdmin(tab) {
@@ -2101,7 +2101,7 @@ function renderAdmin(tab) {
     <section class="section-title">
       <div>
         <h1>${mode === "master" ? "마스타관리자 대시보드" : "관리자 대시보드"}</h1>
-        <p>${mode === "master" ? "모든 메뉴와 백업·연동, 만족도조사를 포함해 전체 운영을 관리합니다." : "신청자 명단, 상영관, 참석 현황과 통계를 관리합니다."}</p>
+        <p>${mode === "master" ? "후원자 관리, 백업·연동, 만족도조사를 포함해 전체 운영을 관리합니다." : "신청자 명단, 상영관, 참석 현황과 통계를 관리합니다."}</p>
       </div>
       <div class="cta-row admin-top-actions">
         ${adminTopReportActions(active)}
@@ -2116,6 +2116,7 @@ function renderAdmin(tab) {
         ${adminTabLink("staff", "STAFF 관리", active)}
         ${adminTabLink("opening", "개막작관리", active)}
         ${adminTabLink("screenings", "상영관, 영화 관리", active)}
+        ${mode === "master" ? adminTabLink("donors", "후원자 관리", active) : ""}
         ${mode === "master" ? adminTabLink("survey", "만족도조사", active) : ""}
         ${mode === "master" ? adminTabLink("backup", "백업·연동", active) : ""}
       </aside>
@@ -2135,7 +2136,7 @@ function renderAdminLogin() {
         <div class="eyebrow" style="background:rgba(179,63,47,.1);color:var(--brand-dark);">${master ? "마스타관리자 전용" : "운영자 전용"}</div>
         <h1>${master ? "마스타관리자 로그인" : "관리자 로그인"}</h1>
         ${showTempNotice ? `<p>임시 계정은 이름 <strong>일반관리자</strong>, 비밀번호 <strong>0909</strong>입니다. 최고관리자 화면에서 운영 계정을 추가한 뒤 임시 계정을 삭제하세요.</p>` : ""}
-        ${master ? `<p>마스타관리자는 모든 메뉴와 백업·연동, 만족도조사 설정을 관리합니다.</p>` : ""}
+        ${master ? `<p>마스타관리자는 후원자 관리, 백업·연동, 만족도조사 설정을 포함한 모든 메뉴를 관리합니다.</p>` : ""}
         <form id="adminLoginForm">
           ${master ? "" : `<label class="label" for="adminName">관리자 이름</label><input class="input" id="adminName" name="name" type="text" autocomplete="username" required />`}
           <label class="label" for="adminPin">${master ? "마스타관리자 PIN" : "관리자 비밀번호"}</label>
@@ -2166,6 +2167,7 @@ function renderAdminPanel(active) {
     if (active === "stats") return adminStats();
     if (active === "surveyView") return adminSurveyView();
     if (active === "staff") return adminStaffManagement();
+    if (active === "donors") return adminDonors();
     if (active === "survey") return adminSurvey();
     if (active === "backup") return adminBackup();
     return adminOverview();
@@ -2182,7 +2184,8 @@ function adminTopReportActions(active) {
     <button class="btn btn-outline" type="button" data-action="export-reservations">신청자엑셀저장</button>
     <button class="btn btn-primary" type="button" data-action="print-admin-report">인쇄PDF저장</button>
   ` : "";
-  return `${reportButtons}<button class="btn btn-danger" type="button" data-action="admin-logout">로그아웃</button>`;
+  const donorButtons = active === "donors" ? `<button class="btn btn-dark" type="button" data-action="export-donations" ${donationList().length ? "" : "disabled"}>후원자엑셀저장</button>` : "";
+  return `${reportButtons}${donorButtons}<button class="btn btn-danger" type="button" data-action="admin-logout">로그아웃</button>`;
 }
 
 function adminOverview() {
@@ -2386,7 +2389,7 @@ function adminOpening() {
           <h2>개막식·개막작 신청 설정</h2>
           <p>개막식 “얼굴”, 박정민 배우 참석, 메인 화면 노출 종료일, 포스터·소개영상, 개막작 신청 기간과 일반 신청 기간을 관리합니다.</p>
         </div>
-        <a class="btn btn-outline" href="/?v=139&fresh=1#/opening">관객 화면 보기</a>
+        <a class="btn btn-outline" href="/?v=140&fresh=1#/opening">관객 화면 보기</a>
       </div>
       <form id="openingForm">
         <div class="form-grid">
@@ -2957,6 +2960,43 @@ function donationStatsCard() {
     </section>`;
 }
 
+function adminDonors() {
+  const stats = donationStats();
+  const rows = donationList().slice().sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  return `
+    <section class="card donor-management-card">
+      <div class="section-title">
+        <div>
+          <h2>후원자 관리</h2>
+          <p>후원 신청 목록을 확인하고 엑셀로 저장할 수 있습니다. 이 메뉴는 마스타관리자에게만 표시됩니다.</p>
+        </div>
+        <button class="btn btn-dark" type="button" data-action="export-donations" ${rows.length ? "" : "disabled"}>후원자엑셀저장</button>
+      </div>
+      <section class="metric-grid compact-metric-grid donation-metrics fixed-row-metrics">
+        <div class="metric-card"><div class="metric-label">후원 신청</div><div class="metric-value">${stats.count}</div><div class="metric-note">전체 건수</div></div>
+        <div class="metric-card"><div class="metric-label">후원 예정액</div><div class="metric-value text-value">${esc(stats.amountText)}</div><div class="metric-note">신청 기준</div></div>
+        <div class="metric-card"><div class="metric-label">감사문자 완료</div><div class="metric-value">${stats.done}</div><div class="metric-note">발송완료</div></div>
+        <div class="metric-card"><div class="metric-label">확인 필요</div><div class="metric-value">${stats.pending + stats.failed}</div><div class="metric-note">대기·실패</div></div>
+      </section>
+      ${rows.length ? `<div class="table-wrap donor-management-table-wrap"><table><thead><tr><th>No</th><th>신청일</th><th>후원자</th><th>입금자</th><th>연락처</th><th>금액</th><th>문자상태</th><th>문자발송일</th></tr></thead><tbody>${rows.map((d, i) => `<tr><td>${i + 1}</td><td>${esc(formatDateTime(d.createdAt || ""))}</td><td><strong>${esc(d.donorName || "")}</strong></td><td>${esc(d.depositorName || "")}</td><td>${esc(d.phone || "")}</td><td>${Number(d.amount || DONATION_AMOUNT || 0).toLocaleString("ko-KR")}원</td><td>${esc(d.smsStatus || "")}</td><td>${esc(formatDateTime(d.smsSentAt || ""))}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">아직 후원 신청 기록이 없습니다.</div>`}
+    </section>
+    <section class="card donor-reset-card">
+      <div class="section-title">
+        <div>
+          <h2>후원자 목록 초기화</h2>
+          <p>후원 신청 ${stats.count}건을 모두 삭제하고 Supabase 원본과 구글시트 후원자현황 백업을 갱신합니다.</p>
+        </div>
+      </div>
+      <div class="donor-reset-warning">
+        <strong>주의</strong>
+        <p>초기화하면 후원자 이름, 입금자명, 연락처, 문자 상태가 모두 삭제됩니다. 영화 관람 신청자 명단과 상영정보는 삭제하지 않습니다.</p>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-danger" type="button" data-action="clear-donations" ${rows.length ? "" : "disabled"}>후원자 목록 전체 초기화</button>
+      </div>
+    </section>`;
+}
+
 function adminStats() {
   const byMovie = groupByMovie();
   const byVenue = groupByVenue();
@@ -3118,7 +3158,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=139">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=140">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3787,7 +3827,7 @@ function adminBackup() {
               <button class="btn btn-dark" type="button" data-action="force-google-backup-from-supabase">Supabase 최신 데이터를 구글시트로 강제 백업</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=139">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=140">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -5238,6 +5278,61 @@ function exportStats() {
   downloadFile(`munae9_stats_${todayFile()}.xls`, "\ufeff" + html, "application/vnd.ms-excel;charset=utf-8");
 }
 
+function exportDonations() {
+  const html = rowsToExcelHtml("후원자 명단", buildDonationRows(), { subtitle: "후원 신청·입금자·감사문자 현황" });
+  downloadFile(`munae9_donors_${todayFile()}.xls`, "\ufeff" + html, "application/vnd.ms-excel;charset=utf-8");
+}
+
+async function clearDonations() {
+  if (!isMasterAdminPath() || !isMasterAdminAuthed()) {
+    toast("마스타관리자만 후원자 목록을 초기화할 수 있습니다.");
+    return false;
+  }
+  const currentDonations = cloneData(donationList());
+  if (!currentDonations.length) {
+    toast("초기화할 후원자 기록이 없습니다.");
+    return false;
+  }
+  if (supabasePushing) {
+    toast("다른 저장 작업이 진행 중입니다. 잠시 후 다시 시도해 주세요.");
+    return false;
+  }
+  const stats = donationStats();
+  const approved = confirm(`후원자 목록을 전체 초기화할까요?\n\n후원 신청 ${stats.count}건\n후원 예정액 ${stats.amountText}\n\n영화 관람 신청자와 상영정보는 유지됩니다.`);
+  if (!approved) return false;
+  const typed = prompt("삭제를 확인하려면 아래 문구를 정확히 입력해 주세요.\n\n후원자 초기화", "");
+  if (String(typed || "").trim() !== "후원자 초기화") {
+    toast("확인 문구가 일치하지 않아 초기화를 취소했습니다.");
+    return false;
+  }
+
+  state.donations = [];
+  persist({ autoSync: false });
+  render();
+  toast("후원자 목록을 초기화하고 Supabase에 저장하는 중입니다.");
+
+  const saved = await postSupabaseState("master-clear-donations", { skipGoogleBackup: true });
+  if (!saved) {
+    state.donations = currentDonations;
+    persist({ autoSync: false });
+    render();
+    toast(`초기화 저장에 실패하여 기존 목록을 복구했습니다. ${supabaseLastError || "Supabase 설정을 확인해 주세요."}`);
+    return false;
+  }
+
+  let googleBackedUp = false;
+  try {
+    googleBackedUp = await runGoogleBackupPipeline("master-clear-donations");
+  } catch (error) {
+    console.warn("후원자 초기화 후 구글시트 백업 실패", error);
+  }
+  render();
+  toast(googleBackedUp
+    ? `후원자 ${currentDonations.length}건을 초기화하고 구글시트 백업까지 갱신했습니다.`
+    : `후원자 ${currentDonations.length}건을 초기화했습니다. 구글시트 백업 상태는 백업·연동 메뉴에서 확인해 주세요.`);
+  return true;
+}
+
 function printAdminReport() {
   document.body.classList.add("admin-print-mode");
   const cleanup = () => {
@@ -6292,7 +6387,7 @@ document.addEventListener("click", (event) => {
   const id = button.dataset.id;
   if (action === "go-home") {
     event.preventDefault();
-    if (isAdminRoutePath() || (window.location.pathname && window.location.pathname !== "/")) window.location.href = "/?v=139&fresh=1";
+    if (isAdminRoutePath() || (window.location.pathname && window.location.pathname !== "/")) window.location.href = "/?v=140&fresh=1";
     else { window.location.hash = "#/"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     return;
   }
@@ -6376,6 +6471,8 @@ document.addEventListener("click", (event) => {
   if (action === "export-reservations") exportReservations();
   if (action === "export-screenings") exportScreenings();
   if (action === "export-stats") exportStats();
+  if (action === "export-donations") exportDonations();
+  if (action === "clear-donations") clearDonations();
   if (action === "sync-drive-reservations") syncGoogleDriveCore({ silent: false, prompt: true, reason: "manual-reservations" });
   if (action === "sync-drive-stats") syncGoogleDriveCore({ silent: false, prompt: true, reason: "manual-stats" });
   if (action === "sync-drive-screenings") syncGoogleDriveCore({ silent: false, prompt: true, reason: "manual-screenings" });
