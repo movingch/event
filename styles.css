@@ -4522,3 +4522,376 @@ tbody tr:hover td { background: rgba(31, 102, 80, .055); }
   .movie-booking-facts { grid-template-columns: 1fr 1fr; }
   .participant-metrics { grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)) !important; }
 }
+
+/* v141: 기존 카드형 상영시간표 + 전체상영 목록형 보기 */
+.classic-schedule-day-groups {
+  display: grid;
+  gap: 9px;
+}
+
+.classic-schedule-day-group {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--schedule-card-border, rgba(31, 102, 80, .22));
+  border-radius: 18px;
+  background: var(--schedule-card-bg, #f2f7f5);
+}
+
+.classic-schedule-day-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 5px;
+  padding: 0 1px;
+}
+
+.classic-schedule-day-heading h3 {
+  margin: 0;
+  color: var(--schedule-card-accent, var(--brand-dark));
+  font-size: clamp(22px, 2.4vw, 29px);
+  line-height: 1.2;
+}
+
+.classic-schedule-day-heading h3 span {
+  font-size: .78em;
+}
+
+.classic-schedule-day-heading strong {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .74);
+  color: var(--schedule-card-accent, var(--brand-dark));
+  font-size: 13px;
+}
+
+.classic-schedule-time-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  align-items: start;
+}
+
+.classic-schedule-time-group {
+  display: grid;
+  gap: 4px;
+}
+
+.classic-schedule-time-group + .classic-schedule-time-group {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.classic-schedule-time-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 32px;
+}
+
+.classic-schedule-group-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin: 0;
+  padding: 0 1px 4px;
+  border-bottom: 1px solid var(--schedule-card-border, rgba(31, 102, 80, .3));
+}
+
+.classic-schedule-group-choice strong {
+  color: var(--schedule-card-accent, var(--brand-dark));
+  font-size: clamp(17px, 1.8vw, 21px);
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.classic-schedule-group-choice span {
+  color: #65594e;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.classic-schedule-group-choice.is-placeholder {
+  visibility: hidden;
+}
+
+.classic-schedule-time-heading > span {
+  color: var(--schedule-card-accent, var(--brand-dark));
+  font-size: 20px;
+  font-weight: 950;
+  letter-spacing: -.02em;
+}
+
+.classic-schedule-time-heading strong {
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: var(--schedule-card-accent, var(--brand-dark));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.classic-schedule-time-group.is-conflict-group {
+  padding: 4px;
+  border: 2px solid var(--schedule-card-accent, rgba(31, 102, 80, .55));
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .42);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .6);
+}
+
+.classic-schedule-time-group:not(.is-conflict-group) {
+  padding: 4px;
+  border: 2px solid transparent;
+}
+
+.classic-schedule-time-group .classic-schedule-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+}
+
+.classic-schedule-time-group.is-conflict-group .classic-schedule-card {
+  width: 100%;
+}
+
+.layout-preview-card {
+  border-style: dashed;
+}
+
+.layout-preview-card .compact-book-btn:disabled {
+  opacity: .72;
+}
+
+.classic-schedule-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.classic-schedule-card {
+  min-height: 0;
+}
+
+.classic-schedule-card .screening-top {
+  position: relative;
+  min-height: 136px;
+  padding: 13px 14px 11px;
+}
+
+.classic-schedule-card .compact-badges {
+  padding-right: 112px;
+}
+
+.classic-schedule-card .screening-title {
+  padding-right: 74px;
+  font-size: clamp(21px, 2vw, 27px);
+  line-height: 1.28;
+}
+
+.classic-schedule-card .screening-meta {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.classic-screening-meta {
+  display: grid;
+  gap: 2px;
+}
+
+.screening-card-time {
+  color: #1e1915;
+  font-family: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+  font-size: 22px;
+  font-weight: 950;
+  line-height: 1.15;
+  letter-spacing: -.03em;
+}
+
+.classic-screening-meta > span {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.classic-schedule-card .compact-screening-body {
+  padding: 9px 12px 10px;
+}
+
+.classic-schedule-card .compact-book-btn {
+  min-height: 44px;
+  border-radius: 14px;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.classic-schedule-card .compact-staff-btn {
+  min-height: 34px;
+  padding: 8px 10px !important;
+  border-radius: 12px !important;
+  font-size: 11px !important;
+}
+
+.screening-corner-date {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  min-height: 62px;
+  padding: 7px 12px 8px;
+  border: 1px solid rgba(58, 41, 27, .14);
+  border-radius: 11px;
+  background: rgba(255, 250, 242, .92);
+  color: var(--brand-dark);
+  line-height: 1;
+  box-shadow: 0 5px 12px rgba(58, 41, 27, .07);
+}
+
+.screening-corner-date strong {
+  font-size: 21px;
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.screening-corner-date small {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.all-screenings-section {
+  margin-top: 24px;
+  padding: clamp(18px, 2.4vw, 26px);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(255, 250, 242, .84);
+  box-shadow: 0 12px 28px rgba(58, 41, 27, .07);
+}
+
+.all-screening-filters {
+  grid-template-columns: minmax(210px, 1.35fr) repeat(3, minmax(135px, .8fr));
+  margin: 14px 0 16px;
+}
+
+.all-screening-list {
+  display: grid;
+  gap: 8px;
+}
+
+.all-screening-list-head,
+.all-screening-row {
+  display: grid;
+  grid-template-columns: minmax(105px, .8fr) 82px minmax(210px, 1.8fr) minmax(130px, 1fr) minmax(145px, 1.1fr) 104px;
+  gap: 10px;
+  align-items: center;
+}
+
+.all-screening-list-head {
+  padding: 9px 14px;
+  border-radius: 11px;
+  background: #2b221d;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.all-screening-row {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fffdf8;
+  box-shadow: 0 5px 12px rgba(58, 41, 27, .045);
+  cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+
+.all-screening-row:hover {
+  transform: translateY(-1px);
+  border-color: rgba(31, 102, 80, .42);
+  box-shadow: 0 8px 17px rgba(58, 41, 27, .08);
+}
+
+.all-screening-row:focus-visible {
+  outline: 3px solid #d99b2b;
+  outline-offset: 2px;
+}
+
+.all-screening-row.is-full {
+  background: #fff9f6;
+  border-color: rgba(179, 38, 30, .22);
+}
+
+.all-screening-date,
+.all-screening-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.all-screening-date strong { font-size: 14px; }
+.all-screening-date span,
+.all-screening-title span { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.all-screening-time { color: var(--accent); font-size: 16px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.all-screening-title strong { font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
+.all-screening-venue { font-size: 13px; font-weight: 750; line-height: 1.4; }
+.all-screening-status .badge { border-radius: 8px; line-height: 1.25; text-align: center; white-space: normal; }
+.all-screening-book { min-height: 38px; padding: 8px 10px; border-radius: 10px; font-size: 12px; }
+
+@media (max-width: 1000px) {
+  .classic-schedule-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .classic-schedule-time-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .all-screening-list-head { display: none; }
+  .all-screening-row {
+    grid-template-columns: 96px 82px minmax(180px, 1fr) minmax(120px, .8fr) 130px;
+  }
+  .all-screening-row .all-screening-book { grid-column: 1 / -1; width: 100%; }
+}
+
+@media (max-width: 640px) {
+  .classic-schedule-day-groups { gap: 8px; }
+  .classic-schedule-day-group { padding: 7px; border-radius: 14px; }
+  .classic-schedule-day-heading { margin-bottom: 5px; }
+  .classic-schedule-day-heading h3 { font-size: 21px; }
+  .classic-schedule-day-heading strong { padding: 6px 9px; font-size: 11px; }
+  .classic-schedule-time-groups { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .classic-schedule-time-group + .classic-schedule-time-group { padding-top: 0; }
+  .classic-schedule-time-group.is-conflict-group { padding: 4px; border-radius: 12px; }
+  .classic-schedule-time-group:not(.is-conflict-group) { padding: 4px; }
+  .classic-schedule-time-group.is-conflict-group .classic-schedule-card { width: 100%; }
+  .classic-schedule-group-choice { padding-bottom: 4px; }
+  .classic-schedule-group-choice strong { font-size: 17px; }
+  .classic-schedule-group-choice span { font-size: 11px; text-align: left; }
+  .classic-schedule-grid { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+  .classic-schedule-card .screening-top { min-height: 132px; padding: 12px 12px 10px; }
+  .classic-schedule-card .compact-badges { padding-right: 100px; }
+  .classic-schedule-card .screening-title { font-size: 22px; }
+  .classic-schedule-card .screening-meta { font-size: 13px; }
+  .screening-card-time { font-size: 21px; }
+  .screening-corner-date { top: 9px; right: 9px; min-width: 54px; min-height: 58px; padding: 7px 10px; }
+  .screening-corner-date strong { font-size: 20px; }
+  .screening-corner-date small { font-size: 12px; }
+  .classic-schedule-card .compact-screening-body { padding: 8px 10px 9px; }
+  .classic-schedule-card .compact-book-btn { min-height: 43px; font-size: 16px; }
+  .classic-schedule-card .compact-staff-btn { min-height: 36px; font-size: 10px !important; }
+  .all-screenings-section { padding: 17px 13px; border-radius: 18px; }
+  .all-screening-filters { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .all-screening-filters #searchInput { grid-column: 1 / -1; }
+  .all-screening-row {
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 6px 10px;
+    padding: 12px;
+  }
+  .all-screening-date { grid-column: 1; grid-row: 1 / span 2; align-self: start; }
+  .all-screening-time { grid-column: 1; grid-row: 3; font-size: 14px; }
+  .all-screening-title { grid-column: 2; grid-row: 1; }
+  .all-screening-title strong { font-size: 15px; }
+  .all-screening-venue { grid-column: 2; grid-row: 2; }
+  .all-screening-status { grid-column: 2; grid-row: 3; }
+  .all-screening-book { grid-column: 1 / -1 !important; grid-row: 4; width: 100%; margin-top: 4px; }
+}
