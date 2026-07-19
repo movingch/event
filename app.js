@@ -6559,7 +6559,7 @@ document.addEventListener("click", (event) => {
   if (action === "move-survey-question-up") moveSurveyQuestionEditor(button.closest("[data-survey-question-row]"), -1);
   if (action === "move-survey-question-down") moveSurveyQuestionEditor(button.closest("[data-survey-question-row]"), 1);
   if (action === "remove-survey-question") removeSurveyQuestionEditor(button.closest("[data-survey-question-row]"));
-  if (action === "open-survey-preview") window.open("/survey.html?preview=1", "_blank", "noopener");
+  if (action === "open-survey-preview") window.open("/survey.html?preview=1&v=156", "_blank", "noopener");
   if (action === "delete-survey-response") deleteSurveyResponse(id);
   if (action === "delete-survey-dispatch") deleteSurveyDispatch(id);
   if (action === "clear-survey-dispatches") clearSurveyDispatches();
