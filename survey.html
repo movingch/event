@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>머내마을영화제 만족도조사</title>
-  <link rel="stylesheet" href="styles.css?v=119" />
+  <link rel="stylesheet" href="styles.css?v=139" />
   <style>
-    body{background:#f6f4ef}.survey-page{max-width:760px;margin:0 auto;padding:32px 16px}.survey-card{background:#fff;border:1px solid #e5e7eb;border-radius:24px;padding:24px;box-shadow:0 18px 45px rgba(15,23,42,.08)}.survey-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.survey-meta div{background:#f9fafb;border-radius:14px;padding:12px}.survey-question{border-top:1px solid #e5e7eb;padding:18px 0}.stars{display:flex;gap:8px;flex-wrap:wrap}.stars label{border:1px solid #d1d5db;border-radius:999px;padding:8px 12px;cursor:pointer}.survey-done{text-align:center;padding:40px 16px}.survey-error{color:#b91c1c;background:#fee2e2;border-radius:14px;padding:12px}@media(max-width:640px){.survey-meta{grid-template-columns:1fr}.survey-card{padding:18px}}
+    body{background:#f6f4ef;font-size:18px;line-height:1.7;color:#171717}.survey-page{max-width:780px;margin:0 auto;padding:32px 16px}.survey-card{background:#fff;border:1px solid #d1d5db;border-radius:24px;padding:30px;box-shadow:0 18px 45px rgba(15,23,42,.08)}.survey-card h1{font-size:2.1rem;line-height:1.25;margin:.25em 0}.survey-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}.survey-meta div{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px 16px}.survey-question{border-top:2px solid #e5e7eb;padding:24px 0}.survey-question>.label{display:block;font-size:1.12rem;font-weight:800;line-height:1.5;margin-bottom:12px}.stars{display:flex;gap:10px;flex-wrap:wrap}.stars label,.choice-list .check-inline{display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px;border:2px solid #b8bdc7;border-radius:14px;padding:10px 16px;cursor:pointer;font-size:1.05rem;font-weight:700;background:#fff}.stars input,.choice-list input{width:23px;height:23px;accent-color:#1f2937}.stars label:has(input:checked),.choice-list .check-inline:has(input:checked){border-color:#111827;background:#e8eef7;color:#111827}.choice-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.survey-question textarea{min-height:130px;font-size:1.05rem;line-height:1.6;padding:14px}.survey-notice{margin:18px 0;padding:16px 18px;border-radius:14px;background:#f3f4f6;color:#242b35;font-size:1rem;line-height:1.75}.survey-deadline{color:#374151;font-size:1rem}.survey-submit{display:block;width:100%;min-height:72px;margin-top:18px;border-radius:16px;font-size:1.3rem;font-weight:900;letter-spacing:-.01em}.survey-submit:focus-visible,.stars label:focus-within,.choice-list label:focus-within,textarea:focus-visible{outline:4px solid #f59e0b;outline-offset:3px}.survey-done{text-align:center;padding:48px 16px}.survey-error{color:#991b1b;background:#fee2e2;border-radius:14px;padding:16px;font-weight:700}@media(max-width:640px){body{font-size:17px}.survey-page{padding:16px 10px}.survey-meta{grid-template-columns:1fr}.survey-card{padding:22px 16px;border-radius:18px}.survey-card h1{font-size:1.8rem}.stars{display:grid;grid-template-columns:repeat(3,1fr)}.stars label{padding:10px 8px}.choice-list{grid-template-columns:1fr}.survey-submit{min-height:76px;font-size:1.28rem}}
   </style>
 </head>
 <body>
@@ -20,8 +20,13 @@
     const params = new URLSearchParams(location.search);
     const token = params.get('t') || params.get('token') || '';
     const webhook = params.get('w') || params.get('webhookUrl') || '';
+    const previewMode = params.get('preview') === '1' && ['127.0.0.1', 'localhost'].includes(location.hostname);
     const esc = (v) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
     let lookupData = null;
+
+    function presentationText(template, participant) {
+      return String(template || '').replaceAll('{이름}', participant.name || '관객').replaceAll('{영화명}', participant.movieTitle || '관람작');
+    }
 
     function questionHtml(q, index) {
       const id = esc(q.id || `q-${index}`);
@@ -34,7 +39,7 @@
       }
       if (type === 'single' || type === 'multiple') {
         const choices = String(q.choices || '예, 아니오').split(',').map(v => v.trim()).filter(Boolean);
-        return `<div class="survey-question"><label class="label">${title}${mark}</label><div class="choice-list">${choices.map(c => `<label class="check-inline"><input type="${type==='multiple'?'checkbox':'radio'}" name="${id}" value="${esc(c)}" ${required && type==='single'?'required':''}> ${esc(c)}</label>`).join('')}</div></div>`;
+        return `<div class="survey-question" ${required && type==='multiple' ? 'data-required-multiple="true"' : ''}><label class="label">${title}${mark}</label><div class="choice-list">${choices.map(c => `<label class="check-inline"><input type="${type==='multiple'?'checkbox':'radio'}" name="${id}" value="${esc(c)}" ${required && type==='single'?'required':''}> ${esc(c)}</label>`).join('')}</div></div>`;
       }
       return `<div class="survey-question"><label class="label" for="${id}">${title}${mark}</label><textarea class="input" id="${id}" name="${id}" rows="4" ${required?'required':''}></textarea></div>`;
     }
@@ -50,20 +55,23 @@
         return;
       }
       const p = data.participant || {};
+      const presentation = data.presentation || {};
       const questions = (data.questions || []).filter(q => q.enabled === 'ON' || q.enabled === true || q.enabled === 'true');
       root.innerHTML = `
         <div class="eyebrow">제9회 머내마을영화제</div>
-        <h1>만족도조사</h1>
-        <p><strong>${esc(p.name || '관객')} 님</strong>, 〈${esc(p.movieTitle || '관람작')}〉 관람은 어떠셨나요?</p>
+        <h1>${esc(presentation.surveyTitle || '만족도조사')}</h1>
+        <p>${esc(presentationText(presentation.surveyIntro || '{이름} 님, 〈{영화명}〉 관람은 어떠셨나요?', p))}</p>
         <div class="survey-meta">
           <div><small>상영일시</small><br><strong>${esc(p.screeningTime || '')}</strong></div>
           <div><small>장소</small><br><strong>${esc(p.venue || '')}</strong></div>
           <div><small>예약번호</small><br><strong>${esc(p.reservationNumber || '')}</strong></div>
           <div><small>신청자</small><br><strong>${esc(p.name || '')}</strong></div>
         </div>
+        ${data.responseDeadlineAt ? `<p class="survey-deadline">응답 마감: <strong>${esc(new Date(data.responseDeadlineAt).toLocaleString('ko-KR'))}</strong></p>` : ''}
+        <div class="survey-notice">${esc(presentation.privacyNotice || '응답 내용은 영화제 운영 개선과 결과 정리를 위해 사용되며 관리자만 확인할 수 있습니다. 개인정보와 설문 응답은 신청 시 안내한 보유기간에 따라 관리됩니다.')}</div>
         <form id="surveyForm">
           ${questions.map(questionHtml).join('')}
-          <div class="form-actions"><button class="btn btn-dark" type="submit">만족도조사 제출</button></div>
+          <div class="form-actions"><button class="btn btn-dark survey-submit" type="submit">만족도조사 제출하기</button></div>
         </form>`;
       document.getElementById('surveyForm').addEventListener('submit', submitSurvey);
     }
@@ -71,6 +79,12 @@
     async function submitSurvey(event) {
       event.preventDefault();
       const form = event.target;
+      const missingMultiple = [...form.querySelectorAll('[data-required-multiple="true"]')].find((group) => !group.querySelector('input[type="checkbox"]:checked'));
+      if (missingMultiple) {
+        missingMultiple.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        alert('필수 복수선택 문항에 하나 이상 응답해 주세요.');
+        return;
+      }
       const fd = new FormData(form);
       const answers = {};
       for (const [key, value] of fd.entries()) {
@@ -82,11 +96,16 @@
       const response = { ...p, id: p.id || token || `survey-${Date.now()}`, token, answers, submittedAt: new Date().toISOString(), status: '응답완료', test: isTest, type: isTest ? 'test' : (p.type || '') };
       const btn = form.querySelector('button[type="submit"]');
       if (btn) { btn.disabled = true; btn.textContent = '제출 중...'; }
+      if (previewMode) {
+        root.innerHTML = `<div class="survey-done"><h1>로컬 미리보기 제출 완료</h1><p>실제 데이터는 저장되지 않았습니다.</p></div>`;
+        return;
+      }
       try {
         const res = await fetch('/api/survey', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ w: webhook, response }) });
         const data = await res.json();
         if (!res.ok || data.ok === false) throw new Error(data.message || '제출 실패');
-        root.innerHTML = `<div class="survey-done"><h1>응답해 주셔서 감사합니다.</h1><p>소중한 의견은 다음 영화제를 준비하는 데 사용하겠습니다.</p></div>`;
+        const presentation = lookupData.presentation || {};
+        root.innerHTML = `<div class="survey-done"><h1>${esc(presentation.completionTitle || '응답해 주셔서 감사합니다.')}</h1><p>${esc(presentation.completionMessage || '소중한 의견은 다음 영화제를 준비하는 데 사용하겠습니다.')}</p></div>`;
       } catch (error) {
         if (btn) { btn.disabled = false; btn.textContent = '만족도조사 제출'; }
         alert(error.message || '제출 중 오류가 발생했습니다.');
@@ -94,6 +113,24 @@
     }
 
     async function init() {
+      if (previewMode) {
+        renderSurvey({
+          ok: true,
+          alreadySubmitted: false,
+          responseDeadlineAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+          presentation: { surveyTitle: '만족도조사', surveyIntro: '{이름} 님, 〈{영화명}〉 관람은 어떠셨나요?', privacyNotice: '응답 내용은 영화제 운영 개선과 결과 정리를 위해 사용되며 관리자만 확인할 수 있습니다. 개인정보와 설문 응답은 신청 시 안내한 보유기간에 따라 관리됩니다.', completionTitle: '응답해 주셔서 감사합니다.', completionMessage: '소중한 의견은 다음 영화제를 준비하는 데 사용하겠습니다.' },
+          participant: { name: '미리보기 관객', movieTitle: '머내마을영화제 상영작', screeningTime: '2026. 9. 12. 오후 7:00', venue: '머내마을 상영관', reservationNumber: 'PREVIEW-001', reservationId: 'preview' },
+          questions: [
+            { id: 'q-overall', enabled: true, type: 'rating', title: '관람하신 영화에 얼마나 만족하셨나요?', required: true },
+            { id: 'q-venue', enabled: true, type: 'rating', title: '상영 장소와 환경은 만족스러웠나요?', required: true },
+            { id: 'q-guide', enabled: true, type: 'rating', title: '영화제 진행과 안내는 만족스러웠나요?', required: true },
+            { id: 'q-return', enabled: true, type: 'single', title: '다음에도 머내마을영화제에 참여하고 싶으신가요?', choices: '예, 아니오, 잘 모르겠음', required: true },
+            { id: 'q-good', enabled: true, type: 'text', title: '가장 좋았던 점은 무엇인가요?', required: false },
+            { id: 'q-improve', enabled: true, type: 'text', title: '개선되었으면 하는 점은 무엇인가요?', required: false }
+          ]
+        });
+        return;
+      }
       if (!token) {
         root.innerHTML = '<div class="survey-error">설문 링크 정보가 올바르지 않습니다.</div>';
         return;

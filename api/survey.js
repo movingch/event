@@ -54,10 +54,10 @@ async function supabaseFetch(path, options = {}) {
   return data;
 }
 
-async function readSupabaseState() {
+async function readSupabaseRecord() {
   const rows = await supabaseFetch('festival_state?key=eq.main&select=key,state,updated_at&limit=1', { method: 'GET' });
   const row = Array.isArray(rows) ? rows[0] : null;
-  return row?.state && typeof row.state === 'object' ? row.state : {};
+  return row ? { state: row.state && typeof row.state === 'object' ? row.state : {}, updatedAt: row.updated_at || '' } : null;
 }
 
 function normalizeSurveyQuestion(q, index) {
@@ -77,7 +77,7 @@ function defaultSurveyQuestions() {
     { id: 'q-overall', order: 1, type: 'rating', title: '전체적으로 만족하셨나요?', choices: '', required: true, enabled: true },
     { id: 'q-venue', order: 2, type: 'rating', title: '상영 장소와 환경은 만족스러웠나요?', choices: '', required: true, enabled: true },
     { id: 'q-guide', order: 3, type: 'rating', title: '진행과 안내는 만족스러웠나요?', choices: '', required: true, enabled: true },
-    { id: 'q-return', order: 4, type: 'rating', title: '다음에도 참여하고 싶으신가요?', choices: '', required: true, enabled: true },
+    { id: 'q-return', order: 4, type: 'single', title: '다음에도 머내마을영화제에 참여하고 싶으신가요?', choices: '예, 아니오, 잘 모르겠음', required: true, enabled: true },
     { id: 'q-good', order: 5, type: 'text', title: '좋았던 점을 적어 주세요.', choices: '', required: false, enabled: true },
     { id: 'q-improve', order: 6, type: 'text', title: '개선하면 좋을 점을 적어 주세요.', choices: '', required: false, enabled: true }
   ];
@@ -95,22 +95,119 @@ function findSurveyResponseByToken(state, token) {
   return (Array.isArray(state.surveyResponses) ? state.surveyResponses : []).find((response) => normalizeValue(response.token) === t) || null;
 }
 
+function settingIsOn(value, fallback = false) {
+  if (value === true || value === 'true' || value === 'ON') return true;
+  if (value === false || value === 'false' || value === 'OFF') return false;
+  return fallback;
+}
+
+function surveySettings(state) {
+  const source = state?.surveySettings || {};
+  return {
+    enabled: settingIsOn(source.enabled, false),
+    preventDuplicate: settingIsOn(source.preventDuplicate, true),
+    responseDeadlineDays: Math.max(1, Number(source.responseDeadlineDays || 7)),
+    surveyTitle: String(source.surveyTitle || '만족도조사').trim(),
+    surveyIntro: String(source.surveyIntro || '{이름} 님, 〈{영화명}〉 관람은 어떠셨나요?').trim(),
+    privacyNotice: String(source.privacyNotice || '응답 내용은 영화제 운영 개선과 결과 정리를 위해 사용되며 관리자만 확인할 수 있습니다. 개인정보와 설문 응답은 신청 시 안내한 보유기간에 따라 관리됩니다.').trim(),
+    completionTitle: String(source.completionTitle || '응답해 주셔서 감사합니다.').trim(),
+    completionMessage: String(source.completionMessage || '소중한 의견은 다음 영화제를 준비하는 데 사용하겠습니다.').trim()
+  };
+}
+
+function dispatchDeadline(dispatch, settings) {
+  const base = new Date(dispatch?.sentAt || dispatch?.createdAt || '').getTime();
+  return Number.isFinite(base) ? base + settings.responseDeadlineDays * 86400000 : 0;
+}
+
+function surveyExpired(dispatch, settings, now = Date.now()) {
+  const deadline = dispatchDeadline(dispatch, settings);
+  return Boolean(deadline && now > deadline);
+}
+
+function activeSurveyQuestions(state) {
+  return (Array.isArray(state.surveyQuestions) && state.surveyQuestions.length ? state.surveyQuestions : defaultSurveyQuestions())
+    .map(normalizeSurveyQuestion)
+    .filter((q) => q.enabled !== false)
+    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+}
+
+function cleanSurveyAnswers(rawAnswers, questions) {
+  const input = rawAnswers && typeof rawAnswers === 'object' && !Array.isArray(rawAnswers) ? rawAnswers : {};
+  const answers = {};
+  for (const question of questions) {
+    const raw = input[question.id];
+    const values = Array.isArray(raw) ? raw : (raw == null || raw === '' ? [] : [raw]);
+    if (question.required && values.length === 0) {
+      const error = new Error(`필수 문항에 응답해 주세요: ${question.title}`);
+      error.status = 400;
+      throw error;
+    }
+    if (!values.length) continue;
+    if (question.type === 'rating') {
+      const score = Number(values[0]);
+      if (!Number.isInteger(score) || score < 1 || score > 5) {
+        const error = new Error(`1점부터 5점 사이로 응답해 주세요: ${question.title}`);
+        error.status = 400;
+        throw error;
+      }
+      answers[question.id] = String(score);
+      continue;
+    }
+    if (question.type === 'single' || question.type === 'multiple') {
+      const allowed = String(question.choices || '').split(',').map((item) => item.trim()).filter(Boolean);
+      const selected = [...new Set(values.map((value) => String(value).trim()).filter(Boolean))];
+      if (question.required && selected.length === 0) {
+        const error = new Error(`필수 문항에 응답해 주세요: ${question.title}`);
+        error.status = 400;
+        throw error;
+      }
+      if (question.type === 'single' && selected.length > 1) {
+        const error = new Error(`하나만 선택해 주세요: ${question.title}`);
+        error.status = 400;
+        throw error;
+      }
+      if (selected.some((value) => !allowed.includes(value))) {
+        const error = new Error(`올바른 선택지를 선택해 주세요: ${question.title}`);
+        error.status = 400;
+        throw error;
+      }
+      if (selected.length) answers[question.id] = question.type === 'multiple' ? selected : selected[0];
+      continue;
+    }
+    const text = String(values[0] || '').trim().slice(0, 2000);
+    if (question.required && !text) {
+      const error = new Error(`필수 문항에 응답해 주세요: ${question.title}`);
+      error.status = 400;
+      throw error;
+    }
+    if (text) answers[question.id] = text;
+  }
+  return answers;
+}
+
 function supabaseSurveyLookupPayload(state, token) {
   const dispatch = findSurveyDispatchByToken(state, token);
   if (!dispatch) return { ok: false, message: '설문 대상 정보를 찾지 못했습니다. 관리자에서 테스트 링크를 다시 만들어 주세요.' };
   const existing = findSurveyResponseByToken(state, token);
-  const settings = state.surveySettings || {};
-  if (settings.enabled === false || settings.enabled === 'false' || settings.enabled === 'OFF') {
-    return { ok: false, message: '현재 만족도조사가 비활성화되어 있습니다.' };
+  const settings = surveySettings(state);
+  if (!settings.enabled) {
+    return { ok: false, disabled: true, message: '현재 만족도조사가 비활성화되어 있습니다.' };
   }
-  const questions = (Array.isArray(state.surveyQuestions) && state.surveyQuestions.length ? state.surveyQuestions : defaultSurveyQuestions())
-    .map(normalizeSurveyQuestion)
-    .filter((q) => q.enabled !== false)
-    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+  if (surveyExpired(dispatch, settings)) return { ok: false, expired: true, message: '설문 응답 기간이 종료되었습니다.' };
+  const questions = activeSurveyQuestions(state);
   return {
     ok: true,
     source: 'supabase',
-    alreadySubmitted: Boolean(existing),
+    alreadySubmitted: settings.preventDuplicate && Boolean(existing),
+    responseDeadlineAt: dispatchDeadline(dispatch, settings) ? new Date(dispatchDeadline(dispatch, settings)).toISOString() : '',
+    presentation: {
+      surveyTitle: settings.surveyTitle,
+      surveyIntro: settings.surveyIntro,
+      privacyNotice: settings.privacyNotice,
+      completionTitle: settings.completionTitle,
+      completionMessage: settings.completionMessage
+    },
     participant: {
       id: dispatch.id || '',
       token: dispatch.token || token,
@@ -122,6 +219,7 @@ function supabaseSurveyLookupPayload(state, token) {
       movieTitle: dispatch.movieTitle || '상영작',
       venue: dispatch.venue || '상영관',
       screeningTime: dispatch.screeningTime || '',
+      seatPeople: Number(dispatch.seatPeople || 1),
       type: dispatch.type || '',
       test: dispatch.test === true || String(dispatch.reservationId || '').startsWith('test-') || String(dispatch.name || '').includes('TEST')
     },
@@ -131,15 +229,23 @@ function supabaseSurveyLookupPayload(state, token) {
 
 async function fallbackSurveyLookupFromSupabase(token) {
   if (!supabaseConfig().configured) return null;
-  const state = await readSupabaseState();
-  return supabaseSurveyLookupPayload(state, token);
+  const record = await readSupabaseRecord();
+  return supabaseSurveyLookupPayload(record?.state || {}, token);
 }
 
-async function writeSupabaseState(state) {
+async function writeSupabaseState(state, expectedUpdatedAt) {
+  const updatedAt = new Date().toISOString();
+  if (expectedUpdatedAt) {
+    return supabaseFetch(`festival_state?key=eq.main&updated_at=eq.${encodeURIComponent(expectedUpdatedAt)}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ state, updated_at: updatedAt })
+    });
+  }
   return supabaseFetch('festival_state', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-    body: JSON.stringify([{ key: 'main', state, updated_at: new Date().toISOString() }])
+    body: JSON.stringify([{ key: 'main', state, updated_at: updatedAt }])
   });
 }
 
@@ -187,39 +293,56 @@ function responseMatchesDispatch(response, dispatch) {
 
 async function appendSurveyResponseToSupabase(response) {
   if (!supabaseConfig().configured || !response || typeof response !== 'object') return { skipped: true, reason: 'NO_SUPABASE' };
-  const state = await readSupabaseState();
-  const list = Array.isArray(state.surveyResponses) ? state.surveyResponses : [];
-  const dispatches = Array.isArray(state.surveyDispatches) ? state.surveyDispatches : [];
-  const matchedDispatch = dispatches.find((dispatch) => responseMatchesDispatch(response, dispatch));
-  const now = new Date().toISOString();
-  const enriched = {
-    ...response,
-    id: response.id || response.token || response.reservationId || response.reservationNumber || `survey-${Date.now()}`,
-    token: response.token || matchedDispatch?.token || '',
-    reservationId: response.reservationId || matchedDispatch?.reservationId || '',
-    reservationNumber: response.reservationNumber || matchedDispatch?.reservationNumber || '',
-    screeningId: response.screeningId || matchedDispatch?.screeningId || '',
-    movieTitle: response.movieTitle || matchedDispatch?.movieTitle || '',
-    venue: response.venue || matchedDispatch?.venue || '',
-    phone: response.phone || response.contact || matchedDispatch?.phone || '',
-    name: response.name || matchedDispatch?.name || '익명',
-    createdAt: response.createdAt || response.submittedAt || now,
-    submittedAt: response.submittedAt || response.createdAt || now,
-    status: '응답완료',
-    test: response.test === true || matchedDispatch?.test === true || String(response.reservationId || matchedDispatch?.reservationId || '').startsWith('test-') || String(response.name || matchedDispatch?.name || '').includes('TEST'),
-    type: response.type || matchedDispatch?.type || (String(response.reservationId || matchedDispatch?.reservationId || '').startsWith('test-') ? 'test' : '')
-  };
-  const key = responseKey(enriched);
-  const next = key ? list.filter((item) => responseKey(item) !== key) : list.slice();
-  next.push(enriched);
-  state.surveyResponses = next;
-  state.surveyDispatches = dispatches.map((dispatch) => {
-    if (!responseMatchesDispatch(enriched, dispatch)) return dispatch;
-    return { ...dispatch, status: '응답완료', respondedAt: enriched.submittedAt, responseId: enriched.id };
-  });
-  state.lastUpdated = now;
-  await writeSupabaseState(state);
-  return { ok: true, count: next.length, matchedDispatch: Boolean(matchedDispatch), state, response: enriched };
+  const token = String(response.token || '').trim();
+  if (!token) { const error = new Error('설문 토큰이 없습니다.'); error.status = 400; throw error; }
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const record = await readSupabaseRecord();
+    if (!record) { const error = new Error('설문 원본 데이터를 찾지 못했습니다.'); error.status = 503; throw error; }
+    const state = record.state;
+    const list = Array.isArray(state.surveyResponses) ? state.surveyResponses : [];
+    const dispatches = Array.isArray(state.surveyDispatches) ? state.surveyDispatches : [];
+    const matchedDispatch = findSurveyDispatchByToken(state, token);
+    if (!matchedDispatch) { const error = new Error('유효하지 않은 설문 링크입니다.'); error.status = 404; throw error; }
+    const settings = surveySettings(state);
+    if (!settings.enabled) { const error = new Error('현재 만족도조사가 비활성화되어 있습니다.'); error.status = 403; throw error; }
+    if (surveyExpired(matchedDispatch, settings)) { const error = new Error('설문 응답 기간이 종료되었습니다.'); error.status = 410; throw error; }
+    if (settings.preventDuplicate && findSurveyResponseByToken(state, token)) { const error = new Error('이미 응답해 주셨습니다.'); error.status = 409; throw error; }
+    const questions = activeSurveyQuestions(state);
+    const answers = cleanSurveyAnswers(response.answers, questions);
+    const now = new Date().toISOString();
+    const isTest = matchedDispatch.test === true || String(matchedDispatch.reservationId || '').startsWith('test-') || String(matchedDispatch.name || '').includes('TEST');
+    const enriched = {
+      id: `survey-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      token: matchedDispatch.token,
+      reservationId: matchedDispatch.reservationId || '',
+      reservationNumber: matchedDispatch.reservationNumber || '',
+      screeningId: matchedDispatch.screeningId || '',
+      movieTitle: matchedDispatch.movieTitle || '',
+      screeningTime: matchedDispatch.screeningTime || '',
+      venue: matchedDispatch.venue || '',
+      seatPeople: Number(matchedDispatch.seatPeople || 1),
+      phone: matchedDispatch.phone || '',
+      name: matchedDispatch.name || '익명',
+      answers,
+      createdAt: now,
+      submittedAt: now,
+      status: '응답완료',
+      allowDuplicate: !settings.preventDuplicate,
+      test: isTest,
+      type: isTest ? 'test' : (matchedDispatch.type || '')
+    };
+    const next = list.concat(enriched);
+    state.surveyResponses = next;
+    state.surveyDispatches = dispatches.map((dispatch) => normalizeValue(dispatch.token) === normalizeValue(token)
+      ? { ...dispatch, status: '응답완료', respondedAt: now, responseId: enriched.id }
+      : dispatch);
+    state.lastUpdated = now;
+    const written = await writeSupabaseState(state, record.updatedAt);
+    if (Array.isArray(written) && written.length) return { ok: true, count: next.length, matchedDispatch: true, state, response: enriched };
+  }
+  const conflict = new Error('동시에 접수된 응답이 많아 저장하지 못했습니다. 잠시 후 다시 제출해 주세요.');
+  conflict.status = 409;
+  throw conflict;
 }
 
 function decodeWebhook(value) {
@@ -266,7 +389,8 @@ module.exports = async function handler(req, res) {
         if (supabaseLookup && supabaseLookup.ok) {
           return sendJson(res, 200, { ...supabaseLookup, source: 'supabase' });
         }
-        return sendJson(res, 404, { ok: false, message: supabaseLookup?.message || 'Supabase 원본에서 설문 대상 정보를 찾지 못했습니다. 관리자에서 테스트 링크/문자를 다시 만들어 주세요.', supabaseLookup });
+        const lookupStatus = supabaseLookup?.expired ? 410 : (supabaseLookup?.disabled ? 403 : 404);
+        return sendJson(res, lookupStatus, { ok: false, message: supabaseLookup?.message || 'Supabase 원본에서 설문 대상 정보를 찾지 못했습니다. 관리자에서 테스트 링크/문자를 다시 만들어 주세요.', supabaseLookup });
       } catch (fallbackError) {
         return sendJson(res, 500, { ok: false, message: fallbackError && fallbackError.message ? fallbackError.message : 'Supabase 설문 조회 실패' });
       }
@@ -280,7 +404,7 @@ module.exports = async function handler(req, res) {
       try {
         supabaseUpdate = await appendSurveyResponseToSupabase(surveyResponse);
       } catch (supabaseError) {
-        supabaseUpdate = { ok: false, message: supabaseError && supabaseError.message ? supabaseError.message : String(supabaseError) };
+        supabaseUpdate = { ok: false, status: supabaseError?.status || 500, message: supabaseError && supabaseError.message ? supabaseError.message : String(supabaseError) };
       }
       let googleSubmit = { skipped: true };
       if (supabaseUpdate?.ok === true) {
@@ -295,7 +419,7 @@ module.exports = async function handler(req, res) {
         }
       }
       const finalOk = supabaseUpdate?.ok === true;
-      return sendJson(res, finalOk ? 200 : 500, {
+      return sendJson(res, finalOk ? 200 : (supabaseUpdate.status || 500), {
         ok: finalOk,
         message: finalOk ? 'Supabase 원본에 저장했습니다.' : (supabaseUpdate.message || 'Supabase 저장 실패'),
         supabaseUpdate,

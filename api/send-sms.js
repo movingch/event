@@ -109,15 +109,20 @@ function buildMessage(body) {
   const seatPeople = safeText(body.seatPeople, 80) || people;
   const dateTime = safeText(body.dateTime, 80) || '일시 미정';
   const venue = safeText(body.venue, 80) || '상영관 미정';
+  const waitlist = safeText(body.reservationStatus, 20) === '대기';
 
   return [
-    `${name} 님 예약이 완료되었습니다.`,
+    waitlist
+      ? `${name} 님, 현재 이 상영관은 신청마감이 되었습니다. 대기상태로 접수되었습니다.`
+      : `${name} 님 예약이 완료되었습니다.`,
     `예약번호: ${reservationId}`,
     `영화명: ${movieTitle}`,
     `좌석/인원: ${seatPeople}`,
     `일시: ${dateTime}`,
     `장소: ${venue}`,
-    '상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요.'
+    waitlist
+      ? '취소석이 생기면 운영진이 입력하신 연락처로 안내드리겠습니다.'
+      : '상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요.'
   ].join('\n');
 }
 

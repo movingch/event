@@ -61,6 +61,36 @@ async function writeState(state) {
   return Array.isArray(rows) ? rows[0] : rows;
 }
 
+function recordKey(item) {
+  return String(item?.id || item?.token || item?.reservationId || item?.reservationNumber || item?.submittedAt || item?.createdAt || '');
+}
+
+function mergeSurveyRecords(remoteItems, incomingItems) {
+  const merged = new Map();
+  for (const item of Array.isArray(remoteItems) ? remoteItems : []) {
+    const key = recordKey(item);
+    if (key) merged.set(key, item);
+  }
+  for (const item of Array.isArray(incomingItems) ? incomingItems : []) {
+    const key = recordKey(item);
+    if (key) merged.set(key, { ...(merged.get(key) || {}), ...item });
+  }
+  return [...merged.values()];
+}
+
+function preserveConcurrentSurveyData(remoteState, incomingState, reason) {
+  const destructiveReasons = ['clear-survey-responses', 'clear-survey-dispatches', 'delete-survey-response', 'delete-survey-dispatch', 'manual-force-migration'];
+  if (destructiveReasons.some((prefix) => String(reason || '').startsWith(prefix))) return incomingState;
+  const next = { ...incomingState };
+  next.surveyResponses = mergeSurveyRecords(remoteState?.surveyResponses, incomingState?.surveyResponses);
+  next.surveyDispatches = mergeSurveyRecords(remoteState?.surveyDispatches, incomingState?.surveyDispatches).map((dispatch) => {
+    const remote = (Array.isArray(remoteState?.surveyDispatches) ? remoteState.surveyDispatches : []).find((item) => recordKey(item) === recordKey(dispatch));
+    if (remote?.respondedAt && !String(dispatch.status || '').includes('응답')) return { ...dispatch, status: remote.status || '응답완료', respondedAt: remote.respondedAt, responseId: remote.responseId || dispatch.responseId || '' };
+    return dispatch;
+  });
+  return next;
+}
+
 async function backupToGoogleSheet(googlePayload, webhookUrl) {
   const url = String(webhookUrl || env('GOOGLE_APPS_SCRIPT_URL') || DEFAULT_GOOGLE_APPS_SCRIPT_URL || '').trim();
   if (!url || !googlePayload) return { skipped: true, reason: 'NO_GOOGLE_BACKUP_CONFIG' };
@@ -98,12 +128,14 @@ module.exports = async function handler(req, res) {
       const body = raw ? JSON.parse(raw) : {};
       const state = body.state;
       if (!state || typeof state !== 'object') return json(res, 400, { ok: false, message: '저장할 state 데이터가 없습니다.' });
-      const row = await writeState(state);
+      const current = await readState();
+      const safeState = current?.state && typeof current.state === 'object' ? preserveConcurrentSurveyData(current.state, state, body.reason) : state;
+      const row = await writeState(safeState);
       let googleBackup = { skipped: true };
       if (body.googlePayload) {
         googleBackup = await backupToGoogleSheet(body.googlePayload, body.googleWebhookUrl);
       }
-      return json(res, 200, { ok: true, data: row?.state || state, updatedAt: row?.updated_at || null, googleBackup });
+      return json(res, 200, { ok: true, data: row?.state || safeState, updatedAt: row?.updated_at || null, googleBackup });
     }
 
     return json(res, 405, { ok: false, message: 'GET/POST only' });

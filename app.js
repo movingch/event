@@ -1,10 +1,9 @@
-const DONATION_MESSAGE = "머내마을영화제는 용인시 수지구 주민들이 모여 어린이부터 시니어까지 감독, 시나리오작가, 배우, 연출이 되어서 직접 영화를 제작하고 상영합니다. 또한 동네 곳곳이 영화상영관이 되어 동네에 펼쳐지는 영화축제입니다.\n\n머내마을영화제는 손수 주민들이 만들어가는 순수 주민주도형 영화제입니다.\n\n현재 마을의 귀한 분들이 십시일반 후원에 참여해 주십니다. 여전히 이 멋진 영화제를 진행하기에 부족한 가운데 있기에 여러분의 소중한 1만원의 후원이 필요합니다. 마음이 움직이신다면 이 영화제에 후원으로 기꺼이 참여해 주시길 부탁드립니다.";
+const DONATION_MESSAGE = "머내마을영화제는 마을 사람들의 품앗이로 함께 준비하고 함께 즐기던 전통적인 마을축제의 정신을 영화로 이어가는 주민 참여형 영화제입니다.\n\n주민들은 기획, 운영, 프로그래머, 공연, 연출, 스탭 등 영화제의 모든 과정에서 활약하고 있습니다.\n\n이러한 우리들의 이야기는 한 편의 영화이자 새로운 마을의 문화를 만들어가는 과정입니다.\n\n함께 영화를 만들고, 함께 영화를 보며, 함께 이야기를 나누는 경험은 사람과 사람을 연결하는 매개가 되고, 서로의 삶과 이야기를 나누는 공통의 언어가 됩니다.\n\n어느덧 10주년을 바라보는 머내마을영화제는 이러한 연대의 힘을 바탕으로 삭막한 아파트촌에서 마을의 다정함을 발견하게 되었습니다.\n\n머내마을영화제의 가장 중요한 가치는 ‘함께 만드는 사람들’입니다. 우리 동네 사람들, 바로 여러분의 단단한 지지가 필요합니다.\n\n작은 후원의 손길은 함께하는 가치를 만들어내고 또다시 10년을 꿈꾸는 열린 발걸음을 내딛는 힘이 됩니다.\n\n머내마을영화제를 지속해 갈 수 있도록 머내엔영화의 회원이 되어주세요. 여러분의 후원을 기다립니다.";
 
 const DONATION_AMOUNT = 10000;
-// 실제 후원 계좌 정보를 아래 세 값에 입력하세요.
-const DONATION_BANK_NAME = "은행명 입력";
-const DONATION_ACCOUNT_NUMBER = "계좌번호 입력";
-const DONATION_ACCOUNT_HOLDER = "예금주 입력";
+const DONATION_BANK_NAME = "신협";
+const DONATION_ACCOUNT_NUMBER = "131-022-582247";
+const DONATION_ACCOUNT_HOLDER = "머내엔영화";
 // 별도의 간편이체/결제 링크가 있다면 입력하세요. 비워두면 계좌이체 안내 화면을 표시합니다.
 const DONATION_TRANSFER_URL = "https://aq.gy/f/2hekV";
 const LAST_DONATION_SESSION_KEY = "munae-last-donation-id";
@@ -17,6 +16,9 @@ const ADMIN_PIN = "0909";
 const SMS_API_ENDPOINT = "/api/send-sms";
 const SUPABASE_STATE_API_ENDPOINT = "/api/supabase-state";
 const AUTO_SEND_SMS_ON_CONFIRMED_RESERVATION = true;
+const PRIVACY_CONSENT_VERSION = "2026-07-19-v1";
+const PRIVACY_CONSENT_TITLE = "개인정보 수집·이용 및 초상권 사용에 대한 동의서";
+const PRIVACY_CONSENT_TEXT = "머내마을영화제에서는 상영작 경과보고와 홍보물 제작에 관련하여 「개인정보보호법」 제15조(개인정보의 수집·이용)에 따라 개인정보를 수집·이용하고 초상권 사용을 관리합니다. 개인정보 및 초상권의 보유 및 이용 기간은 3년입니다. 개인정보 수집·이용 및 초상권 사용에 대한 동의를 거부할 권리가 있으나, 동의를 거부할 경우 제9회 머내마을영화제 참여에 제한을 받을 수 있습니다.";
 
 const FESTIVAL_START_DATE = "2026-09-09";
 const FESTIVAL_END_DATE = "2026-09-13";
@@ -329,6 +331,9 @@ function normalizeReservation(reservation = {}) {
     seatType,
     seatAssignment: "",
     donorName: base.donorName || "",
+    privacyConsent: base.privacyConsent === true,
+    privacyConsentAt: base.privacyConsentAt || "",
+    privacyConsentVersion: base.privacyConsentVersion || "",
     smsConsent: base.smsConsent !== false,
     smsStatus: base.smsStatus || "미발송",
     smsSentAt: base.smsSentAt || "",
@@ -336,6 +341,25 @@ function normalizeReservation(reservation = {}) {
     smsRequestId: base.smsRequestId || "",
     note: cleanReservationNote(base.note)
   };
+}
+
+function normalizeGeneralAdmins(data = {}) {
+  const source = Array.isArray(data.generalAdmins) ? data.generalAdmins : [];
+  const normalized = source.map((admin, index) => ({
+    id: String(admin?.id || `admin-${index + 1}`),
+    name: String(admin?.name || "").trim(),
+    password: String(admin?.password || admin?.pin || "").trim(),
+    createdAt: admin?.createdAt || "",
+    updatedAt: admin?.updatedAt || ""
+  })).filter((admin) => admin.name && admin.password);
+  if (normalized.length) return normalized;
+  return [{
+    id: "admin-default",
+    name: "일반관리자",
+    password: String(data.adminPin || ADMIN_PIN),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }];
 }
 
 function reservationAttendanceState(reservation = {}) {
@@ -357,6 +381,11 @@ function defaultSurveySettings() {
     sendDelayMinutes: 5,
     responseDeadlineDays: 7,
     preventDuplicate: true,
+    surveyTitle: "만족도조사",
+    surveyIntro: "{이름} 님, 〈{영화명}〉 관람은 어떠셨나요?",
+    privacyNotice: "응답 내용은 영화제 운영 개선과 결과 정리를 위해 사용되며 관리자만 확인할 수 있습니다. 개인정보와 설문 응답은 신청 시 안내한 보유기간에 따라 관리됩니다.",
+    completionTitle: "응답해 주셔서 감사합니다.",
+    completionMessage: "소중한 의견은 다음 영화제를 준비하는 데 사용하겠습니다.",
     smsTemplate: "[머내마을영화제]\n{이름} 님, 〈{영화명}〉 관람은 어떠셨나요?\n만족도조사에 참여해 주세요.\n{설문링크}"
   };
 }
@@ -382,6 +411,11 @@ function normalizeSurveySettings(settings = {}) {
     sendDelayMinutes: Math.max(1, Number(settings.sendDelayMinutes || defaults.sendDelayMinutes)),
     responseDeadlineDays: Math.max(1, Number(settings.responseDeadlineDays || defaults.responseDeadlineDays)),
     preventDuplicate: settings.preventDuplicate !== false,
+    surveyTitle: String(settings.surveyTitle || defaults.surveyTitle).trim(),
+    surveyIntro: String(settings.surveyIntro || defaults.surveyIntro).trim(),
+    privacyNotice: String(settings.privacyNotice || defaults.privacyNotice).trim(),
+    completionTitle: String(settings.completionTitle || defaults.completionTitle).trim(),
+    completionMessage: String(settings.completionMessage || defaults.completionMessage).trim(),
     smsTemplate: String(settings.smsTemplate || defaults.smsTemplate)
   };
 }
@@ -421,10 +455,11 @@ function surveySettingLabel(value) {
 }
 
 function surveySummaryStats() {
-  const responses = Array.isArray(state.surveyResponses) ? state.surveyResponses : [];
-  const dispatches = Array.isArray(state.surveyDispatches) ? state.surveyDispatches : [];
-  const sent = dispatches.filter((item) => item.status === "발송완료").length;
-  const overall = responses.map((item) => Number(item.overallRating || item.answers?.["q-overall"] || 0)).filter((n) => n > 0);
+  const responses = realSurveyResponses();
+  const dispatches = realSurveyDispatches();
+  const sent = dispatches.filter(isSuccessfulSurveyDispatch).length;
+  const ratingQuestion = (state.surveyQuestions || defaultSurveyQuestions()).find((q) => q.enabled !== false && q.type === "rating");
+  const overall = responses.map((item) => Number(item.overallRating || item.answers?.[ratingQuestion?.id || "q-overall"] || 0)).filter((n) => n > 0);
   const avg = overall.length ? (overall.reduce((sum, n) => sum + n, 0) / overall.length).toFixed(1) : "-";
   return { responses: responses.length, dispatches: dispatches.length, sent, average: avg };
 }
@@ -472,6 +507,7 @@ function ensureSurveyDispatch(reservation, screening) {
     movieTitle: screening?.title || "",
     venue: screening?.venue || "",
     screeningTime: screening?.startTime || "",
+    seatPeople: Number(reservation.attendedSeats || reservation.seats || 1),
     status: "대기",
     sentAt: "",
     error: "",
@@ -552,6 +588,7 @@ function normalizeState(data) {
     donations: Array.isArray(data.donations) ? data.donations : [],
     sponsorClicks: Number(data.sponsorClicks || 0),
     adminPin: String(data.adminPin || ADMIN_PIN),
+    generalAdmins: normalizeGeneralAdmins(data),
     masterStaffPin: String(data.masterStaffPin || "0909"),
     masterStaffPresent: Boolean(data.masterStaffPresent),
     surveySettings: normalizeSurveySettings(data.surveySettings),
@@ -694,6 +731,60 @@ function confirmedSeats(screeningId) {
 
 function waitlistSeats(screeningId) {
   return getReservations(screeningId).filter((r) => r.status === "대기").reduce((sum, r) => sum + Number(r.seats || 0), 0);
+}
+
+function normalizedPersonName(value = "") {
+  return String(value || "").trim().replace(/\s+/g, "").toLocaleLowerCase("ko-KR");
+}
+
+function normalizedPersonPhone(value = "") {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function reservationMatchesPerson(reservation, name, phone) {
+  const targetName = normalizedPersonName(name);
+  const targetPhone = normalizedPersonPhone(phone);
+  const sameName = targetName && normalizedPersonName(reservation?.name) === targetName;
+  const samePhone = targetPhone && normalizedPersonPhone(reservation?.phone) === targetPhone;
+  return Boolean(sameName || samePhone);
+}
+
+function reservationsForPerson(name, phone) {
+  return state.reservations.filter((reservation) => reservationMatchesPerson(reservation, name, phone));
+}
+
+function screeningTimesConflict(first, second) {
+  if (!first || !second) return false;
+  if (first.id === second.id) return true;
+  const firstStart = new Date(first.startTime);
+  const secondStart = new Date(second.startTime);
+  if (Number.isNaN(firstStart.getTime()) || Number.isNaN(secondStart.getTime())) return false;
+  if (formatDateOnly(first.startTime) !== formatDateOnly(second.startTime)) return false;
+  const startGapMinutes = Math.abs(firstStart.getTime() - secondStart.getTime()) / 60000;
+  const firstEnd = new Date(first.endTime || new Date(firstStart.getTime() + 60 * 60000));
+  const secondEnd = new Date(second.endTime || new Date(secondStart.getTime() + 60 * 60000));
+  const overlaps = firstStart < secondEnd && secondStart < firstEnd;
+  return overlaps || startGapMinutes <= 60;
+}
+
+function bookingRuleError(screening, name, phone) {
+  const existing = reservationsForPerson(name, phone);
+  if (existing.length >= 5) return "5회까지 신청가능합니다.";
+  const conflict = existing.find((reservation) => {
+    const reservedScreening = state.screenings.find((item) => item.id === reservation.screeningId);
+    return screeningTimesConflict(screening, reservedScreening);
+  });
+  if (conflict) {
+    const reservedScreening = state.screenings.find((item) => item.id === conflict.screeningId);
+    return `같은 날 동일 시간 또는 1시간 이내에 시작하는 영화는 중복 예약할 수 없습니다. 이미 신청한 영화: ${cleanMovieTitle(reservedScreening?.title || "상영작")}`;
+  }
+  return "";
+}
+
+function bookingStatusFor(screening, seats = 1) {
+  const capacity = Math.max(0, Number(screening?.capacity || 0));
+  if (!capacity) return "대기";
+  return confirmedSeats(screening.id) + Math.max(1, Number(seats || 1)) <= capacity ? "확정" : "대기";
 }
 
 function canceledSeats(screeningId) {
@@ -1152,10 +1243,17 @@ function getTotals() {
   };
 }
 
+function adminPageHref(tab = "overview", master = false) {
+  const localHost = ["127.0.0.1", "localhost"].includes(window.location.hostname);
+  if (localHost) return `/?v=139&fresh=1&${master ? "masterPreview" : "adminPreview"}=1#/${tab}`;
+  return `/${master ? "adminor" : "admin"}?v=139&fresh=1#/${tab}`;
+}
+
 function appHeader() {
+  const adminHref = adminPageHref();
   return `
     <header class="header">
-      <a class="logo" href="/?v=119&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
+      <a class="logo" href="/?v=139&fresh=1" data-action="go-home" aria-label="메인화면으로 이동">
         <div class="logo-mark"><img src="assets/munae-horse-logo.png" alt="머내마을영화제 말 캐릭터 로고"></div>
         <div>
           <div class="logo-title">제9회 머내마을영화제</div>
@@ -1164,10 +1262,10 @@ function appHeader() {
       </a>
       <nav class="nav" aria-label="주요 메뉴">
         <a href="https://www.meonaeff.com/" target="_blank" rel="noopener noreferrer" class="festival-home-link">머내마을영화제 홈페이지</a>
-        <a href="#/apply">영화 신청</a>
-        <a href="#/donate">후원하기</a>
-        <a href="#/staff" class="staff-link utility-link">STAFF</a>
-        <a href="/admin?v=119&fresh=1" class="primary-link admin-link utility-link">ADMIN</a>
+        <a href="/?v=139&fresh=1#/apply">영화 신청</a>
+        <a href="/?v=139&fresh=1#/donate">후원하기</a>
+        <a href="/?v=139&fresh=1#/staff" class="staff-link utility-link">STAFF</a>
+        <a href="${esc(adminHref)}" class="primary-link admin-link utility-link">ADMIN</a>
       </nav>
     </header>
   `;
@@ -1229,7 +1327,6 @@ function renderHome() {
 }
 
 function renderGeneralHome() {
-  const popular = sortedScreenings();
   return `
     <section class="hero">
       <div class="hero-grid">
@@ -1245,18 +1342,7 @@ function renderGeneralHome() {
       </div>
     </section>
 
-    <section class="section">
-      <div class="section-title">
-        <div>
-          <h2>영화관람신청하기</h2>
-          <p>보고 싶은 영화를 선택하고 참석 인원과 연락처를 남겨주세요.</p>
-        </div>
-        <a class="chip-link" href="#/apply">전체 보기</a>
-      </div>
-      <div class="screening-grid">
-        ${popular.map(screeningCard).join("")}
-      </div>
-    </section>
+    ${renderScreeningSchedule()}
   `;
 }
 
@@ -1336,7 +1422,6 @@ function renderOpeningHome(opening) {
   const phase = openingPhaseInfo(opening);
   const stats = openingStats(opening);
   const poster = openingPosterSrc(opening);
-  const regularPreview = sortedScreenings();
   const openingDateLine = `${formatDateTime(opening.startTime)} · ${opening.venue}`;
   return `
     <section class="opening-home-hero">
@@ -1364,18 +1449,7 @@ function renderOpeningHome(opening) {
       ${renderOpeningPosterVideo(opening, poster)}
     </section>
 
-    <section class="section">
-      <div class="section-title">
-        <div>
-          <h2>전체 영화관람 신청하기</h2>
-          <p>개막식 이후에도 9월 13일까지 마을 곳곳에서 상영이 이어집니다.</p>
-        </div>
-        <a class="chip-link" href="#/apply">전체 보기</a>
-      </div>
-      <div class="screening-grid">
-        ${regularPreview.map(screeningCard).join("")}
-      </div>
-    </section>
+    ${renderScreeningSchedule()}
 
     <section class="opening-progress-section">
       ${renderFestivalProgressWidget()}
@@ -1480,7 +1554,7 @@ function renderOpeningTicketing() {
           <h2>개막작 신청 현황</h2>
           <p>개막작 신청과 일반 신청을 구분해 보여줍니다. 실제 운영 일정과 정원은 관리자 대시보드에서 수정할 수 있습니다.</p>
         </div>
-        <a class="btn btn-outline" href="#/opening">관리자 설정</a>
+        <a class="btn btn-outline" href="${esc(adminPageHref("opening"))}">관리자 설정</a>
       </div>
       <div class="opening-summary-grid">
         <div class="metric-card"><div class="metric-label">개막작 신청</div><div class="metric-value">${stats.earlybirdSeats}</div><div class="metric-note">신청 인원</div></div>
@@ -1501,8 +1575,13 @@ function renderDonationPage() {
     </section>
     <section class="card donation-form-card">
       <div class="section-title compact-title">
-        <div>
-          <h2>1만원 후원 참여</h2>
+        <div class="donation-participation-heading">
+          <h2>기본참여: 매월 1만원</h2>
+          <p class="donation-participation-option"><strong>함께참여:</strong> 매월 2, 3, 5만원 이상 참여</p>
+          <div class="donation-account-summary" aria-label="후원 입금 계좌">
+            <span><strong>입금계좌</strong> 신협 131-022-582247</span>
+            <span><strong>예금주</strong> 머내엔영화</span>
+          </div>
           <p>아래 내용을 남겨주시면 후원 참여 감사 문자를 보내드립니다.</p>
         </div>
       </div>
@@ -1629,6 +1708,49 @@ function renderDonationTransferPage() {
 }
 
 
+function renderScreeningSchedule() {
+  const groups = new Map();
+  sortedScreenings().forEach((screening) => {
+    const dateKey = String(screening.startTime || "").slice(0, 10) || "날짜 미정";
+    if (!groups.has(dateKey)) groups.set(dateKey, []);
+    groups.get(dateKey).push(screening);
+  });
+  return `
+    <section class="screening-schedule-section" aria-labelledby="screeningScheduleTitle">
+      <div class="section-title compact-title">
+        <div>
+          <h2 id="screeningScheduleTitle">제9회 상영시간표</h2>
+          <p>날짜와 시간을 확인한 뒤 영화를 누르면 영화 소개와 관람 신청창이 열립니다.</p>
+        </div>
+      </div>
+      <div class="screening-schedule-days">
+        ${[...groups.entries()].map(([dateKey, screenings], dayIndex) => `
+          <article class="schedule-day-card schedule-day-color-${(dayIndex % 5) + 1}">
+            <h3>${esc(dateKey === "날짜 미정" ? dateKey : formatDateOnly(dateKey))}</h3>
+            <div class="schedule-day-list">
+              ${screenings.map((screening) => {
+                const full = remainingSeats(screening) <= 0;
+                const info = statusInfo(screening);
+                return `<button class="schedule-movie-slot ${full ? "is-full" : ""}" type="button" data-action="book" data-id="${esc(screening.id)}" aria-label="${esc(cleanMovieTitle(screening.title))} 영화 소개와 관람 신청 열기">
+                  <strong class="schedule-movie-title">${esc(cleanMovieTitle(screening.title))}</strong>
+                  <span class="schedule-main-row">
+                    <span class="schedule-time">${esc(formatTimePart(screening.startTime))}</span>
+                    <span class="badge ${info.className}">${full ? "신청마감 · 대기접수" : esc(String(info.text).startsWith("여유 ") ? `신청가능 · ${info.text}` : info.text)}</span>
+                  </span>
+                  <span class="schedule-credit-row">
+                    <span><b>장소</b> ${esc(screening.venue)}</span>
+                    ${screening.gvHost ? `<span><b>GV 담당</b> ${esc(screening.gvHost)}</span>` : ""}
+                    ${screening.moderator ? `<span><b>모더레이터</b> ${esc(screening.moderator)}</span>` : ""}
+                  </span>
+                </button>`;
+              }).join("")}
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </section>`;
+}
+
 function renderApply() {
   const venues = uniqueValues("venue");
   const dates = [...new Set(state.screenings.map((s) => formatDateOnly(s.startTime)))];
@@ -1638,7 +1760,6 @@ function renderApply() {
         <h1>영화 신청하기</h1>
         <p>보고 싶은 영화와 상영관을 선택한 뒤 참석 인원과 연락처를 남겨주세요. 정원이 찬 회차는 대기 신청으로 접수됩니다.</p>
       </div>
-      <a class="btn btn-outline" href="#/donate">후원하기</a>
     </section>
 
     ${shouldExposeOpeningPromotion(getOpeningScreening()) ? openingInlineCard() : ""}
@@ -1650,6 +1771,15 @@ function renderApply() {
       </div>
       <a class="btn btn-primary" href="#/donate">후원 함께하기</a>
     </section>
+
+    <section class="apply-participation-notice" aria-labelledby="applyParticipationNoticeTitle">
+      <h2 id="applyParticipationNoticeTitle">영화제 참여 신청 안내</h2>
+      <p>제9회 머내마을영화제에 함께 해 주셔서 감사합니다. 머내마을영화제는 온동네를 영화관으로 만들고, 마을주민이 직접 감독, 연출, 작가, 배우, 스탭, 프로그래머가 되어 만들어가는 영화제입니다. 앞으로 더욱 많은 관심과 참여 부탁드립니다.</p>
+      <p>초가을날에 영화와 함께 설레는 시간되길 바라며, 원하시는 상영작을 신청해 주세요. 날짜와 시간, 장소를 잘 확인해 주세요. 모든 영화는 무료 관람입니다.</p>
+      <p>무분별한 노쇼방지를 위해 시간대 중복예약을 방지합니다. 감사합니다.</p>
+    </section>
+
+    ${renderScreeningSchedule()}
 
     <section class="filters" aria-label="상영작 필터">
       <input class="input" id="searchInput" type="search" placeholder="영화 제목, 상영관, 담당자 검색" />
@@ -1680,12 +1810,13 @@ function screeningCard(screening) {
   const exposeOpening = isOpening && shouldExposeOpeningPromotion(screening);
   const phase = isOpening ? openingPhaseInfo(screening) : null;
   const bookingDisabled = exposeOpening && phase && !phase.allowBooking;
-  const bookingLabel = exposeOpening && phase ? (phase.allowBooking ? "관람신청" : phase.label) : "관람신청";
+  const full = remainingSeats(screening) <= 0;
+  const bookingLabel = exposeOpening && phase ? (phase.allowBooking ? (full ? "대기 신청" : "관람신청") : phase.label) : (full ? "대기 신청" : "관람신청");
   return `
     <article class="screening-card compact-screening-card ${exposeOpening ? "opening-card" : ""}" data-screening-card="${esc(screening.id)}">
       <div class="screening-top">
         <div class="badges compact-badges">
-          ${exposeOpening ? `<span class="badge warn">개막작</span><span class="badge ${phase.className}">${esc(phase.label)}</span>` : `<span class="badge blue">${esc(screening.status || "신청 가능")}</span>`}
+          ${exposeOpening ? `<span class="badge warn">개막작</span><span class="badge ${phase.className}">${esc(phase.label)}</span>` : `<span class="badge blue">${full ? "신청마감 · 대기접수" : esc(screening.status || "신청 가능")}</span>`}
           <span class="badge ${info.className}">${esc(info.text)}</span>
         </div>
         <h3 class="screening-title">${esc(screening.title)}</h3>
@@ -1737,6 +1868,7 @@ function reservationAttendanceIndex(reservation) {
   const stateLabel = reservationAttendanceState(reservation);
   if (stateLabel === "참석") return `<span class="badge status-index ok">참석</span>`;
   if (stateLabel === "미참석") return `<span class="badge status-index warn">미참석</span>`;
+  if (reservation.status === "대기") return `<span class="badge status-index warn">대기</span>`;
   return `<span class="badge status-index blue">신청</span>`;
 }
 
@@ -1929,11 +2061,13 @@ function normalizedPathname() {
 }
 
 function isGeneralAdminPath() {
-  return normalizedPathname() === "/admin";
+  const localPreview = ["127.0.0.1", "localhost"].includes(window.location.hostname) && new URLSearchParams(window.location.search).get("adminPreview") === "1";
+  return normalizedPathname() === "/admin" || localPreview;
 }
 
 function isMasterAdminPath() {
-  return normalizedPathname() === "/adminor";
+  const localPreview = ["127.0.0.1", "localhost"].includes(window.location.hostname) && new URLSearchParams(window.location.search).get("masterPreview") === "1";
+  return normalizedPathname() === "/adminor" || localPreview;
 }
 
 function isAdminRoutePath() {
@@ -1994,17 +2128,18 @@ function renderAdmin(tab) {
 
 function renderAdminLogin() {
   const master = isMasterAdminPath();
-  const showTempNotice = !master && String(state.adminPin || ADMIN_PIN) === String(ADMIN_PIN);
+  const showTempNotice = !master && (state.generalAdmins || []).some((admin) => admin.name === "일반관리자" && admin.password === ADMIN_PIN);
   return `
     <section class="admin-login">
       <div class="login-card">
         <div class="eyebrow" style="background:rgba(179,63,47,.1);color:var(--brand-dark);">${master ? "마스타관리자 전용" : "운영자 전용"}</div>
         <h1>${master ? "마스타관리자 로그인" : "관리자 로그인"}</h1>
-        ${showTempNotice ? `<p>임시 비밀번호는 <strong>0909</strong>입니다. 비밀번호를 새로 저장하면 이 안내문은 사라집니다. 스탭 비번도 <strong>0909</strong>입니다.</p>` : ""}
+        ${showTempNotice ? `<p>임시 계정은 이름 <strong>일반관리자</strong>, 비밀번호 <strong>0909</strong>입니다. 최고관리자 화면에서 운영 계정을 추가한 뒤 임시 계정을 삭제하세요.</p>` : ""}
         ${master ? `<p>마스타관리자는 모든 메뉴와 백업·연동, 만족도조사 설정을 관리합니다.</p>` : ""}
         <form id="adminLoginForm">
-          <label class="label" for="adminPin">${master ? "마스타관리자 PIN" : "관리자 PIN"}</label>
-          <input class="input" id="adminPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required />
+          ${master ? "" : `<label class="label" for="adminName">관리자 이름</label><input class="input" id="adminName" name="name" type="text" autocomplete="username" required />`}
+          <label class="label" for="adminPin">${master ? "마스타관리자 PIN" : "관리자 비밀번호"}</label>
+          <input class="input" id="adminPin" name="pin" type="password" autocomplete="current-password" required />
           <div class="form-actions">
             <button class="btn btn-dark" type="submit">대시보드 열기</button>
             <a class="btn btn-outline" href="/">첫 화면</a>
@@ -2054,7 +2189,7 @@ function adminOverview() {
   const totals = getTotals();
   const risky = sortedScreenings().filter((s) => statusInfo(s).className !== "ok");
   return `
-    <section class="metric-grid">
+    <section class="metric-grid overview-metrics fixed-row-metrics">
       <div class="metric-card"><div class="metric-label">총 신청 건수</div><div class="metric-value">${totals.totalApplicationCount}</div><div class="metric-note">신청 인원 ${totals.totalAppliedSeats}명</div></div>
       <div class="metric-card"><div class="metric-label">신청 인원</div><div class="metric-value">${totals.totalAppliedSeats}</div><div class="metric-note">신청 ${totals.totalApplicationCount}건 · 신청률 ${totals.occupancy}%</div></div>
       <div class="metric-card"><div class="metric-label">참석 인원</div><div class="metric-value">${totals.totalActualAttendees}</div><div class="metric-note">참석 처리 ${totals.totalAttendedApplicationCount}건 · 참석률 ${totals.attendance}%</div></div>
@@ -2099,7 +2234,7 @@ function screeningTable(screenings, options = {}) {
           <tr>
             <th>영화</th>
             <th>상영관</th>
-            <th>상태</th>
+            <th class="screening-status-heading">상태</th>
             <th>시간</th>
             <th>정원</th>
             <th>신청</th>
@@ -2117,10 +2252,10 @@ function screeningTable(screenings, options = {}) {
             const openStats = isOpening ? openingStats(screening) : null;
             const phase = isOpening ? openingPhaseInfo(screening) : null;
             return `
-              <tr>
+              <tr ${options.manage ? "" : `class="screening-roster-row" data-screening-roster-row="${esc(screening.id)}" tabindex="0" aria-label="${esc(screening.title)} 신청자 목록 열기"`}>
                 <td>${options.manage ? `<strong>${esc(screening.title)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.title)}</strong></button>`}${isOpening ? `<br><span class="help">개막작 신청 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
                 <td>${options.manage ? `<strong>${esc(screening.venue)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.venue)}</strong></button>`}</td>
-                <td><span class="badge ${info.className}">${esc(info.text)}</span>${isOpening ? `<br><span class="badge ${phase.className}">${esc(phase.label)}</span>` : ""}</td>
+                <td class="screening-status-cell">${options.manage ? `<span class="badge ${info.className}">${esc(info.text)}</span>` : `<button class="seat-status-button ${info.className}" type="button" data-action="view-roster" data-id="${esc(screening.id)}" aria-label="${esc(screening.title)} 좌석현황 ${esc(info.text)} · 신청자 목록 열기">${esc(info.text)}</button>`}${isOpening ? `<span class="screening-phase-badge badge ${phase.className}">${esc(phase.label)}</span>` : ""}</td>
                 <td>${esc(formatDateTime(screening.startTime))}</td>
                 <td>${Number(screening.capacity || 0)}명</td>
                 <td>${applicationCount(screening.id)}건 / ${appliedSeats(screening.id)}명</td>
@@ -2251,7 +2386,7 @@ function adminOpening() {
           <h2>개막식·개막작 신청 설정</h2>
           <p>개막식 “얼굴”, 박정민 배우 참석, 메인 화면 노출 종료일, 포스터·소개영상, 개막작 신청 기간과 일반 신청 기간을 관리합니다.</p>
         </div>
-        <a class="btn btn-outline" href="#/opening">관객 화면 보기</a>
+        <a class="btn btn-outline" href="/?v=139&fresh=1#/opening">관객 화면 보기</a>
       </div>
       <form id="openingForm">
         <div class="form-grid">
@@ -2360,7 +2495,7 @@ function adminOpening() {
       </form>
     </section>
 
-    <section class="metric-grid opening-metrics">
+    <section class="metric-grid opening-metrics fixed-row-metrics">
       <div class="metric-card"><div class="metric-label">현재 단계</div><div class="metric-value text-value">${esc(phase.label)}</div><div class="metric-note">${esc(phase.message || "")}</div></div>
       <div class="metric-card"><div class="metric-label">개막작 신청</div><div class="metric-value">${stats.earlybirdSeats}</div><div class="metric-note">신청 인원</div></div>
       <div class="metric-card"><div class="metric-label">일반 신청</div><div class="metric-value">${stats.generalSeats}</div><div class="metric-note">신청 인원</div></div>
@@ -2442,7 +2577,7 @@ function adminScreenings() {
             <span class="help">담당 스태프가 신청자 명단을 열 때 사용합니다.</span>
           </div>
           <div class="full">
-            <label class="label" for="screeningNotes">기타 사항</label>
+            <label class="label" for="screeningNotes">영화 소개·기타 사항</label>
             <textarea class="textarea" id="screeningNotes" name="notes">${esc(editing?.notes || "")}</textarea>
           </div>
         </div>
@@ -2462,6 +2597,72 @@ function adminScreenings() {
   `;
 }
 
+function participantReservationGroups() {
+  const groups = [];
+  state.reservations.forEach((reservation) => {
+    const nameKey = normalizedPersonName(reservation.name);
+    const phoneKey = normalizedPersonPhone(reservation.phone);
+    const matches = groups.filter((group) => (nameKey && group.names.has(nameKey)) || (phoneKey && group.phones.has(phoneKey)));
+    let group = matches[0];
+    if (!group) {
+      group = { names: new Set(), phones: new Set(), reservations: [] };
+      groups.push(group);
+    }
+    matches.slice(1).forEach((other) => {
+      other.names.forEach((value) => group.names.add(value));
+      other.phones.forEach((value) => group.phones.add(value));
+      group.reservations.push(...other.reservations);
+      groups.splice(groups.indexOf(other), 1);
+    });
+    if (nameKey) group.names.add(nameKey);
+    if (phoneKey) group.phones.add(phoneKey);
+    group.reservations.push(reservation);
+  });
+  return groups.map((group) => {
+    const reservations = group.reservations;
+    const latest = [...reservations].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0] || {};
+    const movies = [...new Set(reservations.map((reservation) => state.screenings.find((screening) => screening.id === reservation.screeningId)?.title).filter(Boolean).map(cleanMovieTitle))];
+    return {
+      name: latest.name || "이름 없음",
+      phone: latest.phone || "-",
+      applications: reservations.length,
+      confirmed: reservations.filter((reservation) => reservation.status === "확정").length,
+      waitlist: reservations.filter((reservation) => reservation.status === "대기").length,
+      attended: reservations.filter((reservation) => reservation.attended === true).length,
+      unattended: reservations.filter(isUnattendedReservation).length,
+      movies
+    };
+  }).sort((a, b) => b.applications - a.applications || b.attended - a.attended || a.name.localeCompare(b.name, "ko"));
+}
+
+function participantHistoryFor(reservation) {
+  const reservations = reservationsForPerson(reservation?.name, reservation?.phone);
+  return {
+    applications: reservations.length,
+    attended: reservations.filter((item) => item.attended === true).length,
+    waitlist: reservations.filter((item) => item.status === "대기").length
+  };
+}
+
+function participantStatsSection() {
+  const rows = participantReservationGroups();
+  const repeatCount = rows.filter((row) => row.applications > 1).length;
+  const maxCount = rows.filter((row) => row.applications >= 5).length;
+  return `
+    <section class="card participant-stats-card">
+      <div class="section-title">
+        <div><h2>신청자별 영화제 참여 현황</h2><p>동일한 이름 또는 전화번호를 한 사람으로 묶어 신청·대기·참석 횟수를 집계합니다.</p></div>
+      </div>
+      <section class="metric-grid participant-metrics fixed-row-metrics">
+        <div class="metric-card"><div class="metric-label">전체 신청자</div><div class="metric-value">${rows.length}</div><div class="metric-note">이름·전화번호 기준</div></div>
+        <div class="metric-card"><div class="metric-label">2회 이상 신청</div><div class="metric-value">${repeatCount}</div><div class="metric-note">반복 참여 신청자</div></div>
+        <div class="metric-card"><div class="metric-label">5회 도달</div><div class="metric-value">${maxCount}</div><div class="metric-note">추가 예약 제한 대상</div></div>
+        <div class="metric-card"><div class="metric-label">총 참석 횟수</div><div class="metric-value">${rows.reduce((sum, row) => sum + row.attended, 0)}</div><div class="metric-note">참석 처리된 영화 수</div></div>
+      </section>
+      ${rows.length ? `<div class="table-wrap participant-stats-table-wrap"><table class="participant-stats-table"><thead><tr><th>이름</th><th>전화번호</th><th>신청</th><th>확정</th><th>대기</th><th>참석</th><th>미참석</th><th>신청 영화</th></tr></thead><tbody>${rows.slice(0, 300).map((row) => `<tr><td><strong>${esc(row.name)}</strong></td><td>${esc(row.phone)}</td><td><strong>${row.applications}회</strong></td><td>${row.confirmed}회</td><td>${row.waitlist}회</td><td>${row.attended}회</td><td>${row.unattended}회</td><td>${esc(row.movies.join(", ") || "-")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">아직 신청자 통계가 없습니다.</div>`}
+    </section>`;
+}
+
 function adminReservations() {
   const options = sortedScreenings().map((screening) => `<option value="${esc(screening.id)}">${esc(screening.venue)} · ${esc(screening.title)}</option>`).join("");
   const dateOptions = uniqueValues("startTime")
@@ -2472,6 +2673,7 @@ function adminReservations() {
     .map((date) => `<option value="${esc(date)}">${esc(formatDateOnly(date))}</option>`)
     .join("");
   return `
+    ${participantStatsSection()}
     <section class="card">
       <div class="section-title">
         <div>
@@ -2539,6 +2741,7 @@ function reservationTable(reservations, options = {}) {
             const screening = state.screenings.find((s) => s.id === reservation.screeningId);
             const attended = reservation.attended === true;
             const selected = selectedReservationActionId === reservation.id;
+            const history = participantHistoryFor(reservation);
             return `
               <tr class="reservation-click-row ${attended ? "attended-row" : ""} ${selected ? "is-selected" : ""}" data-reservation-row="${esc(reservation.id)}" tabindex="0" title="클릭하면 상세 관리 버튼이 열립니다.">
                 ${options.smsSelectMode ? `<td class="screen-only sms-check-col"><input type="checkbox" class="reservation-sms-check" data-reservation-check="${esc(reservation.id)}" ${selectedReservationSmsIds.has(reservation.id) ? "checked" : ""} aria-label="${esc(reservation.name)} 문자 발송 선택" /></td>` : ""}
@@ -2548,6 +2751,7 @@ function reservationTable(reservations, options = {}) {
                   <div class="applicant-name-line"><strong>${esc(reservation.name)}</strong>${reservationAttendanceIndex(reservation)}</div>
                   <span class="help applicant-phone">${esc(reservation.phone || "-")}</span>
                   ${reservation.email ? `<span class="help applicant-email">${esc(reservation.email)}</span>` : ""}
+                  <span class="participant-history-badge">신청 ${history.applications}회 · 참석 ${history.attended}회${history.waitlist ? ` · 대기 ${history.waitlist}회` : ""}</span>
                   <span class="print-only print-attendance-text">${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : ""}</span>
                 </td>
                 <td class="col-reservation-no"><strong>${esc(reservationDisplayNumber(reservation, screening))}</strong></td>
@@ -2569,6 +2773,7 @@ function reservationTable(reservations, options = {}) {
                         <button class="btn btn-outline attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true">참석</button>
                         <button class="btn btn-outline" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="false">미참석</button>
                         <button class="btn btn-outline" type="button" data-action="staff-edit-reservation" data-id="${esc(reservation.id)}">수정</button>
+                        ${reservation.status === "대기" ? `<button class="btn btn-primary" type="button" data-action="set-reservation-status" data-status="확정" data-id="${esc(reservation.id)}">대기→확정</button>` : ""}
                         <button class="btn btn-danger" type="button" data-action="delete-reservation" data-id="${esc(reservation.id)}">삭제</button>
                         <button class="btn btn-dark" type="button" data-action="send-sms" data-id="${esc(reservation.id)}">예약문자</button>
                         <button class="btn btn-primary" type="button" data-action="open-single-notice-sms" data-id="${esc(reservation.id)}">별도안내문자</button>
@@ -2609,6 +2814,23 @@ function surveyAverage(values) {
 
 function surveyResponseList() {
   return Array.isArray(state.surveyResponses) ? state.surveyResponses : [];
+}
+
+function isSurveyTestRecord(item = {}) {
+  return item.test === true || String(item.type || "").toLowerCase() === "test" || String(item.reservationId || "").startsWith("test-") || String(item.name || "").includes("TEST") || String(item.token || "").includes("test");
+}
+
+function realSurveyResponses() {
+  return surveyResponseList().filter((item) => !isSurveyTestRecord(item));
+}
+
+function realSurveyDispatches() {
+  return (Array.isArray(state.surveyDispatches) ? state.surveyDispatches : []).filter((item) => !isSurveyTestRecord(item));
+}
+
+function isSuccessfulSurveyDispatch(item = {}) {
+  const status = String(item.status || "");
+  return Boolean(item.sentAt) && !status.includes("실패") && (status.includes("완료") || status.includes("응답"));
 }
 
 function surveyRatingDistribution(responses, keys) {
@@ -2658,18 +2880,15 @@ function surveyChoiceBarsHtml(rows) {
 }
 
 function surveyDetailedStatsSection() {
-  const responses = surveyResponseList();
-  // v118: 이전 배포/캐시에서 남아 있던 allResponses 참조가 있어도 상세통계가 죽지 않도록 같은 스코프에서 보장합니다.
-  const allResponses = responses;
-  const dispatches = Array.isArray(state.surveyDispatches) ? state.surveyDispatches : [];
+  const responses = realSurveyResponses();
+  const dispatches = realSurveyDispatches().filter(isSuccessfulSurveyDispatch);
   const attendedTotal = (state.reservations || []).filter((r) => r.attended === true).reduce((sum, r) => sum + Number(r.attendedSeats || r.seats || 1), 0);
   const sentTotal = dispatches.length;
   const responseRate = sentTotal ? `${Math.round((responses.length / sentTotal) * 100)}%` : "-";
-  const overallAvg = surveyAverage(responses.map((r) => surveyRatingValue(r, ["q-overall", "overallRating", "전체만족도"])));
-  const venueAvg = surveyAverage(responses.map((r) => surveyRatingValue(r, ["q-venue", "venueRating", "상영장소만족도"])));
-  const guideAvg = surveyAverage(responses.map((r) => surveyRatingValue(r, ["q-guide", "guideRating", "진행안내만족도"])));
-  const returnAvg = surveyAverage(responses.map((r) => surveyRatingValue(r, ["q-return", "returnIntent", "재참여의향"])));
   const activeQuestions = (state.surveyQuestions || defaultSurveyQuestions()).filter((q) => q.enabled !== false).sort((a,b) => Number(a.order || 0) - Number(b.order || 0));
+  const ratingQuestions = activeQuestions.filter((q) => q.type === "rating");
+  const primaryRatingQuestion = ratingQuestions.find((q) => q.id === "q-overall") || ratingQuestions[0];
+  const overallAvg = primaryRatingQuestion ? surveyAverage(responses.map((r) => surveyRatingValue(r, [primaryRatingQuestion.id, primaryRatingQuestion.title]))) : "-";
   const textQuestions = activeQuestions.filter((q) => q.type === "text");
   const latestComments = responses.slice().reverse().slice(0, 20);
   return `
@@ -2682,17 +2901,15 @@ function surveyDetailedStatsSection() {
         <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${responses.length}건</span>
       </div>
       <div class="metric-grid survey-metric-grid">
-        <div class="metric-card"><div class="metric-label">응답수</div><div class="metric-value">${responses.length}</div><div class="metric-note">설문 제출 기준</div></div>
+        <div class="metric-card"><div class="metric-label">응답수</div><div class="metric-value">${responses.length}</div><div class="metric-note">실제 참석 ${attendedTotal}명 · 테스트 제외</div></div>
         <div class="metric-card"><div class="metric-label">문자 발송</div><div class="metric-value">${sentTotal}</div><div class="metric-note">테스트 제외 발송 기록</div></div>
         <div class="metric-card"><div class="metric-label">응답률</div><div class="metric-value">${responseRate}</div><div class="metric-note">발송 대비 응답</div></div>
         <div class="metric-card"><div class="metric-label">전체 만족도</div><div class="metric-value">${overallAvg}</div><div class="metric-note">5점 만점 평균</div></div>
       </div>
-      <div class="survey-score-grid">
-        <div class="survey-score-card"><h3>전체 만족도</h3><div class="survey-big-score">${overallAvg}</div>${surveyRatingBarsHtml(responses, ["q-overall", "overallRating", "전체만족도"])}</div>
-        <div class="survey-score-card"><h3>상영 장소/환경</h3><div class="survey-big-score">${venueAvg}</div>${surveyRatingBarsHtml(responses, ["q-venue", "venueRating", "상영장소만족도"])}</div>
-        <div class="survey-score-card"><h3>진행/안내</h3><div class="survey-big-score">${guideAvg}</div>${surveyRatingBarsHtml(responses, ["q-guide", "guideRating", "진행안내만족도"])}</div>
-        <div class="survey-score-card"><h3>재참여 의향</h3><div class="survey-big-score">${returnAvg}</div>${surveyRatingBarsHtml(responses, ["q-return", "returnIntent", "재참여의향"])}</div>
-      </div>
+      ${ratingQuestions.length ? `<div class="survey-score-grid">${ratingQuestions.map((q) => {
+        const avg = surveyAverage(responses.map((r) => surveyRatingValue(r, [q.id, q.title])));
+        return `<div class="survey-score-card"><h3>${esc(q.title)}</h3><div class="survey-big-score">${avg}</div>${surveyRatingBarsHtml(responses, [q.id, q.title])}</div>`;
+      }).join("")}</div>` : ""}
       <div class="section-title compact-section-title"><div><h3>영화별 만족도 응답 현황</h3><p>각 영화별 발송·응답·평균 점수를 확인합니다.</p></div></div>
       ${surveyResponseStatsTable()}
       <div class="survey-question-stat-grid">
@@ -2730,7 +2947,7 @@ function donationStatsCard() {
   return `
     <section class="card donation-stats-card">
       <div class="section-title"><div><h2>후원자 집계</h2><p>후원하기 신청 현황을 별도로 집계하고 구글시트 후원자현황 탭에도 백업합니다.</p></div></div>
-      <section class="metric-grid compact-metric-grid">
+      <section class="metric-grid compact-metric-grid donation-metrics fixed-row-metrics">
         <div class="metric-card"><div class="metric-label">후원 신청</div><div class="metric-value">${stats.count}</div><div class="metric-note">전체 건수</div></div>
         <div class="metric-card"><div class="metric-label">후원 예정액</div><div class="metric-value text-value">${esc(stats.amountText)}</div><div class="metric-note">신청 기준</div></div>
         <div class="metric-card"><div class="metric-label">감사문자 완료</div><div class="metric-value">${stats.done}</div><div class="metric-note">문자 발송완료</div></div>
@@ -2901,7 +3118,7 @@ function adminBackupAlwaysOnPanel(activeTab = "overview") {
           <button class="btn btn-outline" type="button" data-action="export-reservations">신청자 엑셀저장</button>
           <button class="btn btn-outline" type="button" data-action="export-json">전체 JSON 백업</button>
           <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=119">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=139">별도 백업페이지 열기</a>
         </div>
       </form>
     </section>
@@ -3065,6 +3282,82 @@ async function createSurveyTestLink({ sendSms = false } = {}) {
   }
 }
 
+function surveyQuestionEditorRow(question = {}, index = 0) {
+  const q = normalizeSurveyQuestions([{ ...question, order: question.order || index + 1 }])[0];
+  return `
+    <tr data-survey-question-row data-question-index="${index}">
+      <td><input type="checkbox" data-question-field="enabled" name="q_enabled_${index}" ${q.enabled ? "checked" : ""} /></td>
+      <td><input class="input compact-input" data-question-field="order" name="q_order_${index}" type="number" min="1" value="${esc(q.order)}" /><input type="hidden" data-question-field="id" name="q_id_${index}" value="${esc(q.id)}" /></td>
+      <td><select class="input compact-select" data-question-field="type" name="q_type_${index}"><option value="rating" ${q.type === "rating" ? "selected" : ""}>별점</option><option value="single" ${q.type === "single" ? "selected" : ""}>단일</option><option value="multiple" ${q.type === "multiple" ? "selected" : ""}>복수</option><option value="text" ${q.type === "text" ? "selected" : ""}>주관식</option></select></td>
+      <td><input class="input" data-question-field="title" name="q_title_${index}" value="${esc(q.title)}" /></td>
+      <td><input class="input" data-question-field="choices" name="q_choices_${index}" value="${esc(q.choices)}" placeholder="선택지는 쉼표로 구분" /></td>
+      <td><input type="checkbox" data-question-field="required" name="q_required_${index}" ${q.required ? "checked" : ""} /></td>
+      <td><div class="row-actions survey-question-actions">
+        <button class="btn btn-outline btn-small" type="button" data-action="move-survey-question-up" aria-label="문항 위로 이동">↑</button>
+        <button class="btn btn-outline btn-small" type="button" data-action="move-survey-question-down" aria-label="문항 아래로 이동">↓</button>
+        <button class="btn btn-outline btn-small" type="button" data-action="duplicate-survey-question">복제</button>
+        <button class="btn btn-danger btn-small" type="button" data-action="remove-survey-question">삭제</button>
+      </div></td>
+    </tr>`;
+}
+
+function surveyQuestionEditorRows() {
+  return [...document.querySelectorAll("[data-survey-question-row]")];
+}
+
+function reindexSurveyQuestionEditor() {
+  const rows = surveyQuestionEditorRows();
+  rows.forEach((row, index) => {
+    row.dataset.questionIndex = String(index);
+    row.querySelectorAll("[data-question-field]").forEach((field) => { field.name = `q_${field.dataset.questionField}_${index}`; });
+    const order = row.querySelector('[data-question-field="order"]');
+    if (order) order.value = String(index + 1);
+  });
+  const count = document.querySelector('#surveyQuestionsForm [name="questionCount"]');
+  if (count) count.value = String(rows.length);
+}
+
+function questionFromEditorRow(row) {
+  const field = (name) => row?.querySelector(`[data-question-field="${name}"]`);
+  return {
+    id: field("id")?.value || `q-custom-${Date.now()}`,
+    enabled: field("enabled")?.checked !== false,
+    order: Number(field("order")?.value || 1),
+    type: field("type")?.value || "text",
+    title: field("title")?.value || "새 설문 문항",
+    choices: field("choices")?.value || "",
+    required: field("required")?.checked === true
+  };
+}
+
+function addSurveyQuestionEditor(sourceRow = null) {
+  const tbody = document.querySelector("#surveyQuestionsForm tbody");
+  if (!tbody) return;
+  const source = sourceRow ? questionFromEditorRow(sourceRow) : { enabled: true, type: "rating", title: "새 설문 문항", choices: "", required: true };
+  source.id = `q-custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  if (sourceRow) source.title = `${source.title} (복사본)`;
+  tbody.insertAdjacentHTML("beforeend", surveyQuestionEditorRow(source, surveyQuestionEditorRows().length));
+  reindexSurveyQuestionEditor();
+  const rows = surveyQuestionEditorRows();
+  rows[rows.length - 1]?.querySelector('[data-question-field="title"]')?.focus();
+  toast(sourceRow ? "문항을 복제했습니다. 저장 버튼을 눌러 반영하세요." : "새 문항을 추가했습니다. 내용을 입력한 뒤 저장하세요.");
+}
+
+function moveSurveyQuestionEditor(row, direction) {
+  if (!row?.parentElement) return;
+  if (direction < 0 && row.previousElementSibling) row.parentElement.insertBefore(row, row.previousElementSibling);
+  if (direction > 0 && row.nextElementSibling) row.parentElement.insertBefore(row.nextElementSibling, row);
+  reindexSurveyQuestionEditor();
+}
+
+function removeSurveyQuestionEditor(row) {
+  if (!row) return;
+  if (surveyQuestionEditorRows().length <= 1) return toast("설문 문항은 최소 1개가 필요합니다.");
+  row.remove();
+  reindexSurveyQuestionEditor();
+  toast("문항을 목록에서 삭제했습니다. 저장 버튼을 눌러 반영하세요.");
+}
+
 function adminSurvey() {
   const settings = state.surveySettings || defaultSurveySettings();
   const questions = state.surveyQuestions || defaultSurveyQuestions();
@@ -3078,11 +3371,10 @@ function adminSurvey() {
           <h2>만족도조사 관리</h2>
           <p>설문 사용 여부, 문자 자동발송, 문항, 회차별 설정과 응답 통계를 관리합니다. 기본값은 안전을 위해 OFF입니다.</p>
         </div>
-        <span class="badge ${settings.enabled ? "badge-ok" : ""}">만족도조사 ${surveySettingLabel(settings.enabled)}</span>
       </div>
-      <section class="metric-grid survey-metric-grid">
-        <div class="metric-card"><div class="metric-label">만족도조사</div><div class="metric-value">${surveySettingLabel(settings.enabled)}</div><div class="metric-note">최종 사용 여부</div></div>
-        <div class="metric-card"><div class="metric-label">자동문자</div><div class="metric-value">${surveySettingLabel(settings.autoSmsEnabled)}</div><div class="metric-note">상영 종료 후 ${settings.sendDelayMinutes}분</div></div>
+      <section class="metric-grid survey-metric-grid fixed-row-metrics">
+        <button class="metric-card survey-toggle-card ${settings.enabled ? "is-on" : "is-off"}" type="button" data-action="toggle-survey-setting" data-setting="enabled" aria-pressed="${settings.enabled ? "true" : "false"}"><span class="metric-label">만족도조사</span><span class="metric-value">${surveySettingLabel(settings.enabled)}</span><span class="metric-note">카드를 눌러 사용 여부 변경</span></button>
+        <button class="metric-card survey-toggle-card ${settings.autoSmsEnabled ? "is-on" : "is-off"}" type="button" data-action="toggle-survey-setting" data-setting="autoSmsEnabled" aria-pressed="${settings.autoSmsEnabled ? "true" : "false"}"><span class="metric-label">자동문자</span><span class="metric-value">${surveySettingLabel(settings.autoSmsEnabled)}</span><span class="metric-note">상영 종료 후 ${settings.sendDelayMinutes}분</span></button>
         <div class="metric-card"><div class="metric-label">응답수</div><div class="metric-value">${stats.responses}</div><div class="metric-note">평균 만족도 ${stats.average}</div></div>
         <div class="metric-card"><div class="metric-label">문자 발송</div><div class="metric-value">${stats.sent}</div><div class="metric-note">기록 ${stats.dispatches}건</div></div>
       </section>
@@ -3092,15 +3384,21 @@ function adminSurvey() {
     <section class="card">
       <h3>전체 설정</h3>
       <form id="surveySettingsForm" class="survey-settings-form">
-        <div class="grid-2">
-          <label class="check-card"><input type="checkbox" name="enabled" ${settings.enabled ? "checked" : ""} /> <strong>만족도조사 사용</strong><span>OFF이면 설문 링크 접속과 응답 저장이 중지됩니다.</span></label>
-          <label class="check-card"><input type="checkbox" name="autoSmsEnabled" ${settings.autoSmsEnabled ? "checked" : ""} /> <strong>설문 문자 자동발송</strong><span>상영 종료 후 참석자에게 자동 발송합니다.</span></label>
-        </div>
+        <div class="notice-box survey-toggle-help">상단의 <strong>만족도조사</strong>와 <strong>자동문자</strong> 카드를 누르면 ON/OFF가 즉시 변경됩니다. 자동문자는 문자 발송 비용이 발생할 수 있어 켤 때 한 번 더 확인합니다.</div>
         <div class="form-grid">
           <label><span class="label">발송 지연 시간</span><input class="input" name="sendDelayMinutes" type="number" min="1" value="${esc(settings.sendDelayMinutes)}" /></label>
           <label><span class="label">응답 마감일</span><input class="input" name="responseDeadlineDays" type="number" min="1" value="${esc(settings.responseDeadlineDays)}" /></label>
           <label class="check-inline"><input type="checkbox" name="preventDuplicate" ${settings.preventDuplicate ? "checked" : ""} /> 중복 응답 방지</label>
         </div>
+        <div class="section-title compact-section-title"><div><h3>설문 화면 문구</h3><p>관객에게 보이는 제목, 안내문과 제출 완료 문구를 직접 수정합니다.</p></div></div>
+        <div class="form-grid">
+          <label><span class="label">설문 제목</span><input class="input" name="surveyTitle" value="${esc(settings.surveyTitle)}" /></label>
+          <label><span class="label">제출 완료 제목</span><input class="input" name="completionTitle" value="${esc(settings.completionTitle)}" /></label>
+        </div>
+        <label><span class="label">설문 시작 안내</span><textarea class="input" name="surveyIntro" rows="3">${esc(settings.surveyIntro)}</textarea></label>
+        <span class="help">사용 가능: {이름}, {영화명}</span>
+        <label><span class="label">개인정보·응답 이용 안내</span><textarea class="input" name="privacyNotice" rows="4">${esc(settings.privacyNotice)}</textarea></label>
+        <label><span class="label">제출 완료 안내</span><textarea class="input" name="completionMessage" rows="3">${esc(settings.completionMessage)}</textarea></label>
         <label class="label" for="surveySmsTemplate">문자 내용</label>
         <textarea class="input" id="surveySmsTemplate" name="smsTemplate" rows="5">${esc(settings.smsTemplate)}</textarea>
         <span class="help">사용 가능: {이름}, {영화명}, {상영일시}, {장소}, {설문링크}</span>
@@ -3109,26 +3407,18 @@ function adminSurvey() {
     </section>
 
     <section class="card">
-      <div class="section-title"><div><h3>설문 문항</h3><p>문항은 구글시트 만족도_문항 탭에도 함께 저장됩니다.</p></div></div>
+      <div class="section-title"><div><h3>설문 문항</h3><p>문항을 추가·복제·삭제하고 화살표로 순서를 바꿀 수 있습니다. 변경 후 반드시 저장하세요.</p></div><button class="btn btn-primary" type="button" data-action="add-survey-question">+ 새 문항 추가</button></div>
       <form id="surveyQuestionsForm">
         <div class="table-wrap survey-question-table-wrap">
           <table class="survey-question-table">
-            <thead><tr><th>사용</th><th>순서</th><th>유형</th><th>문항</th><th>선택지</th><th>필수</th></tr></thead>
+            <thead><tr><th>사용</th><th>순서</th><th>유형</th><th>문항</th><th>선택지</th><th>필수</th><th>관리</th></tr></thead>
             <tbody>
-              ${questions.map((q, index) => `
-                <tr>
-                  <td><input type="checkbox" name="q_enabled_${index}" ${q.enabled ? "checked" : ""} /></td>
-                  <td><input class="input compact-input" name="q_order_${index}" type="number" min="1" value="${esc(q.order)}" /><input type="hidden" name="q_id_${index}" value="${esc(q.id)}" /></td>
-                  <td><select class="input compact-select" name="q_type_${index}"><option value="rating" ${q.type === "rating" ? "selected" : ""}>별점</option><option value="single" ${q.type === "single" ? "selected" : ""}>단일</option><option value="multiple" ${q.type === "multiple" ? "selected" : ""}>복수</option><option value="text" ${q.type === "text" ? "selected" : ""}>주관식</option></select></td>
-                  <td><input class="input" name="q_title_${index}" value="${esc(q.title)}" /></td>
-                  <td><input class="input" name="q_choices_${index}" value="${esc(q.choices)}" placeholder="쉼표로 구분" /></td>
-                  <td><input type="checkbox" name="q_required_${index}" ${q.required ? "checked" : ""} /></td>
-                </tr>`).join("")}
+              ${questions.map((q, index) => surveyQuestionEditorRow(q, index)).join("")}
             </tbody>
           </table>
         </div>
         <input type="hidden" name="questionCount" value="${questions.length}" />
-        <div class="form-actions"><button class="btn btn-dark" type="submit">설문 문항 저장</button></div>
+        <div class="form-actions"><button class="btn btn-primary" type="button" data-action="add-survey-question">+ 새 문항 추가</button><button class="btn btn-outline" type="button" data-action="open-survey-preview">관객 화면 미리보기</button><button class="btn btn-dark" type="submit">설문 문항 저장</button></div>
       </form>
     </section>
 
@@ -3141,7 +3431,7 @@ function adminSurvey() {
             <tbody>
               ${screenings.map((screening) => {
                 const cfg = surveyScreeningConfig(screening.id);
-                const attended = state.reservations.filter((r) => r.screeningId === screening.id && r.attended === true).length;
+                const attended = state.reservations.filter((r) => r.screeningId === screening.id && r.attended === true).reduce((sum, r) => sum + Number(r.attendedSeats || r.seats || 1), 0);
                 const unsent = state.reservations.filter((r) => r.screeningId === screening.id && r.attended === true && !findSurveyDispatchByReservation(r.id)).length;
                 return `<tr>
                   <td><strong>${esc(cleanMovieTitle(screening.title))}</strong><input type="hidden" name="sid_${esc(screening.id)}" value="1" /></td>
@@ -3293,7 +3583,6 @@ function adminSurveyView() {
           <h2>만족도조사현황</h2>
           <p>설문 수신 명단, 응답 목록, 실제 응답 내용을 일반관리자도 확인할 수 있습니다. 테스트 응답도 통계에 포함됩니다.</p>
         </div>
-        <span class="badge ${responses.length ? "badge-ok" : ""}">응답 ${responses.length}건</span>
       </div>
       ${surveyDetailedStatsSection()}
     </section>
@@ -3375,10 +3664,11 @@ function clearSurveyResponses() {
 
 function surveyResponseStatsTable() {
   const rows = sortedScreenings().map((s) => {
-    const responses = (state.surveyResponses || []).filter((r) => r.screeningId === s.id || cleanMovieTitle(r.movieTitle || "") === cleanMovieTitle(s.title || ""));
-    const attended = state.reservations.filter((r) => r.screeningId === s.id && r.attended === true).length;
-    const sent = (state.surveyDispatches || []).filter((d) => d.screeningId === s.id || cleanMovieTitle(d.movieTitle || "") === cleanMovieTitle(s.title || "")).length;
-    const ratings = responses.map((r) => Number(r.overallRating || r.answers?.["q-overall"] || 0)).filter((n) => n > 0);
+    const responses = realSurveyResponses().filter((r) => r.screeningId === s.id || cleanMovieTitle(r.movieTitle || "") === cleanMovieTitle(s.title || ""));
+    const attended = state.reservations.filter((r) => r.screeningId === s.id && r.attended === true).reduce((sum, r) => sum + Number(r.attendedSeats || r.seats || 1), 0);
+    const sent = realSurveyDispatches().filter(isSuccessfulSurveyDispatch).filter((d) => d.screeningId === s.id || cleanMovieTitle(d.movieTitle || "") === cleanMovieTitle(s.title || "")).length;
+    const ratingQuestion = (state.surveyQuestions || defaultSurveyQuestions()).find((q) => q.enabled !== false && q.type === "rating");
+    const ratings = responses.map((r) => Number(r.overallRating || r.answers?.[ratingQuestion?.id || "q-overall"] || 0)).filter((n) => n > 0);
     const avg = ratings.length ? (ratings.reduce((sum, n) => sum + n, 0) / ratings.length).toFixed(1) : "-";
     const rate = sent ? `${Math.round((responses.length / sent) * 100)}%` : "-";
     return { movie: cleanMovieTitle(s.title), attended, sent, responses: responses.length, rate, avg };
@@ -3388,22 +3678,37 @@ function surveyResponseStatsTable() {
 
 function submitSurveySettings(form) {
   const data = new FormData(form);
-  const willEnableAuto = data.get("autoSmsEnabled") === "on";
-  if (willEnableAuto && !state.surveySettings?.autoSmsEnabled) {
-    const ok = confirm("만족도조사 문자 자동발송을 켜시겠습니까?\n상영 종료 후 참석자에게 문자가 자동 발송되며 문자 발송 비용이 발생할 수 있습니다.");
-    if (!ok) return;
-  }
+  const current = state.surveySettings || defaultSurveySettings();
   state.surveySettings = normalizeSurveySettings({
-    enabled: data.get("enabled") === "on",
-    autoSmsEnabled: willEnableAuto,
+    enabled: current.enabled === true,
+    autoSmsEnabled: current.autoSmsEnabled === true,
     sendDelayMinutes: data.get("sendDelayMinutes"),
     responseDeadlineDays: data.get("responseDeadlineDays"),
     preventDuplicate: data.get("preventDuplicate") === "on",
+    surveyTitle: data.get("surveyTitle"),
+    surveyIntro: data.get("surveyIntro"),
+    privacyNotice: data.get("privacyNotice"),
+    completionTitle: data.get("completionTitle"),
+    completionMessage: data.get("completionMessage"),
     smsTemplate: data.get("smsTemplate")
   });
   persist();
   render();
   toast("만족도조사 설정을 저장했습니다.");
+}
+
+function toggleSurveySetting(setting) {
+  if (!['enabled', 'autoSmsEnabled'].includes(setting)) return;
+  const current = state.surveySettings || defaultSurveySettings();
+  const next = current[setting] !== true;
+  if (setting === 'autoSmsEnabled' && next) {
+    const ok = confirm("만족도조사 문자 자동발송을 켜시겠습니까?\n상영 종료 후 참석자에게 문자가 자동 발송되며 문자 발송 비용이 발생할 수 있습니다.");
+    if (!ok) return;
+  }
+  state.surveySettings = normalizeSurveySettings({ ...current, [setting]: next });
+  persist();
+  render();
+  toast(`${setting === 'enabled' ? '만족도조사' : '자동문자'}를 ${surveySettingLabel(next)}으로 변경했습니다.`);
 }
 
 function submitSurveyQuestions(form) {
@@ -3464,18 +3769,7 @@ function adminBackup() {
           </div>
           <span class="help">반드시 신청자 명단이 정상으로 보이는 주 컴퓨터에서만 누르세요. 실행 후 Supabase Table Editor에서 state가 {}가 아닌지 확인합니다.</span>
         </div>
-        <div class="card compact">
-          <h3>총관리자 비밀번호</h3>
-          <p>ADMIN 로그인에 사용하는 총관리자 비밀번호를 변경할 수 있습니다.</p>
-          <form id="adminPinChangeForm" class="inline-admin-pin-form">
-            <label class="label" for="adminNewPin">새 일반관리자 비밀번호</label>
-            <div class="form-actions admin-pin-actions">
-              <input class="input" id="adminNewPin" name="adminPin" type="password" inputmode="numeric" autocomplete="new-password" value="${esc(state.adminPin || ADMIN_PIN)}" placeholder="새 비밀번호" required />
-              <button class="btn btn-dark" type="submit">비밀번호 저장</button>
-            </div>
-            <span class="help">저장 후 다음 ADMIN 로그인부터 변경된 비밀번호가 적용됩니다.</span>
-          </form>
-        </div>
+        ${generalAdminAccountsCard()}
         <div class="card compact">
           <h3>구글시트 자동백업</h3>
           <p>Apps Script 웹앱 URL을 입력하고 저장하면 자동저장이 바로 켜집니다. 팝업창 없이 이 화면에서 바로 설정합니다.</p>
@@ -3493,7 +3787,7 @@ function adminBackup() {
               <button class="btn btn-dark" type="button" data-action="force-google-backup-from-supabase">Supabase 최신 데이터를 구글시트로 강제 백업</button>
               <button class="btn btn-outline" type="button" data-action="drive-sync-settings">현재 URL로 다시 저장</button>
               <button class="btn btn-outline" type="button" data-action="reset-drive-webhook">URL 초기화</button>
-          <a class="btn btn-dark" href="/backup.html?v=119">별도 백업페이지 열기</a>
+          <a class="btn btn-dark" href="/backup.html?v=139">별도 백업페이지 열기</a>
             </div>
           </form>
           <div class="form-actions">
@@ -3523,6 +3817,28 @@ function adminBackup() {
       </div>
     </section>
   `;
+}
+
+function generalAdminAccountsCard() {
+  const accounts = state.generalAdmins || [];
+  const rows = accounts.map((admin) => `<form class="general-admin-edit-form" data-id="${esc(admin.id)}">
+    <input class="input" name="name" type="text" value="${esc(admin.name)}" aria-label="일반관리자 이름" required />
+    <input class="input" name="password" type="password" value="${esc(admin.password)}" aria-label="일반관리자 비밀번호" autocomplete="new-password" minlength="4" required />
+    <button class="btn btn-dark" type="submit">저장</button>
+    <button class="btn btn-danger" type="button" data-action="delete-general-admin" data-id="${esc(admin.id)}">삭제</button>
+  </form>`).join("");
+  return `<div class="card compact general-admin-card">
+    <h3>일반관리자 계정</h3>
+    <p>일반관리자는 이름과 비밀번호로 ADMIN 화면에 로그인합니다. 비밀번호를 바꾼 뒤 저장하거나 새 계정을 추가할 수 있습니다.</p>
+    <div class="general-admin-list">${rows}</div>
+    <form id="generalAdminAddForm" class="general-admin-add-form">
+      <label class="label" for="newGeneralAdminName">새 일반관리자 추가</label>
+      <input class="input" id="newGeneralAdminName" name="name" type="text" placeholder="관리자 이름" autocomplete="off" required />
+      <input class="input" name="password" type="password" placeholder="비밀번호 4자리 이상" autocomplete="new-password" minlength="4" required />
+      <button class="btn btn-primary" type="submit">일반관리자 추가</button>
+    </form>
+    <span class="help">임시 계정은 실제 운영 계정을 만든 뒤 삭제하세요. 최소 1개의 일반관리자 계정은 유지됩니다.</span>
+  </div>`;
 }
 
 function bookingModalShell() {
@@ -3567,6 +3883,27 @@ function openingBookingIntro(screening, phase, stats) {
   `;
 }
 
+function movieBookingIntroHtml(screening) {
+  const full = remainingSeats(screening) <= 0;
+  return `
+    <section class="movie-booking-intro ${full ? "is-full" : ""}" aria-label="영화 소개">
+      <div class="badges">
+        <span class="badge blue">${esc(screening.venue || "상영관")}</span>
+        <span class="badge ${statusInfo(screening).className}">${full ? "신청마감 · 대기접수" : esc(statusInfo(screening).text)}</span>
+      </div>
+      <h3>${esc(cleanMovieTitle(screening.title))}</h3>
+      <p class="movie-booking-time"><strong>${esc(formatDateTime(screening.startTime))}</strong>${screening.endTime ? ` ~ ${esc(formatTimePart(screening.endTime))}` : ""}</p>
+      ${screening.notes ? `<p class="movie-booking-description">${esc(screening.notes)}</p>` : ""}
+      <dl class="movie-booking-facts">
+        ${screening.gvHost ? `<div><dt>GV</dt><dd>${esc(screening.gvHost)}</dd></div>` : ""}
+        ${screening.moderator ? `<div><dt>진행</dt><dd>${esc(screening.moderator)}</dd></div>` : ""}
+        <div><dt>정원</dt><dd>${Number(screening.capacity || 0)}명</dd></div>
+        <div><dt>확정/대기</dt><dd>${confirmedSeats(screening.id)}명 / ${waitlistSeats(screening.id)}명</dd></div>
+      </dl>
+      ${full ? `<div class="waitlist-booking-notice"><strong>현재 이 상영관은 신청마감이 되었습니다.</strong><span>대기상태로 신청을 받겠습니다.</span></div>` : ""}
+    </section>`;
+}
+
 function openOpeningBooking(screening) {
   const phase = openingPhaseInfo(screening);
   const stats = openingStats(screening);
@@ -3574,8 +3911,8 @@ function openOpeningBooking(screening) {
     toast(phase.message || "현재 개막작 신청 기간이 아닙니다.");
     return;
   }
-  if (remainingSeats(screening) <= 0 && waitlistSeats(screening.id) > 0) {
-    toast("현재 정원이 가득 차 대기 신청으로 접수될 수 있습니다.");
+  if (remainingSeats(screening) <= 0) {
+    toast("현재 이 상영관은 신청마감이 되었습니다. 대기상태로 신청을 받겠습니다.");
   }
   const maxTickets = Math.max(1, Number(screening.maxTicketsPerReservation || 4));
   const isEarlybird = phase.phase === "earlybird";
@@ -3583,6 +3920,7 @@ function openOpeningBooking(screening) {
   const body = document.getElementById("bookingBody");
   document.getElementById("bookingTitle").textContent = "개막식 영화 <얼굴> 신청";
   body.innerHTML = `
+    ${movieBookingIntroHtml(screening)}
     <div class="card compact" style="margin-bottom:16px;">
       <div class="badges">
         <span class="badge blue">${esc(screening.venue)}</span>
@@ -3603,10 +3941,6 @@ function openOpeningBooking(screening) {
           <label class="label" for="guestPhone">연락처 <span class="required">*</span></label>
           <input class="input" id="guestPhone" name="phone" inputmode="tel" autocomplete="tel" required placeholder="010-0000-0000" />
         </div>
-        <label class="checkbox-line sms-consent-line full">
-          <input type="checkbox" name="smsConsent" checked />
-          <span>예약 확정 시 입력한 연락처로 예약 확인 문자를 받겠습니다.</span>
-        </label>
         <div>
           <label class="label" for="guestEmail">이메일</label>
           <input class="input" id="guestEmail" name="email" type="email" autocomplete="email" placeholder="선택 입력" />
@@ -3621,6 +3955,11 @@ function openOpeningBooking(screening) {
         </div>
       </div>
       <p class="help">개막식 신청은 현장 안내에 따라 입장합니다.</p>
+      <label class="checkbox-line sms-consent-line">
+        <input type="checkbox" name="smsConsent" checked />
+        <span>예약 확정 시 입력한 연락처로 예약 확인 문자를 받겠습니다.</span>
+      </label>
+      ${bookingPrivacyConsentHtml()}
       <div class="form-actions">
         <button class="btn btn-dark booking-submit-btn" type="submit">개막작 신청 완료</button>
         <button class="btn btn-outline" type="button" data-action="close-modal">취소</button>
@@ -3635,13 +3974,16 @@ function openOpeningBooking(screening) {
 function openBooking(screeningId) {
   const screening = state.screenings.find((s) => s.id === screeningId);
   if (!screening) return toast("상영 정보를 찾을 수 없습니다.");
-  if (screening.status === "마감") return toast("이 회차는 현재 신청이 마감되었습니다.");
+  if (screening.status === "준비중") return toast("이 회차는 아직 신청을 준비하고 있습니다.");
+  if (screening.status === "마감" && remainingSeats(screening) > 0) return toast("이 회차는 운영진이 신청을 마감했습니다.");
   if (isOpeningScreening(screening)) return openOpeningBooking(screening);
   const remaining = remainingSeats(screening);
+  if (remaining <= 0) toast("현재 이 상영관은 신청마감이 되었습니다. 대기상태로 신청을 받겠습니다.");
   const modal = document.getElementById("bookingModal");
   const body = document.getElementById("bookingBody");
-  document.getElementById("bookingTitle").textContent = screening.title;
+  document.getElementById("bookingTitle").textContent = "영화 소개 · 관람 신청";
   body.innerHTML = `
+    ${movieBookingIntroHtml(screening)}
     <div class="card compact" style="margin-bottom:16px;">
       <div class="badges">
         <span class="badge blue">${esc(screening.venue)}</span>
@@ -3660,10 +4002,6 @@ function openBooking(screeningId) {
           <label class="label" for="guestPhone">연락처 <span class="required">*</span></label>
           <input class="input" id="guestPhone" name="phone" inputmode="tel" autocomplete="tel" required placeholder="010-0000-0000" />
         </div>
-        <label class="checkbox-line sms-consent-line full">
-          <input type="checkbox" name="smsConsent" checked />
-          <span>예약 확정 시 입력한 연락처로 예약 확인 문자를 받겠습니다.</span>
-        </label>
         <div>
           <label class="label" for="guestEmail">이메일</label>
           <input class="input" id="guestEmail" name="email" type="email" autocomplete="email" placeholder="선택 입력" />
@@ -3677,7 +4015,12 @@ function openBooking(screeningId) {
           <textarea class="textarea" id="guestNote" name="note" placeholder="접근성 지원, 단체 참석, 기타 요청사항"></textarea>
         </div>
       </div>
-      <p class="help">잔여 인원보다 많이 신청하면 대기 신청으로 접수됩니다. 운영진이 연락처로 확정 여부를 안내할 수 있습니다.</p>
+      <p class="help">정원이 모두 찼거나 잔여 인원보다 많이 신청하면 대기상태로 접수됩니다. 한 사람은 영화제 기간 동안 최대 5회까지 신청할 수 있으며, 같은 날 동일 시간 또는 1시간 이내 상영작은 중복 신청할 수 없습니다.</p>
+      <label class="checkbox-line sms-consent-line">
+        <input type="checkbox" name="smsConsent" checked />
+        <span>예약 확정 시 입력한 연락처로 예약 확인 문자를 받겠습니다.</span>
+      </label>
+      ${bookingPrivacyConsentHtml()}
       <div class="donation-mini">
         <strong>신청 후 후원도 함께해 주세요.</strong>
         <span>주민들이 직접 만드는 영화제가 계속 이어질 수 있도록 작은 후원의 손길을 보태주세요.</span>
@@ -3691,6 +4034,17 @@ function openBooking(screeningId) {
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
   setTimeout(() => document.getElementById("guestName")?.focus(), 0);
+}
+
+function bookingPrivacyConsentHtml() {
+  return `<section class="privacy-consent-box full" aria-labelledby="privacyConsentTitle">
+    <h4 id="privacyConsentTitle">${esc(PRIVACY_CONSENT_TITLE)} <span class="required">*</span></h4>
+    <p>${esc(PRIVACY_CONSENT_TEXT)}</p>
+    <label class="checkbox-line privacy-consent-check">
+      <input type="checkbox" name="privacyConsent" value="yes" checked required />
+      <span>위 개인정보 수집·이용 및 초상권 사용에 동의합니다.</span>
+    </label>
+  </section>`;
 }
 
 function openRoster(screeningId) {
@@ -4009,16 +4363,17 @@ function reservationConfirmationMessage(reservation, screening, status) {
   const movieTitle = cleanMovieTitle(screening?.title);
   const venue = screening?.venue || "상영관 미정";
   const time = formatSmsDateTime(screening?.startTime);
-  const statusText = statusLabel === "확정" ? "예약이 완료되었습니다." : "대기 신청으로 접수되었습니다.";
-  return [
+  const statusText = statusLabel === "확정" ? "예약이 완료되었습니다." : "현재 이 상영관은 신청마감이 되었습니다. 대기상태로 접수되었습니다.";
+  const lines = [
     `${reservation.name} 님 ${statusText}`,
     `예약번호: ${reservationDisplayNumber(reservation, screening)}`,
     `영화명: ${movieTitle}`,
     `인원: ${reservationSmsSeatPeople(reservation, screening)}`,
     `일시: ${time}`,
     `장소: ${venue}`,
-    "상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요."
-  ].join("\n");
+    statusLabel === "확정" ? "상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요." : "취소석이 생기면 운영진이 입력하신 연락처로 안내드리겠습니다."
+  ];
+  return lines.join("\n");
 }
 
 function reservationSmsMessage(reservation, screening) {
@@ -4035,7 +4390,8 @@ function reservationSmsPayload(reservation, screening) {
     people: reservationSmsPeople(reservation),
     seatPeople: reservationSmsSeatPeople(reservation, screening),
     dateTime: formatSmsDateTime(screening?.startTime),
-    venue: screening?.venue || "상영관 미정"
+    venue: screening?.venue || "상영관 미정",
+    reservationStatus: reservation.status === "대기" ? "대기" : "확정"
   };
 }
 
@@ -4069,8 +4425,8 @@ async function sendReservationSms(reservationOrId, screening = null, options = {
     return false;
   }
   const targetScreening = screening || state.screenings.find((item) => item.id === reservation.screeningId);
-  if (reservation.status !== "확정") {
-    if (manual) toast("확정된 예약만 예약 완료 문자를 발송할 수 있습니다.");
+  if (!["확정", "대기"].includes(reservation.status)) {
+    if (manual) toast("확정 또는 대기 상태의 신청자에게만 문자를 발송할 수 있습니다.");
     return false;
   }
   if (reservation.smsConsent === false && !manual) return false;
@@ -4122,7 +4478,7 @@ function sendReservationSmsById(id) {
 
 function autoSendReservationSms(reservation, screening, status) {
   if (!AUTO_SEND_SMS_ON_CONFIRMED_RESERVATION) return;
-  if (status !== "확정" || reservation.smsConsent === false) return;
+  if (!["확정", "대기"].includes(status) || reservation.smsConsent === false) return;
   window.setTimeout(() => sendReservationSms(reservation, screening, { manual: false }), 250);
 }
 
@@ -4195,10 +4551,10 @@ function showReservationComplete(reservation, status) {
   const description = openingReservation
     ? (isConfirmed
       ? `개막식 신청이 접수되었습니다. 상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요.`
-      : "잔여 인원이 부족해 대기 신청으로 접수되었습니다. 운영진이 연락처로 확정 여부를 안내할 수 있습니다.")
+      : "현재 이 상영관은 신청마감이 되었습니다. 대기상태로 신청을 받았습니다. 취소석이 생기면 운영진이 연락처로 안내드립니다.")
     : (isConfirmed
       ? "상영 당일 현장에서 예약번호와 신청자 이름을 알려주세요."
-      : "정원이 부족해 대기 신청으로 접수되었습니다. 운영진이 연락처로 확정 여부를 안내할 수 있습니다.");
+      : "현재 이 상영관은 신청마감이 되었습니다. 대기상태로 신청을 받았습니다. 취소석이 생기면 운영진이 연락처로 안내드립니다.");
   const modal = document.createElement("div");
   modal.className = "modal-backdrop open reservation-complete-modal";
   modal.id = "reservationCompleteModal";
@@ -4277,15 +4633,18 @@ function submitOpeningBooking(form, screening, data) {
   const phase = openingPhaseInfo(screening);
   if (!phase.allowBooking) return toast(phase.message || "현재 개막작 신청 기간이 아닙니다.");
   const seats = Math.max(1, Number(data.seats || 1));
+  if (data.privacyConsent !== "yes") return toast("개인정보 수집·이용 및 초상권 사용에 동의해 주세요.");
   const maxTickets = Math.max(1, Number(screening.maxTicketsPerReservation || 4));
   if (seats > maxTickets) return toast(`개막작은 1회 최대 ${maxTickets}명까지 신청할 수 있습니다.`);
+  const ruleError = bookingRuleError(screening, data.name, data.phone);
+  if (ruleError) return toast(ruleError);
 
   const isEarlybird = phase.phase === "earlybird";
   const ticketType = isEarlybird ? "사전신청" : "일반";
   const seatType = "";
   const seatAssignment = "";
   const donorName = "";
-  const status = "확정";
+  const status = bookingStatusFor(screening, seats);
 
   const reservation = normalizeReservation({
     id: uid("rsv"),
@@ -4304,6 +4663,9 @@ function submitOpeningBooking(form, screening, data) {
     seatAssignment,
     donorName,
     smsConsent: data.smsConsent === "on",
+    privacyConsent: true,
+    privacyConsentAt: new Date().toISOString(),
+    privacyConsentVersion: PRIVACY_CONSENT_VERSION,
     smsStatus: "미발송",
     smsSentAt: "",
     smsRequestId: "",
@@ -4368,9 +4730,12 @@ function submitBooking(form) {
   const data = formDataObject(form);
   const screening = state.screenings.find((s) => s.id === form.dataset.id);
   if (!screening) return toast("상영 정보를 찾을 수 없습니다.");
+  if (data.privacyConsent !== "yes") return toast("개인정보 수집·이용 및 초상권 사용에 동의해 주세요.");
   if (form.dataset.opening === "true" || isOpeningScreening(screening)) return submitOpeningBooking(form, screening, data);
   const seats = Math.max(1, Number(data.seats || 1));
-  const status = "확정";
+  const ruleError = bookingRuleError(screening, data.name, data.phone);
+  if (ruleError) return toast(ruleError);
+  const status = bookingStatusFor(screening, seats);
   const reservation = normalizeReservation({
     id: uid("rsv"),
     reservationNumber: nextVenueReservationNumber(screening),
@@ -4384,6 +4749,9 @@ function submitBooking(form) {
     attendedSeats: 0,
     attendedAt: "",
     smsConsent: data.smsConsent === "on",
+    privacyConsent: true,
+    privacyConsentAt: new Date().toISOString(),
+    privacyConsentVersion: PRIVACY_CONSENT_VERSION,
     smsStatus: "미발송",
     smsSentAt: "",
     smsRequestId: "",
@@ -4402,7 +4770,8 @@ function submitBooking(form) {
 }
 
 function submitAdminLogin(form) {
-  const pin = String(new FormData(form).get("pin") || "").trim();
+  const formData = new FormData(form);
+  const pin = String(formData.get("pin") || "").trim();
   const master = isMasterAdminPath();
   if (master) {
     if (pin === MASTER_ADMIN_PIN) {
@@ -4415,19 +4784,60 @@ function submitAdminLogin(form) {
     }
     return;
   }
-  const currentPin = String(state.adminPin || ADMIN_PIN);
-  if (pin === currentPin) {
-    if (!state.adminPin) {
-      state.adminPin = String(ADMIN_PIN);
-      persist({ autoSync: false });
-    }
+  const name = String(formData.get("name") || "").trim();
+  const account = (state.generalAdmins || []).find((admin) => admin.name === name && admin.password === pin);
+  if (account) {
     sessionStorage.setItem(ADMIN_SESSION_KEY, "general");
-    toast("관리자 대시보드에 로그인했습니다.");
+    sessionStorage.setItem(`${ADMIN_SESSION_KEY}.name`, account.name);
+    toast(`${account.name}님, 관리자 대시보드에 로그인했습니다.`);
     window.location.hash = "#/overview";
     render();
   } else {
-    toast("관리자 PIN이 맞지 않습니다.");
+    toast("관리자 이름 또는 비밀번호가 맞지 않습니다.");
   }
+}
+
+function submitGeneralAdminAdd(form) {
+  if (!isMasterAdminAuthed()) return toast("마스타관리자만 일반관리자를 추가할 수 있습니다.");
+  const data = formDataObject(form);
+  const name = String(data.name || "").trim();
+  const password = String(data.password || "").trim();
+  if (!name) return toast("일반관리자 이름을 입력해 주세요.");
+  if (password.length < 4) return toast("비밀번호는 4자리 이상으로 입력해 주세요.");
+  if ((state.generalAdmins || []).some((admin) => admin.name.toLowerCase() === name.toLowerCase())) return toast("같은 이름의 일반관리자가 이미 있습니다.");
+  state.generalAdmins.push({ id: uid("admin"), name, password, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  persist();
+  render();
+  toast(`${name} 일반관리자를 추가했습니다.`);
+}
+
+function submitGeneralAdminEdit(form) {
+  if (!isMasterAdminAuthed()) return toast("마스타관리자만 일반관리자를 수정할 수 있습니다.");
+  const account = (state.generalAdmins || []).find((admin) => admin.id === form.dataset.id);
+  if (!account) return toast("일반관리자 계정을 찾지 못했습니다.");
+  const data = formDataObject(form);
+  const name = String(data.name || "").trim();
+  const password = String(data.password || "").trim();
+  if (!name || password.length < 4) return toast("이름과 4자리 이상의 비밀번호를 입력해 주세요.");
+  if ((state.generalAdmins || []).some((admin) => admin.id !== account.id && admin.name.toLowerCase() === name.toLowerCase())) return toast("같은 이름의 일반관리자가 이미 있습니다.");
+  account.name = name;
+  account.password = password;
+  account.updatedAt = new Date().toISOString();
+  persist();
+  render();
+  toast(`${name} 일반관리자 정보를 저장했습니다.`);
+}
+
+function deleteGeneralAdmin(id) {
+  if (!isMasterAdminAuthed()) return toast("마스타관리자만 일반관리자를 삭제할 수 있습니다.");
+  const account = (state.generalAdmins || []).find((admin) => admin.id === id);
+  if (!account) return;
+  if ((state.generalAdmins || []).length <= 1) return toast("일반관리자 계정은 최소 1개를 유지해야 합니다.");
+  if (!confirm(`${account.name} 일반관리자를 삭제할까요?`)) return;
+  state.generalAdmins = state.generalAdmins.filter((admin) => admin.id !== id);
+  persist();
+  render();
+  toast(`${account.name} 일반관리자를 삭제했습니다.`);
 }
 
 function submitAdminPinChange(form) {
@@ -4490,6 +4900,9 @@ function setReservationStatus(id, status) {
   if (!canManageReservation(reservation)) return toast("이 신청자를 관리할 권한이 없습니다.");
   const screening = state.screenings.find((s) => s.id === reservation.screeningId);
   const previousStatus = reservation.status;
+  if (status === "확정" && previousStatus !== "확정" && screening && remainingSeats(screening) < Number(reservation.seats || 1)) {
+    return toast("잔여 정원이 부족해 확정할 수 없습니다. 정원을 늘리거나 기존 확정 신청을 조정해 주세요.");
+  }
 
   if (isOpeningScreening(screening)) {
     reservation.seatType = "";
@@ -4747,7 +5160,7 @@ function rowsToExcelHtml(title, rows, options = {}) {
 }
 
 function buildReservationRows() {
-  const rows = [["예약번호", "상태", "후원자명/입금자명", "참석여부", "참석처리일", "영화", "상영관", "상영시간", "신청자", "연락처", "이메일", "문자수신동의", "문자상태", "문자발송일", "문자요청ID", "신청인원", "실제참석인원", "신청일", "메모"]];
+  const rows = [["예약번호", "상태", "후원자명/입금자명", "참석여부", "참석처리일", "영화", "상영관", "상영시간", "신청자", "연락처", "이메일", "문자수신동의", "개인정보·초상권동의", "동의시각", "동의서버전", "문자상태", "문자발송일", "문자요청ID", "신청인원", "실제참석인원", "신청일", "메모"]];
   state.reservations.forEach((reservation) => {
     const screening = state.screenings.find((s) => s.id === reservation.screeningId);
     rows.push([
@@ -4763,6 +5176,9 @@ function buildReservationRows() {
       reservation.phone,
       reservation.email,
       reservation.smsConsent === false ? "미동의" : "동의",
+      reservation.privacyConsent === true ? "동의" : "미확인",
+      reservation.privacyConsentAt || "",
+      reservation.privacyConsentVersion || "",
       reservation.smsStatus || "미발송",
       reservation.smsSentAt || "",
       reservation.smsRequestId || "",
@@ -4861,6 +5277,9 @@ function buildDriveApplicants() {
       attendanceStatus: reservationAttendanceState(reservation),
       donorName: reservation.donorName || "",
       smsConsent: reservation.smsConsent === false ? "미동의" : "동의",
+      privacyConsent: reservation.privacyConsent === true ? "동의" : "미확인",
+      privacyConsentAt: reservation.privacyConsentAt || "",
+      privacyConsentVersion: reservation.privacyConsentVersion || "",
       smsStatus: reservation.smsStatus || "미발송",
       smsSentAt: reservation.smsSentAt || "",
       createdAt: reservation.createdAt || "",
@@ -4949,16 +5368,17 @@ function buildDriveSurvey() {
       screeningTime: s.startTime || "",
       surveyEnabled: cfg.enabled ? "ON" : "OFF",
       autoSmsEnabled: cfg.autoSmsEnabled ? "ON" : "OFF",
-      attendedCount: state.reservations.filter((r) => r.screeningId === s.id && r.attended === true).length
+      attendedCount: state.reservations.filter((r) => r.screeningId === s.id && r.attended === true).reduce((sum, r) => sum + Number(r.attendedSeats || r.seats || 1), 0)
     };
   });
   const responses = (state.surveyResponses || []).map((r, index) => ({ no: index + 1, ...r }));
   const dispatches = (state.surveyDispatches || []).map((d, index) => ({ no: index + 1, ...d }));
   const stats = sortedScreenings().map((s, index) => {
-    const res = responses.filter((r) => r.screeningId === s.id || r.movieTitle === s.title);
-    const attended = state.reservations.filter((r) => r.screeningId === s.id && r.attended === true).length;
-    const sent = dispatches.filter((d) => d.screeningId === s.id || d.movieTitle === s.title || d.movieTitle === cleanMovieTitle(s.title)).length;
-    const ratings = res.map((r) => Number(r.overallRating || r.answers?.["q-overall"] || 0)).filter((n) => n > 0);
+    const res = responses.filter((r) => !isSurveyTestRecord(r) && (r.screeningId === s.id || r.movieTitle === s.title));
+    const attended = state.reservations.filter((r) => r.screeningId === s.id && r.attended === true).reduce((sum, r) => sum + Number(r.attendedSeats || r.seats || 1), 0);
+    const sent = dispatches.filter((d) => !isSurveyTestRecord(d) && isSuccessfulSurveyDispatch(d) && (d.screeningId === s.id || d.movieTitle === s.title || d.movieTitle === cleanMovieTitle(s.title))).length;
+    const ratingQuestion = questions.find((q) => q.enabled === "ON" && q.type === "rating");
+    const ratings = res.map((r) => Number(r.overallRating || r.answers?.[ratingQuestion?.id || "q-overall"] || 0)).filter((n) => n > 0);
     return {
       no: index + 1,
       movieTitle: s.title || "",
@@ -4979,6 +5399,11 @@ function buildDriveSurvey() {
       sendDelayMinutes: settings.sendDelayMinutes,
       responseDeadlineDays: settings.responseDeadlineDays,
       preventDuplicate: settings.preventDuplicate ? "ON" : "OFF",
+      surveyTitle: settings.surveyTitle,
+      surveyIntro: settings.surveyIntro,
+      privacyNotice: settings.privacyNotice,
+      completionTitle: settings.completionTitle,
+      completionMessage: settings.completionMessage,
       smsTemplate: settings.smsTemplate,
       updatedAt: new Date().toISOString()
     }, ...screeningSettings.map((item) => ({
@@ -4988,6 +5413,11 @@ function buildDriveSurvey() {
       sendDelayMinutes: "",
       responseDeadlineDays: "",
       preventDuplicate: "",
+      surveyTitle: "",
+      surveyIntro: "",
+      privacyNotice: "",
+      completionTitle: "",
+      completionMessage: "",
       smsTemplate: `${item.movieTitle} / ${item.venue} / ${item.screeningTime}`,
       updatedAt: new Date().toISOString()
     }))],
@@ -5839,6 +6269,11 @@ document.addEventListener("click", (event) => {
     setSelectedReservationAction(row.dataset.reservationRow);
     return;
   }
+  const screeningRosterRow = event.target.closest("[data-screening-roster-row]");
+  if (screeningRosterRow && !event.target.closest("button, input, select, textarea, a, label")) {
+    openRoster(screeningRosterRow.dataset.screeningRosterRow);
+    return;
+  }
   const adminTabAnchor = event.target.closest("[data-admin-tab]");
   if (adminTabAnchor) {
     event.preventDefault();
@@ -5857,7 +6292,7 @@ document.addEventListener("click", (event) => {
   const id = button.dataset.id;
   if (action === "go-home") {
     event.preventDefault();
-    if (window.location.pathname && window.location.pathname !== "/") window.location.href = "/?v=119&fresh=1";
+    if (isAdminRoutePath() || (window.location.pathname && window.location.pathname !== "/")) window.location.href = "/?v=139&fresh=1";
     else { window.location.hash = "#/"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     return;
   }
@@ -5880,7 +6315,7 @@ document.addEventListener("click", (event) => {
   if (action === "book") openBooking(id);
   if (action === "close-modal") closeModals();
   if (action === "view-roster") openRoster(id);
-  if (action === "admin-logout") { sessionStorage.removeItem(ADMIN_SESSION_KEY); selectedScreeningId = null; render(); toast("로그아웃했습니다."); }
+  if (action === "admin-logout") { sessionStorage.removeItem(ADMIN_SESSION_KEY); sessionStorage.removeItem(`${ADMIN_SESSION_KEY}.name`); selectedScreeningId = null; render(); toast("로그아웃했습니다."); }
   if (action === "staff-add-reservation") staffAddReservation();
   if (action === "staff-edit-reservation") staffEditReservation(id);
   if (action === "staff-logout") {
@@ -5910,6 +6345,13 @@ document.addEventListener("click", (event) => {
   }
   if (action === "create-survey-test-link") createSurveyTestLink({ sendSms: false });
   if (action === "send-survey-test-sms") createSurveyTestLink({ sendSms: true });
+  if (action === "toggle-survey-setting") toggleSurveySetting(button.dataset.setting);
+  if (action === "add-survey-question") addSurveyQuestionEditor();
+  if (action === "duplicate-survey-question") addSurveyQuestionEditor(button.closest("[data-survey-question-row]"));
+  if (action === "move-survey-question-up") moveSurveyQuestionEditor(button.closest("[data-survey-question-row]"), -1);
+  if (action === "move-survey-question-down") moveSurveyQuestionEditor(button.closest("[data-survey-question-row]"), 1);
+  if (action === "remove-survey-question") removeSurveyQuestionEditor(button.closest("[data-survey-question-row]"));
+  if (action === "open-survey-preview") window.open("/survey.html?preview=1", "_blank", "noopener");
   if (action === "delete-survey-response") deleteSurveyResponse(id);
   if (action === "delete-survey-dispatch") deleteSurveyDispatch(id);
   if (action === "clear-survey-dispatches") clearSurveyDispatches();
@@ -5923,6 +6365,7 @@ document.addEventListener("click", (event) => {
   if (action === "clear-master-staff-present") clearMasterStaffPresent();
   if (action === "save-staff-pin") saveStaffPin(id);
   if (action === "clear-staff-present") clearStaffPresent(id);
+  if (action === "delete-general-admin") deleteGeneralAdmin(id);
   if (action === "set-reservation-status") setReservationStatus(id, button.dataset.status);
   if (action === "set-attendance") setAttendance(id, button.dataset.attended === "true");
   if (action === "copy-confirmation") copyReservationConfirmation(id);
@@ -5947,7 +6390,7 @@ document.addEventListener("click", (event) => {
   if (action === "export-json") exportJson();
   if (action === "reset-demo") {
     if (!confirm("데모 데이터로 초기화할까요? 현재 입력된 정보가 사라집니다.")) return;
-    state = normalizeState({ screenings: cloneData(seedScreenings), reservations: cloneData(seedReservations), donations: [], sponsorClicks: 0, adminPin: String(state.adminPin || ADMIN_PIN), masterStaffPin: "0909", masterStaffPresent: false, lastUpdated: new Date().toISOString() });
+    state = normalizeState({ screenings: cloneData(seedScreenings), reservations: cloneData(seedReservations), donations: [], sponsorClicks: 0, adminPin: String(state.adminPin || ADMIN_PIN), generalAdmins: cloneData(state.generalAdmins || []), masterStaffPin: "0909", masterStaffPresent: false, lastUpdated: new Date().toISOString() });
     selectedScreeningId = null;
     persist();
     render();
@@ -5962,6 +6405,13 @@ document.addEventListener("click", (event) => {
   }
 });
 
+document.addEventListener("keydown", (event) => {
+  const row = event.target.closest?.("[data-screening-roster-row]");
+  if (!row || event.target !== row || !["Enter", " "].includes(event.key)) return;
+  event.preventDefault();
+  openRoster(row.dataset.screeningRosterRow);
+});
+
 document.addEventListener("submit", (event) => {
   event.preventDefault();
   const form = event.target;
@@ -5969,6 +6419,8 @@ document.addEventListener("submit", (event) => {
   if (form.id === "donationForm") submitDonation(form);
   if (form.id === "adminLoginForm") submitAdminLogin(form);
   if (form.id === "adminPinChangeForm") submitAdminPinChange(form);
+  if (form.id === "generalAdminAddForm") submitGeneralAdminAdd(form);
+  if (form.matches(".general-admin-edit-form")) submitGeneralAdminEdit(form);
   if (form.id === "driveSyncForm" || form.id === "driveSyncQuickForm") submitDriveSyncForm(form);
   if (form.id === "staffLoginForm") submitStaffLogin(form);
   if (form.id === "staffPinChangeForm") submitStaffPinChange(form);

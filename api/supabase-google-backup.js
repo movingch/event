@@ -79,6 +79,9 @@ function buildApplicants(state) {
       attendanceStatus: attendanceState(r),
       donorName: r.donorName || '',
       smsConsent: r.smsConsent === false ? '미동의' : '동의',
+      privacyConsent: r.privacyConsent === true ? '동의' : '미확인',
+      privacyConsentAt: r.privacyConsentAt || '',
+      privacyConsentVersion: r.privacyConsentVersion || '',
       smsStatus: r.smsStatus || '미발송',
       smsSentAt: r.smsSentAt || '',
       createdAt: r.createdAt || '',
@@ -137,6 +140,15 @@ function answerValue(response, answers, keys) {
   return '';
 }
 
+function isSurveyTestRecord(item) {
+  return item?.test === true || item?.test === 'TEST' || String(item?.type || '').toLowerCase() === 'test' || String(item?.reservationId || '').startsWith('test-') || String(item?.name || '').includes('TEST');
+}
+
+function isSuccessfulSurveyDispatch(item) {
+  const status = String(item?.status || '');
+  return Boolean(item?.sentAt) && !status.includes('실패') && (status.includes('완료') || status.includes('응답'));
+}
+
 function buildDonations(state) {
   return arr(state.donations).map((d, i) => ({
     no: i + 1,
@@ -178,6 +190,7 @@ function buildSurvey(state) {
       movieTitle: r.movieTitle || '',
       screeningTime: r.screeningTime || r.startTime || '',
       venue: r.venue || '',
+      seatPeople: num(r.seatPeople || 1),
       overallRating: answerValue(r, answers, ['overallRating', 'q-overall', 'overall', 'rating']),
       venueRating: answerValue(r, answers, ['venueRating', 'q-venue', 'venueSatisfaction']),
       guideRating: answerValue(r, answers, ['guideRating', 'q-guide', 'guideSatisfaction']),
@@ -215,12 +228,26 @@ function buildSurvey(state) {
   }));
   const stats = buildScreenings(state).map((s, i) => {
     const movie = s.movieTitle || '';
-    const res = responses.filter((r) => r.movieTitle === movie);
-    const sent = dispatches.filter((d) => d.movieTitle === movie).length;
+    const res = responses.filter((r) => !isSurveyTestRecord(r) && r.movieTitle === movie);
+    const sent = dispatches.filter((d) => !isSurveyTestRecord(d) && isSuccessfulSurveyDispatch(d) && d.movieTitle === movie).length;
     const ratings = res.map((r) => Number(r.overallRating || 0)).filter((n) => n > 0);
     return { no: i + 1, movieTitle: movie, screeningTime: s.startTime || '', venue: s.venue || '', attendedCount: s.attendedCount || 0, sentCount: sent, responseCount: res.length, responseRate: sent ? `${Math.round(res.length / sent * 100)}%` : '-', averageRating: ratings.length ? (ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1) : '-' };
   });
-  return { settings: [{ festival: '제9회 머내마을영화제', enabled: settings.enabled ? 'ON' : 'OFF', updatedAt: new Date().toISOString() }], questions, responses, stats, dispatches };
+  return { settings: [{
+    festival: '제9회 머내마을영화제',
+    enabled: settings.enabled ? 'ON' : 'OFF',
+    autoSmsEnabled: settings.autoSmsEnabled ? 'ON' : 'OFF',
+    sendDelayMinutes: settings.sendDelayMinutes || 5,
+    responseDeadlineDays: settings.responseDeadlineDays || 7,
+    preventDuplicate: settings.preventDuplicate === false ? 'OFF' : 'ON',
+    surveyTitle: settings.surveyTitle || '만족도조사',
+    surveyIntro: settings.surveyIntro || '',
+    privacyNotice: settings.privacyNotice || '',
+    completionTitle: settings.completionTitle || '',
+    completionMessage: settings.completionMessage || '',
+    smsTemplate: settings.smsTemplate || '',
+    updatedAt: new Date().toISOString()
+  }], questions, responses, stats, dispatches };
 }
 function rowsFromObjects(items) {
   const keys = [...new Set(items.flatMap((item) => Object.keys(item || {})))];
