@@ -21,7 +21,7 @@
 <main>
   <div class="top">
     <div><h1>백업·구글시트 연동</h1><p>관리자 메뉴 버튼이 작동하지 않아도 이 별도 페이지에서 바로 저장합니다.</p></div>
-    <a class="btn" href="/admin?v=119&fresh=1">관리자 화면</a>
+    <a class="btn" id="adminReturnLink" href="/adminor?v=139&fresh=1#/backup">관리자 화면</a>
   </div>
 
   <section class="card">
@@ -63,6 +63,8 @@ const URL_KEY = 'munae9DriveWebhookUrl';
 const LAST_KEY = 'munae9DriveLastSyncAt';
 const AUTO_KEY = 'munae9DriveAutoSyncEnabled';
 const FESTIVAL = '제9회 머내마을영화제';
+const localHost = ['127.0.0.1','localhost'].includes(location.hostname);
+document.getElementById('adminReturnLink').href = localHost ? '/?v=139&fresh=1&masterPreview=1#/backup' : '/adminor?v=139&fresh=1#/backup';
 function $(id){return document.getElementById(id)}
 function esc(v){return String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;')}
 function log(msg){$('log').textContent = msg}

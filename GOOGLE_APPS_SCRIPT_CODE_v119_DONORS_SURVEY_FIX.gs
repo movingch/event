@@ -37,11 +37,12 @@ function doPost(e) {
     writeSurveyDispatchesSheet(ss, data.survey.dispatches, now);
     writeSyncLogSheet(ss, body, now, data, raw);
     applySpreadsheetFinishing_(ss);
+    normalizePhoneColumnsInAllSheets_(ss);
 
     return jsonOutput({
       ok: true,
       message: '저장 및 시트 디자인 적용 완료',
-      version: 'v119-donors-survey-fix',
+    version: 'v120-phone-format',
       savedAt: now.toISOString(),
       applicantsCount: data.applicants.length,
       statsCount: data.stats.length,
@@ -66,7 +67,7 @@ function doGet(e) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     if (e && e.parameter && e.parameter.action === 'exportData') {
-      return jsonOutput({ ok: true, message: '구글시트 원본 데이터 내보내기 완료', version: 'v119-donors-survey-fix', data: exportCurrentData_(ss) });
+      return jsonOutput({ ok: true, message: '구글시트 원본 데이터 내보내기 완료', version: 'v120-phone-format', data: exportCurrentData_(ss) });
     }
     if (e && e.parameter && e.parameter.action === 'surveyLookup') {
       return jsonOutput(lookupSurveyParticipant_(ss, String(e.parameter.token || '').trim()));
@@ -203,7 +204,7 @@ function handleSurveyResponse_(ss, response, now) {
   const token = String(response.token || '').trim();
   if (!token) return jsonOutput({ ok: false, message: '설문 토큰이 없습니다.' });
   const existing = findSurveyResponseByToken_(ss, token);
-  if (existing) return jsonOutput({ ok: true, alreadySubmitted: true, message: '이미 응답했습니다.' });
+  if (existing && response.allowDuplicate !== true) return jsonOutput({ ok: true, alreadySubmitted: true, message: '이미 응답했습니다.' });
   const sheet = getOrCreateSheet(ss, '만족도_응답');
   if (sheet.getLastRow() === 0) {
     writeSurveyResponsesSheet(ss, [], now);
@@ -215,7 +216,7 @@ function handleSurveyResponse_(ss, response, now) {
     response.reservationNumber || '',
     token,
     response.name || '',
-    response.phone || '',
+    formatPhoneForSheet_(response.phone || ''),
     response.movieTitle || '',
     response.screeningTime || '',
     response.venue || '',
@@ -226,7 +227,8 @@ function handleSurveyResponse_(ss, response, now) {
     answers['q-return'] || response.returnIntent || '',
     answers['q-good'] || response.goodComment || '',
     answers['q-improve'] || response.improveComment || '',
-    '응답완료'
+    '응답완료',
+    JSON.stringify(answers)
   ];
   sheet.appendRow(row);
   styleSurveyResponseAppend_(sheet);
@@ -239,6 +241,7 @@ function styleSurveyResponseAppend_(sheet) {
     const lastCol = sheet.getLastColumn();
     if (lastRow >= 5 && lastCol >= 17) {
       sheet.getRange(lastRow, 1, 1, lastCol).setBorder(true, true, true, true, true, true, BRAND.line, SpreadsheetApp.BorderStyle.SOLID).setWrap(true).setVerticalAlignment('middle');
+      sheet.getRange(lastRow, 6).setNumberFormat('@').setValue(formatPhoneForSheet_(sheet.getRange(lastRow, 6).getDisplayValue()));
       paintStatusColumn_(sheet, 5, 17, lastRow - 4);
       paintRateColumns_(sheet, 5, 11, lastRow - 4);
     }
@@ -426,7 +429,7 @@ function writeApplicantsSheet(ss, applicants, now) {
   const sheet = resetSheet_(ss, '신청자현황');
   const headers = [
     'No', '신청일시', '예약번호', '참석여부', '신청자', '연락처', '영화명', '상영일', '상영시간', '상영관',
-    '신청인원', '참석인원', '후원자명/입금자명', '문자수신', '문자상태', '문자발송일', '메모', '저장시각'
+    '신청인원', '참석인원', '후원자명/입금자명', '문자수신', '개인정보·초상권동의', '동의시각', '동의서버전', '문자상태', '문자발송일', '메모', '저장시각'
   ];
 
   const rows = applicants.map(function (r, index) {
@@ -445,6 +448,9 @@ function writeApplicantsSheet(ss, applicants, now) {
       valueOf(r, ['attendedCount', '참석인원', 'actualCount', '실제참석인원']),
       valueOf(r, ['donorName', '후원자명/입금자명']),
       valueOf(r, ['smsConsent', '문자수신동의']),
+      valueOf(r, ['privacyConsent', '개인정보·초상권동의']),
+      valueOf(r, ['privacyConsentAt', '동의시각']),
+      valueOf(r, ['privacyConsentVersion', '동의서버전']),
       valueOf(r, ['smsStatus', '문자상태']),
       valueOf(r, ['smsSentAt', '문자발송일']),
       valueOf(r, ['memo', '메모', 'note']),
@@ -458,9 +464,9 @@ function writeApplicantsSheet(ss, applicants, now) {
   const summary = '기준시각: ' + formatDateTime(now) + '    총 신청자: ' + rows.length + '명    참석: ' + attended + '명    미참석: ' + canceled + '명';
   writeDesignedTable_(sheet, title, summary, headers, rows, 4);
   setDropdown_(sheet, 4, 4, ['신청', '참석', '미참석']);
-  setDropdown_(sheet, 4, 15, ['미발송', '발송완료', '실패', '대기']);
+  setDropdown_(sheet, 4, 18, ['미발송', '발송완료', '실패', '대기']);
   paintStatusColumn_(sheet, 5, 4, rows.length);
-  paintStatusColumn_(sheet, 5, 15, rows.length);
+  paintStatusColumn_(sheet, 5, 18, rows.length);
   sheet.getRange('F:F').setNumberFormat('@');
   sheet.getRange('B:B').setNumberFormat('yyyy-mm-dd hh:mm');
   sheet.getRange('H:H').setNumberFormat('yyyy-mm-dd');
@@ -611,10 +617,10 @@ function writeDonationsSheet(ss, donations, now) {
 
 function writeSurveySettingsSheet(ss, settings, now) {
   const sheet = resetSheet_(ss, '만족도_설정');
-  const headers = ['No', '구분', '만족도조사', '자동문자', '발송지연분', '응답마감일', '중복방지', '문자내용/회차정보', '수정시각'];
+  const headers = ['No', '구분', '만족도조사', '자동문자', '발송지연분', '응답마감일', '중복방지', '설문제목', '시작안내', '개인정보안내', '완료제목', '완료안내', '문자내용/회차정보', '수정시각'];
   const source = settings && settings.length ? settings : [{ festival: '제9회 머내마을영화제', enabled: 'OFF', autoSmsEnabled: 'OFF', sendDelayMinutes: 5, responseDeadlineDays: 7, preventDuplicate: 'ON', smsTemplate: '기본 OFF 상태', updatedAt: now }];
   const rows = source.map(function (r, index) {
-    return [index + 1, valueOf(r, ['festival', '구분']), valueOf(r, ['enabled', '만족도조사']), valueOf(r, ['autoSmsEnabled', '자동문자']), valueOf(r, ['sendDelayMinutes', '발송지연분']), valueOf(r, ['responseDeadlineDays', '응답마감일']), valueOf(r, ['preventDuplicate', '중복방지']), valueOf(r, ['smsTemplate', '문자내용']), valueOf(r, ['updatedAt', '수정시각']) || formatDateTime(now)];
+    return [index + 1, valueOf(r, ['festival', '구분']), valueOf(r, ['enabled', '만족도조사']), valueOf(r, ['autoSmsEnabled', '자동문자']), valueOf(r, ['sendDelayMinutes', '발송지연분']), valueOf(r, ['responseDeadlineDays', '응답마감일']), valueOf(r, ['preventDuplicate', '중복방지']), valueOf(r, ['surveyTitle', '설문제목']), valueOf(r, ['surveyIntro', '시작안내']), valueOf(r, ['privacyNotice', '개인정보안내']), valueOf(r, ['completionTitle', '완료제목']), valueOf(r, ['completionMessage', '완료안내']), valueOf(r, ['smsTemplate', '문자내용']), valueOf(r, ['updatedAt', '수정시각']) || formatDateTime(now)];
   });
   writeDesignedTable_(sheet, '제9회 머내마을영화제 만족도조사 설정', '전체 ON/OFF, 자동문자, 회차별 사용 여부를 확인합니다. 기준시각: ' + formatDateTime(now), headers, rows, 4);
   setDropdown_(sheet, 4, 3, ['ON', 'OFF']);
@@ -640,7 +646,7 @@ function writeSurveyQuestionsSheet(ss, questions, now) {
 
 function writeSurveyResponsesSheet(ss, responses, now) {
   const sheet = resetSheet_(ss, '만족도_응답');
-  const headers = ['No', '응답시각', '예약번호', '설문토큰', '이름', '연락처', '영화명', '상영일시', '장소', '전체만족도', '상영환경', '진행안내', '재참여의향', '좋았던점', '개선의견', '응답상태'];
+  const headers = ['No', '응답시각', '예약번호', '설문토큰', '이름', '연락처', '영화명', '상영일시', '장소', '신청인원', '전체만족도', '상영환경', '진행안내', '재참여의향', '좋았던점', '개선의견', '응답상태', '전체응답(JSON)'];
   const rows = (responses || []).map(function (r, index) {
     return [
       index + 1,
@@ -652,18 +658,22 @@ function writeSurveyResponsesSheet(ss, responses, now) {
       valueOf(r, ['movieTitle', '영화명']),
       valueOf(r, ['screeningTime', '상영일시']),
       valueOf(r, ['venue', '장소']),
+      valueOf(r, ['seatPeople', '신청인원']),
       valueOf(r, ['overallRating', '전체만족도']) || nestedAnswer_(r, 'q-overall'),
       valueOf(r, ['venueRating', '상영환경']) || nestedAnswer_(r, 'q-venue'),
       valueOf(r, ['guideRating', '진행안내']) || nestedAnswer_(r, 'q-guide'),
       valueOf(r, ['returnIntent', '재참여의향']) || nestedAnswer_(r, 'q-return'),
       valueOf(r, ['goodComment', '좋았던점']) || nestedAnswer_(r, 'q-good'),
       valueOf(r, ['improveComment', '개선의견']) || nestedAnswer_(r, 'q-improve'),
-      valueOf(r, ['status', '응답상태']) || '응답완료'
+      valueOf(r, ['status', '응답상태']) || '응답완료',
+      valueOf(r, ['answersText', '전체응답(JSON)']) || JSON.stringify(r.answers || {})
     ];
   });
   writeDesignedTable_(sheet, '만족도조사 응답 원자료', '관객이 제출한 응답이 신청자 정보와 함께 누적됩니다. 기준시각: ' + formatDateTime(now), headers, rows, 4);
-  paintStatusColumn_(sheet, 5, 15, rows.length);
+  paintStatusColumn_(sheet, 5, 17, rows.length);
   paintRateColumns_(sheet, 5, 11, rows.length);
+  paintRateColumns_(sheet, 5, 12, rows.length);
+  paintRateColumns_(sheet, 5, 13, rows.length);
 }
 
 function writeSurveyStatsSheet(ss, stats, now) {
@@ -727,7 +737,16 @@ function writeDesignedTable_(sheet, title, summary, headers, rows, headerRow) {
   sheet.getRange(2, 1, 1, colCount).merge().setValue(summary)
     .setBackground(BRAND.grayBg).setFontColor(BRAND.navy).setFontWeight('bold');
   sheet.getRange(headerRow, 1, 1, colCount).setValues([headers]);
-  if (rows.length > 0) sheet.getRange(headerRow + 1, 1, rows.length, colCount).setValues(rows);
+  const phoneColumns = phoneColumnIndexes_(headers);
+  const formattedRows = rows.map(function (row) {
+    return row.map(function (cell, index) {
+      return phoneColumns.indexOf(index) >= 0 ? formatPhoneForSheet_(cell) : cell;
+    });
+  });
+  if (formattedRows.length > 0) sheet.getRange(headerRow + 1, 1, formattedRows.length, colCount).setValues(formattedRows);
+  phoneColumns.forEach(function (index) {
+    sheet.getRange(headerRow + 1, index + 1, Math.max(formattedRows.length, 1), 1).setNumberFormat('@');
+  });
   styleHeader_(sheet, headerRow, colCount);
   styleTableBody_(sheet, headerRow + 1, colCount, rows.length);
   addFilter_(sheet, headerRow, colCount, Math.max(rows.length, 1));
@@ -848,6 +867,50 @@ function applySpreadsheetFinishing_(ss) {
     const sheet = ss.getSheetByName(name);
     if (!sheet) return;
     try { sheet.setTabColor(tabColorFor_(name)); } catch (err) {}
+  });
+}
+
+function phoneColumnIndexes_(headers) {
+  const indexes = [];
+  (headers || []).forEach(function (header, index) {
+    const text = String(header || '').replace(/\s+/g, '');
+    if ((text.indexOf('연락처') >= 0 || text.indexOf('전화번호') >= 0 || text.indexOf('휴대폰') >= 0) && text.indexOf('뒷자리') < 0) indexes.push(index);
+  });
+  return indexes;
+}
+
+function formatPhoneForSheet_(value) {
+  let digits = String(value == null ? '' : value).replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.indexOf('82') === 0) digits = '0' + digits.slice(2);
+  if (digits.length === 10 && digits.indexOf('10') === 0) digits = '0' + digits;
+  if (digits.length === 11) return digits.slice(0, 3) + '-' + digits.slice(3, 7) + '-' + digits.slice(7);
+  if (digits.length === 10 && digits.indexOf('02') === 0) return digits.slice(0, 2) + '-' + digits.slice(2, 6) + '-' + digits.slice(6);
+  if (digits.length === 10) return digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
+  if (digits.length === 9 && digits.indexOf('02') === 0) return digits.slice(0, 2) + '-' + digits.slice(2, 5) + '-' + digits.slice(5);
+  return String(value == null ? '' : value).trim();
+}
+
+function normalizePhoneColumnsInAllSheets_(ss) {
+  ss.getSheets().forEach(function (sheet) {
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow < 1 || lastCol < 1) return;
+    const scanRows = Math.min(lastRow, 10);
+    const top = sheet.getRange(1, 1, scanRows, lastCol).getDisplayValues();
+    for (var rowIndex = 0; rowIndex < top.length; rowIndex++) {
+      const phoneColumns = phoneColumnIndexes_(top[rowIndex]);
+      if (!phoneColumns.length) continue;
+      phoneColumns.forEach(function (columnIndex) {
+        const dataStartRow = rowIndex + 2;
+        const dataRowCount = Math.max(lastRow - dataStartRow + 1, 0);
+        if (!dataRowCount) return;
+        const range = sheet.getRange(dataStartRow, columnIndex + 1, dataRowCount, 1);
+        const formatted = range.getDisplayValues().map(function (row) { return [formatPhoneForSheet_(row[0])]; });
+        range.setNumberFormat('@').setValues(formatted);
+      });
+      break;
+    }
   });
 }
 
