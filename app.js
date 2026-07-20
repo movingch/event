@@ -1057,6 +1057,74 @@ function packScheduleBookingGroups(groups = []) {
   return packed;
 }
 
+function continuousRepeatSeries(screenings = []) {
+  if (!Array.isArray(screenings) || screenings.length < 2) return null;
+  const ordered = [...screenings].sort((a, b) => String(a.startTime || "").localeCompare(String(b.startTime || "")));
+  const first = ordered[0];
+  const groupKey = normalizedBookingGroup(first?.bookingGroup);
+  if (!groupKey || first?.bookingGroupDisabled === true) return null;
+  const identity = `${String(first.title || "").trim()}|${String(first.venue || "").trim()}|${scheduleDayKey(first)}`;
+  if (!ordered.every((screening) => screening?.bookingGroupDisabled !== true
+    && normalizedBookingGroup(screening?.bookingGroup) === groupKey
+    && `${String(screening.title || "").trim()}|${String(screening.venue || "").trim()}|${scheduleDayKey(screening)}` === identity)) return null;
+  const gaps = ordered.slice(1).map((screening, index) => {
+    const previousTime = new Date(ordered[index].startTime || "").getTime();
+    const currentTime = new Date(screening.startTime || "").getTime();
+    return Math.round((currentTime - previousTime) / 60000);
+  });
+  const intervalMinutes = gaps[0];
+  if (!Number.isFinite(intervalMinutes) || intervalMinutes <= 0 || !gaps.every((gap) => gap === intervalMinutes)) return null;
+  return {
+    key: groupKey,
+    label: String(first.bookingGroup || "").trim(),
+    screenings: ordered,
+    first,
+    startTime: first.startTime,
+    lastStartTime: ordered[ordered.length - 1].startTime,
+    intervalMinutes,
+    slotCount: ordered.length,
+    layoutPreview: ordered.every((screening) => screening.layoutPreview === true)
+  };
+}
+
+function continuousSeriesIntervalLabel(series) {
+  const minutes = Number(series?.intervalMinutes || 60);
+  if (minutes === 60) return "1시간 연속상영";
+  if (minutes % 60 === 0) return `${minutes / 60}시간 간격 연속상영`;
+  return `${minutes}분 간격 연속상영`;
+}
+
+function continuousSeriesTimeLabel(series) {
+  return `${formatTimePart(series?.startTime)}–${formatTimePart(series?.lastStartTime)}`;
+}
+
+function collapseContinuousSeriesForDisplay(screenings = []) {
+  const used = new Set();
+  const items = [];
+  screenings.forEach((screening) => {
+    if (used.has(screening.id)) return;
+    const groupKey = normalizedBookingGroup(screening.bookingGroup);
+    const candidates = groupKey ? screenings.filter((candidate) => normalizedBookingGroup(candidate.bookingGroup) === groupKey) : [];
+    const series = continuousRepeatSeries(candidates);
+    if (series) {
+      series.screenings.forEach((candidate) => used.add(candidate.id));
+      items.push({ type: "series", series });
+      return;
+    }
+    used.add(screening.id);
+    items.push({ type: "screening", screening });
+  });
+  return items;
+}
+
+function continuousSeriesStatus(series) {
+  const bookable = series.screenings.filter((screening) => screening.status !== "준비중" && screening.status !== "마감");
+  const available = bookable.filter((screening) => remainingSeats(screening) > 0).length;
+  if (available > 0) return { className: "ok", text: `${available}회차 신청가능`, full: false };
+  if (bookable.length > 0) return { className: "danger", text: "대기접수", full: true };
+  return { className: "warn", text: "신청준비중", full: false };
+}
+
 function bookingRuleError(screening, name, phone) {
   const existing = reservationsForPerson(name, phone);
   if (existing.length >= 5) return "5회까지 신청가능합니다.";
@@ -2039,14 +2107,17 @@ function renderScreeningSchedule() {
   }, []);
   dayGroups.forEach((group) => {
     group.bookingGroups = packScheduleBookingGroups(groupScreeningsForSchedule(group.screenings)).map((screeningGroup) => {
-      const layoutColumnCount = Math.max(1, Math.ceil(screeningGroup.screenings.length / 3));
+      const repeatSeries = continuousRepeatSeries(screeningGroup.screenings);
+      const layoutColumnCount = repeatSeries ? 1 : Math.max(1, Math.ceil(screeningGroup.screenings.length / 3));
       return {
         ...screeningGroup,
+        repeatSeries,
         times: [...new Set(screeningGroup.screenings.map((screening) => formatTimePart(screening.startTime) || "시간 미정"))],
         layoutColumnCount,
-        layoutRowCount: Math.min(3, screeningGroup.screenings.length)
+        layoutRowCount: repeatSeries ? 1 : Math.min(3, screeningGroup.screenings.length)
       };
     });
+    group.programCount = group.bookingGroups.reduce((sum, bookingGroup) => sum + (bookingGroup.repeatSeries ? 1 : bookingGroup.screenings.length) + bookingGroup.fillerScreenings.length, 0);
   });
   return `
     <section class="screening-schedule-section" aria-labelledby="screeningScheduleTitle">
@@ -2064,13 +2135,15 @@ function renderScreeningSchedule() {
           <section class="classic-schedule-day-group schedule-day-color-${(index % 5) + 1}" aria-labelledby="scheduleDay${index}">
             <div class="classic-schedule-day-heading">
               <h3 id="scheduleDay${index}">${esc(group.date.date)} <span>${esc(group.date.weekday)}</span></h3>
-              <strong>${group.screenings.length}편 상영</strong>
+              <strong>${group.programCount}개 프로그램 · ${group.screenings.length}회차</strong>
             </div>
             <div class="classic-schedule-time-groups">
               ${group.bookingGroups.map((bookingGroup) => `
                 <section class="classic-schedule-time-group booking-group-columns-${Math.min(3, bookingGroup.layoutColumnCount)} ${bookingGroup.fillerScreenings.length ? "has-schedule-fillers" : ""} ${bookingGroup.forced ? "is-forced-group" : (bookingGroup.screenings.length > 1 ? "is-conflict-group" : "")}" style="--booking-group-columns:${bookingGroup.layoutColumnCount};--booking-group-rows:${bookingGroup.layoutRowCount}" ${bookingGroup.forced ? `data-forced-booking-group="${esc(bookingGroup.label)}"` : ""}>
                   <div class="classic-schedule-group-choice ${bookingGroup.forced || bookingGroup.screenings.length > 1 ? "" : "is-placeholder"}" ${bookingGroup.forced || bookingGroup.screenings.length > 1 ? "" : `aria-hidden="true"`}>
-                    ${bookingGroup.forced ? `
+                    ${bookingGroup.repeatSeries ? `
+                      <strong>${esc(continuousSeriesTimeLabel(bookingGroup.repeatSeries))} · ${esc(continuousSeriesIntervalLabel(bookingGroup.repeatSeries))}</strong>
+                      <span>${bookingGroup.repeatSeries.slotCount}개 회차 중 원하는 시간 1회 선택</span>` : bookingGroup.forced ? `
                       <strong>${bookingGroup.screenings.length}개 회차 중 1회만 예약 가능</strong>
                       <span>${esc(bookingGroup.label)}</span>` : bookingGroup.screenings.length > 1 ? `
                       <strong>${bookingGroup.screenings.length}편 중 1편 선택 가능</strong>
@@ -2079,7 +2152,9 @@ function renderScreeningSchedule() {
                       <span>단독 상영</span>`}
                   </div>
                   <div class="screening-grid classic-schedule-grid">
-                    ${bookingGroup.screenings.map((screening) => screeningCard(screening, { schedule: true, groupMember: bookingGroup.screenings.length > 1 || bookingGroup.forced, layoutPreview: screening.layoutPreview === true })).join("")}
+                    ${bookingGroup.repeatSeries
+                      ? screeningSeriesCard(bookingGroup.repeatSeries, { schedule: true })
+                      : bookingGroup.screenings.map((screening) => screeningCard(screening, { schedule: true, groupMember: bookingGroup.screenings.length > 1 || bookingGroup.forced, layoutPreview: screening.layoutPreview === true })).join("")}
                     ${bookingGroup.fillerScreenings.map((screening) => screeningCard(screening, { schedule: true, groupFiller: true, layoutPreview: screening.layoutPreview === true })).join("")}
                   </div>
                 </section>`).join("")}
@@ -2111,7 +2186,8 @@ function layoutTimelineDay(screenings = []) {
 }
 
 function renderFullSchedule() {
-  const screenings = scheduleSortedScreenings();
+  const showForcedGroupPreview = new URLSearchParams(window.location.search).get("forcedGroupPreview") === "1";
+  const screenings = scheduleSortedScreenings([...state.screenings, ...(showForcedGroupPreview ? FORCED_GROUP_LAYOUT_PREVIEW_SCREENINGS : [])]);
   if (!screenings.length) return `<section class="card"><div class="empty">등록된 상영작이 없습니다.</div></section>`;
   const dayMap = new Map();
   screenings.forEach((screening) => {
@@ -2138,15 +2214,38 @@ function renderFullSchedule() {
       <div class="festival-text-schedule" style="--schedule-days:${days.length}" role="table" aria-label="제9회 영화 상영시간표">
         ${days.map(([key, dayScreenings], dayIndex) => {
           const parts = screeningDateParts(dayScreenings[0]?.startTime);
+          const displayItems = collapseContinuousSeriesForDisplay(dayScreenings);
           return `
             <section class="festival-text-day timeline-day-tone-${(dayIndex % 5) + 1}" role="rowgroup" aria-labelledby="fullScheduleDay${dayIndex}">
               <header class="festival-text-day-heading" id="fullScheduleDay${dayIndex}">
                 <strong>${esc(parts.date)}</strong>
                 <span>${esc(parts.weekday)}</span>
-                <small>${dayScreenings.length}편</small>
+                <small>${displayItems.length}개 프로그램</small>
               </header>
               <div class="festival-text-movie-list">
-                ${dayScreenings.map((screening) => {
+                ${displayItems.map((item) => {
+                  if (item.type === "series") {
+                    const series = item.series;
+                    const screening = series.first;
+                    const seriesStatus = continuousSeriesStatus(series);
+                    const actionAttributes = series.layoutPreview ? "disabled" : `data-action="book-series" data-group="${esc(series.label)}" data-series-day="${esc(scheduleDayKey(screening))}"`;
+                    return `<button class="festival-text-movie festival-text-series ${seriesStatus.full ? "is-full" : ""}" type="button" ${actionAttributes} aria-label="${esc(cleanMovieTitle(screening.title))} 연속상영 시간 선택">
+                      <span class="festival-text-movie-topline">
+                        <b>${esc(continuousSeriesTimeLabel(series))}</b>
+                        <em class="${esc(seriesStatus.className)}">${esc(seriesStatus.text)}</em>
+                      </span>
+                      <span class="festival-text-series-interval">${esc(continuousSeriesIntervalLabel(series))}</span>
+                      <strong>${esc(cleanMovieTitle(screening.title))}</strong>
+                      <span class="festival-text-venue">${esc(screening.venue)}</span>
+                      <span class="festival-text-meta">
+                        <i>${series.slotCount}개 회차</i>
+                        <i>${esc(screening.ageRating || "전체관람가")}</i>
+                        <i>회차당 ${Number(screening.runtimeMinutes || 60)}분</i>
+                      </span>
+                      <small>원하는 시간 1회 선택 · ${esc(series.label)}</small>
+                    </button>`;
+                  }
+                  const screening = item.screening;
                   const full = remainingSeats(screening) <= 0;
                   const info = statusInfo(screening);
                   return `<button class="festival-text-movie ${full ? "is-full" : ""}" type="button" data-action="book" data-id="${esc(screening.id)}" aria-label="${esc(cleanMovieTitle(screening.title))} ${esc(formatTimePart(screening.startTime))} 관람 신청">
@@ -2238,14 +2337,16 @@ function screeningCard(screening, options = {}) {
   const exposeOpening = isOpening && shouldExposeOpeningPromotion(screening);
   const phase = isOpening ? openingPhaseInfo(screening) : null;
   const layoutPreview = options.layoutPreview === true;
-  const bookingDisabled = layoutPreview || (exposeOpening && phase && !phase.allowBooking);
+  const adminArrange = options.adminArrange === true;
+  const bookingDisabled = layoutPreview || adminArrange || (exposeOpening && phase && !phase.allowBooking);
   const full = remainingSeats(screening) <= 0;
   const bookingLabel = layoutPreview ? "배치 확인용" : (exposeOpening && phase ? (phase.allowBooking ? (full ? "대기 신청" : "관람신청") : phase.label) : (full ? "대기 신청" : "관람신청"));
   const dateParts = screeningDateParts(screening.startTime);
   const category = String(screening.category || "기타").trim() || "기타";
   const categoryColor = screeningCategoryColorIndex(category);
   return `
-    <article class="screening-card compact-screening-card screening-category-color-${categoryColor} ${options.schedule ? "classic-schedule-card" : ""} ${options.groupMember ? "schedule-group-member-card" : ""} ${options.groupFiller ? "schedule-group-filler-card" : ""} ${layoutPreview ? "layout-preview-card" : ""} ${exposeOpening ? "opening-card" : ""}" ${layoutPreview ? "" : `data-screening-card="${esc(screening.id)}"`}>
+    <article class="screening-card compact-screening-card screening-category-color-${categoryColor} ${options.schedule ? "classic-schedule-card" : ""} ${options.groupMember ? "schedule-group-member-card" : ""} ${options.groupFiller ? "schedule-group-filler-card" : ""} ${layoutPreview ? "layout-preview-card" : ""} ${adminArrange ? "schedule-arrange-card" : ""} ${exposeOpening ? "opening-card" : ""}" ${adminArrange ? `draggable="true" data-schedule-drag-id="${esc(screening.id)}" data-schedule-day="${esc(scheduleDayKey(screening))}" tabindex="0"` : (layoutPreview ? "" : `data-screening-card="${esc(screening.id)}"`)}>
+      ${adminArrange ? `<div class="schedule-edit-drag-handle" aria-label="${esc(cleanMovieTitle(screening.title))} 카드 이동">⋮⋮ <span>카드 이동</span></div>` : ""}
       <div class="screening-top">
         ${options.schedule ? `<span class="screening-corner-date"><strong>${esc(dateParts.day)}</strong><small>${esc(dateParts.weekday)}</small></span>` : ""}
         <div class="badges compact-badges">
@@ -2260,12 +2361,49 @@ function screeningCard(screening, options = {}) {
       </div>
       <div class="screening-body compact-screening-body">
         <div class="screening-card-actions compact-actions">
-          <button class="btn btn-dark compact-book-btn" type="button" ${layoutPreview ? "" : `data-action="book" data-id="${esc(screening.id)}"`} ${bookingDisabled ? "disabled" : ""}>${bookingLabel}</button>
-          ${layoutPreview ? `<span class="btn btn-outline compact-staff-btn">테스트 카드</span>` : `<a class="btn btn-outline compact-staff-btn" href="#/staff/${esc(screening.id)}">담당스태프</a>`}
+          <button class="btn btn-dark compact-book-btn" type="button" ${layoutPreview || adminArrange ? "" : `data-action="book" data-id="${esc(screening.id)}"`} ${bookingDisabled ? "disabled" : ""}>${bookingLabel}</button>
+          ${layoutPreview ? `<span class="btn btn-outline compact-staff-btn">테스트 카드</span>` : (adminArrange ? `<span class="btn btn-outline compact-staff-btn">담당스태프</span>` : `<a class="btn btn-outline compact-staff-btn" href="#/staff/${esc(screening.id)}">담당스태프</a>`)}
         </div>
       </div>
     </article>
   `;
+}
+
+function screeningSeriesCard(series, options = {}) {
+  const screening = series.first;
+  const dateParts = screeningDateParts(series.startTime);
+  const category = String(screening.category || "기타").trim() || "기타";
+  const categoryColor = screeningCategoryColorIndex(category);
+  const seriesStatus = continuousSeriesStatus(series);
+  const adminArrange = options.adminArrange === true;
+  const actionAttributes = series.layoutPreview || adminArrange
+    ? "disabled"
+    : `data-action="book-series" data-group="${esc(series.label)}" data-series-day="${esc(scheduleDayKey(screening))}"`;
+  return `
+    <article class="screening-card compact-screening-card classic-schedule-card continuous-series-card screening-category-color-${categoryColor} ${adminArrange ? "schedule-arrange-card" : ""}" ${adminArrange ? `draggable="true" data-schedule-drag-id="${esc(screening.id)}" data-schedule-day="${esc(scheduleDayKey(screening))}" tabindex="0"` : ""}>
+      ${adminArrange ? `<div class="schedule-edit-drag-handle" aria-label="${esc(cleanMovieTitle(screening.title))} 연속상영 카드 이동">⋮⋮ <span>묶음 이동</span></div>` : ""}
+      <div class="screening-top">
+        <span class="screening-corner-date"><strong>${esc(dateParts.day)}</strong><small>${esc(dateParts.weekday)}</small></span>
+        <div class="badges compact-badges">
+          <span class="badge category-badge">${esc(category)}</span>
+          <span class="badge blue">연속상영</span>
+          <span class="badge ${esc(seriesStatus.className)}">${esc(seriesStatus.text)}</span>
+        </div>
+        <h3 class="screening-title">${esc(cleanMovieTitle(screening.title))}</h3>
+        <p class="screening-meta continuous-series-meta">
+          <span class="continuous-series-time">${esc(continuousSeriesTimeLabel(series))}</span>
+          <strong>${esc(continuousSeriesIntervalLabel(series))}</strong>
+          <span>${esc(screening.venue)} · ${series.slotCount}개 회차</span>
+          <span><span class="badge age-rating-badge">${esc(screening.ageRating || "전체관람가")}</span> <span class="badge runtime-badge">회차당 ${Number(screening.runtimeMinutes || 60)}분</span></span>
+        </p>
+      </div>
+      <div class="screening-body compact-screening-body">
+        <div class="screening-card-actions compact-actions">
+          <button class="btn btn-dark compact-book-btn" type="button" ${actionAttributes}>${series.layoutPreview ? "배치 확인용" : "상영시간 선택 · 신청"}</button>
+          ${series.layoutPreview ? `<span class="btn btn-outline compact-staff-btn">테스트 카드</span>` : (adminArrange ? `<span class="btn btn-outline compact-staff-btn">담당스태프</span>` : `<a class="btn btn-outline compact-staff-btn" href="#/staff/${esc(screening.id)}">담당스태프</a>`)}
+        </div>
+      </div>
+    </article>`;
 }
 
 function screeningListRow(screening) {
@@ -2981,36 +3119,59 @@ function renderScheduleOrderEditor() {
     else groups.push({ key, date: screeningDateParts(screening.startTime), screenings: [screening] });
     return groups;
   }, []);
+  dayGroups.forEach((group) => {
+    group.bookingGroups = packScheduleBookingGroups(groupScreeningsForSchedule(group.screenings)).map((screeningGroup) => {
+      const repeatSeries = continuousRepeatSeries(screeningGroup.screenings);
+      const layoutColumnCount = repeatSeries ? 1 : Math.max(1, Math.ceil(screeningGroup.screenings.length / 3));
+      const renderedCount = (repeatSeries ? 1 : screeningGroup.screenings.length) + screeningGroup.fillerScreenings.length;
+      const visibleSlots = repeatSeries ? 1 : layoutColumnCount * Math.min(3, screeningGroup.screenings.length);
+      return {
+        ...screeningGroup,
+        repeatSeries,
+        layoutColumnCount,
+        layoutRowCount: repeatSeries ? 1 : Math.min(3, screeningGroup.screenings.length),
+        emptySlots: Math.max(0, visibleSlots - renderedCount)
+      };
+    });
+    const usedColumns = group.bookingGroups.reduce((sum, bookingGroup) => sum + Math.min(3, bookingGroup.layoutColumnCount), 0);
+    group.dayEmptySlots = usedColumns % 3 === 0 ? 0 : 3 - (usedColumns % 3);
+  });
   return `
     <section class="card schedule-order-editor" aria-labelledby="scheduleOrderEditorTitle">
       <div class="section-title schedule-order-editor-heading">
         <div>
           <span class="eyebrow">최고관리자 전용</span>
           <h2 id="scheduleOrderEditorTitle">시간표 카드 배치 편집</h2>
-          <p>카드의 <b>이동 손잡이</b>를 누른 채 원하는 위치로 끌어 놓으세요. 같은 날짜 안에서만 이동하며 놓는 즉시 자동 저장됩니다.</p>
+          <p>관객 화면에 보이는 실제 날짜·그룹·카드 모양입니다. 카드의 <b>이동 손잡이</b>를 누른 채 다른 카드 또는 점선 빈칸에 놓으면 즉시 저장됩니다.</p>
         </div>
         <button class="btn btn-outline" type="button" data-action="reset-schedule-order">시간순으로 초기화</button>
       </div>
-      <div class="schedule-order-days">
+      <div class="classic-schedule-day-groups schedule-arrange-days">
         ${dayGroups.map((group, dayIndex) => `
-          <section class="schedule-order-day schedule-day-color-${(dayIndex % 5) + 1}" data-schedule-order-day="${esc(group.key)}">
-            <div class="schedule-order-day-title">
+          <section class="classic-schedule-day-group schedule-arrange-day schedule-day-color-${(dayIndex % 5) + 1}" data-schedule-order-day="${esc(group.key)}" data-schedule-order-grid="${esc(group.key)}">
+            <div class="classic-schedule-day-heading">
               <h3>${esc(group.date.date)} <span>${esc(group.date.weekday)}</span></h3>
-              <strong>${group.screenings.length}편</strong>
+              <strong>${group.screenings.length}회차 · 드래그 편집</strong>
             </div>
-            <div class="schedule-order-grid" data-schedule-order-grid="${esc(group.key)}">
-              ${group.screenings.map((screening, index) => `
-                <article class="schedule-order-card screening-category-color-${screeningCategoryColorIndex(screening.category || "기타")}" draggable="true" data-schedule-drag-id="${esc(screening.id)}" data-schedule-day="${esc(group.key)}" tabindex="0">
-                  <div class="schedule-drag-handle" aria-label="${esc(cleanMovieTitle(screening.title))} 카드 이동">⋮⋮ <span>이동</span></div>
-                  <div class="schedule-order-card-index">${index + 1}</div>
-                  <strong>${esc(cleanMovieTitle(screening.title))}</strong>
-                  <span>${esc(formatTimePart(screening.startTime))} · ${esc(screening.venue)}</span>
-                  <small>${esc(screening.category || "기타")}${screening.bookingGroup ? ` · 예약그룹` : ""}</small>
-                  <div class="schedule-order-card-actions">
-                    <button type="button" data-action="move-schedule-card" data-id="${esc(screening.id)}" data-direction="-1" ${index === 0 ? "disabled" : ""}>← 앞</button>
-                    <button type="button" data-action="move-schedule-card" data-id="${esc(screening.id)}" data-direction="1" ${index === group.screenings.length - 1 ? "disabled" : ""}>뒤 →</button>
+            <div class="classic-schedule-time-groups schedule-arrange-grid">
+              ${group.bookingGroups.map((bookingGroup) => {
+                const allCards = [...bookingGroup.screenings, ...bookingGroup.fillerScreenings];
+                const anchorId = allCards[allCards.length - 1]?.id || "";
+                return `
+                <section class="classic-schedule-time-group booking-group-columns-${Math.min(3, bookingGroup.layoutColumnCount)} ${bookingGroup.fillerScreenings.length ? "has-schedule-fillers" : ""} ${bookingGroup.forced ? "is-forced-group" : (bookingGroup.screenings.length > 1 ? "is-conflict-group" : "")}" style="--booking-group-columns:${bookingGroup.layoutColumnCount};--booking-group-rows:${bookingGroup.layoutRowCount}">
+                  <div class="classic-schedule-group-choice ${bookingGroup.forced || bookingGroup.screenings.length > 1 ? "" : "is-placeholder"}" ${bookingGroup.forced || bookingGroup.screenings.length > 1 ? "" : `aria-hidden="true"`}>
+                    ${bookingGroup.repeatSeries ? `<strong>${bookingGroup.repeatSeries.slotCount}개 회차 중 1회만 예약 가능</strong><span>${esc(continuousSeriesTimeLabel(bookingGroup.repeatSeries))} · ${esc(continuousSeriesIntervalLabel(bookingGroup.repeatSeries))}</span>` : bookingGroup.forced ? `<strong>${bookingGroup.screenings.length}개 회차 중 1회만 예약 가능</strong><span>${esc(bookingGroup.label)}</span>` : bookingGroup.screenings.length > 1 ? `<strong>${bookingGroup.screenings.length}편 중 1편 선택 가능</strong><span>동시간대·앞뒤 1시간 이내 중복신청 제한</span>` : `<strong>선택 제한 없음</strong><span>단독 상영</span>`}
                   </div>
-                </article>`).join("")}
+                  <div class="screening-grid classic-schedule-grid">
+                    ${bookingGroup.repeatSeries
+                      ? screeningSeriesCard(bookingGroup.repeatSeries, { schedule: true, adminArrange: true })
+                      : bookingGroup.screenings.map((screening) => screeningCard(screening, { schedule: true, adminArrange: true, groupMember: bookingGroup.screenings.length > 1 || bookingGroup.forced })).join("")}
+                    ${bookingGroup.fillerScreenings.map((screening) => screeningCard(screening, { schedule: true, adminArrange: true, groupFiller: true })).join("")}
+                    ${Array.from({ length: bookingGroup.emptySlots }, (_, slotIndex) => `<button class="schedule-empty-slot" type="button" data-schedule-empty-after-id="${esc(anchorId)}" data-schedule-day="${esc(group.key)}" aria-label="빈칸 ${slotIndex + 1}: 여기에 카드를 놓으세요"><strong>＋ 빈칸</strong><span>여기에 카드 놓기</span></button>`).join("")}
+                  </div>
+                </section>`;
+              }).join("")}
+              ${Array.from({ length: group.dayEmptySlots }, (_, slotIndex) => `<button class="schedule-empty-slot schedule-day-empty-slot" type="button" data-schedule-empty-after-id="${esc(group.screenings[group.screenings.length - 1]?.id || "")}" data-schedule-day="${esc(group.key)}" aria-label="날짜 배치 빈칸 ${slotIndex + 1}: 여기에 카드를 놓으세요"><strong>＋ 빈칸</strong><span>여기에 카드 놓기</span></button>`).join("")}
             </div>
           </section>`).join("")}
       </div>
@@ -4539,6 +4700,42 @@ function openOpeningBooking(screening) {
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
   setTimeout(() => document.getElementById("guestName")?.focus(), 0);
+}
+
+function openBookingSeries(groupLabel, dayKey = "") {
+  const groupKey = normalizedBookingGroup(groupLabel);
+  const candidates = state.screenings.filter((screening) => screening.bookingGroupDisabled !== true
+    && normalizedBookingGroup(screening.bookingGroup) === groupKey
+    && (!dayKey || scheduleDayKey(screening) === dayKey));
+  const series = continuousRepeatSeries(candidates);
+  if (!series) return toast("연속상영 회차 정보를 찾지 못했습니다.");
+  const screening = series.first;
+  const modal = document.getElementById("bookingModal");
+  const body = document.getElementById("bookingBody");
+  document.getElementById("bookingTitle").textContent = "연속상영 시간 선택";
+  body.innerHTML = `
+    <section class="continuous-series-booking-intro">
+      <span class="eyebrow">${esc(continuousSeriesIntervalLabel(series))}</span>
+      <h3>${esc(cleanMovieTitle(screening.title))}</h3>
+      <p><strong>${esc(formatDatePart(series.startTime))} · ${esc(continuousSeriesTimeLabel(series))}</strong></p>
+      <p>${esc(screening.venue)}에서 ${series.slotCount}개 회차가 이어집니다. 아래에서 관람할 시간을 한 번 선택해 주세요.</p>
+      <div class="forced-booking-notice"><strong>${esc(series.label)}</strong><span>이 연속상영에서는 한 사람당 한 회차만 예약할 수 있습니다.</span></div>
+    </section>
+    <div class="continuous-series-time-options" aria-label="연속상영 회차 선택">
+      ${series.screenings.map((slot) => {
+        const info = statusInfo(slot);
+        const full = remainingSeats(slot) <= 0;
+        const unavailable = slot.status === "준비중" || (slot.status === "마감" && !full);
+        return `<button class="continuous-series-time-option ${full ? "is-full" : ""}" type="button" data-action="book" data-id="${esc(slot.id)}" ${unavailable ? "disabled" : ""}>
+          <strong>${esc(formatTimePart(slot.startTime))}</strong>
+          <span>${full ? "대기접수" : esc(info.text)}</span>
+          <small>회차당 ${Number(slot.runtimeMinutes || 60)}분</small>
+        </button>`;
+      }).join("")}
+    </div>
+    <div class="form-actions"><button class="btn btn-outline" type="button" data-action="close-modal">닫기</button></div>`;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
 }
 
 function openBooking(screeningId) {
@@ -6987,8 +7184,9 @@ document.addEventListener("dragover", (event) => {
   if (!source || grid.dataset.scheduleOrderGrid !== scheduleDayKey(source)) return;
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-  document.querySelectorAll(".schedule-order-card.is-drop-target").forEach((card) => card.classList.remove("is-drop-target"));
-  event.target.closest?.("[data-schedule-drag-id]")?.classList.add("is-drop-target");
+  document.querySelectorAll(".schedule-arrange-card.is-drop-target, .schedule-empty-slot.is-drop-target").forEach((item) => item.classList.remove("is-drop-target"));
+  const dropTarget = event.target.closest?.("[data-schedule-drag-id], [data-schedule-empty-after-id]");
+  if (dropTarget?.dataset.scheduleDragId !== draggedScheduleCardId) dropTarget?.classList.add("is-drop-target");
   grid.classList.add("is-drag-over");
 });
 
@@ -6997,19 +7195,22 @@ document.addEventListener("drop", (event) => {
   const grid = event.target.closest?.("[data-schedule-order-grid]");
   if (!grid) return;
   event.preventDefault();
+  const emptySlot = event.target.closest?.("[data-schedule-empty-after-id]");
   const targetCard = event.target.closest?.("[data-schedule-drag-id]");
+  const emptyAnchorId = emptySlot?.dataset.scheduleEmptyAfterId || "";
   const targetId = targetCard?.dataset.scheduleDragId || "";
   const rect = targetCard?.getBoundingClientRect();
-  const placeAfter = Boolean(rect && (event.clientY > rect.top + (rect.height / 2)));
+  const placeAfter = emptySlot ? true : Boolean(rect && (event.clientY > rect.top + (rect.height / 2)));
   const sourceId = draggedScheduleCardId;
   draggedScheduleCardId = "";
-  if (sourceId !== targetId) reorderScheduleCard(sourceId, targetId, placeAfter);
+  const destinationId = emptyAnchorId || targetId;
+  if (sourceId !== destinationId) reorderScheduleCard(sourceId, destinationId, placeAfter);
 });
 
 document.addEventListener("dragend", () => {
   draggedScheduleCardId = "";
-  document.querySelectorAll(".schedule-order-card.is-dragging, .schedule-order-card.is-drop-target").forEach((card) => card.classList.remove("is-dragging", "is-drop-target"));
-  document.querySelectorAll(".schedule-order-grid.is-drag-over").forEach((grid) => grid.classList.remove("is-drag-over"));
+  document.querySelectorAll(".schedule-arrange-card.is-dragging, .schedule-arrange-card.is-drop-target, .schedule-empty-slot.is-drop-target").forEach((item) => item.classList.remove("is-dragging", "is-drop-target"));
+  document.querySelectorAll("[data-schedule-order-grid].is-drag-over").forEach((grid) => grid.classList.remove("is-drag-over"));
 });
 
 document.addEventListener("click", (event) => {
@@ -7062,6 +7263,7 @@ document.addEventListener("click", (event) => {
   }
   if (action === "play-video") playYoutubeVideo(button);
   if (action === "book") openBooking(id);
+  if (action === "book-series") openBookingSeries(button.dataset.group || "", button.dataset.seriesDay || "");
   if (action === "close-modal") closeModals();
   if (action === "view-roster") openRoster(id);
   if (action === "admin-logout") { sessionStorage.removeItem(ADMIN_SESSION_KEY); sessionStorage.removeItem(`${ADMIN_SESSION_KEY}.name`); selectedScreeningId = null; render(); toast("로그아웃했습니다."); }
