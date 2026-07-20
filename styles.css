@@ -5087,3 +5087,95 @@ tbody tr:hover td { background: rgba(31, 102, 80, .055); }
   line-height: 1.2;
   white-space: nowrap;
 }
+
+/* v162 관리자가 지정하는 강제 예약 그룹 */
+.classic-schedule-time-group.is-forced-group {
+  padding: 5px;
+  border: 3px solid #6d4aa5;
+  border-radius: 17px;
+  background: linear-gradient(145deg, rgba(244, 238, 252, .96), rgba(235, 225, 248, .76));
+  box-shadow: 0 9px 20px rgba(82, 53, 125, .12), inset 0 0 0 1px rgba(255, 255, 255, .72);
+}
+
+.classic-schedule-time-group.is-forced-group .classic-schedule-group-choice {
+  background: #6d4aa5;
+  color: #fff;
+}
+
+.classic-schedule-time-group.is-forced-group .classic-schedule-group-choice span {
+  color: rgba(255, 255, 255, .86);
+}
+
+.classic-schedule-time-group.is-forced-group .classic-schedule-card {
+  width: 100%;
+}
+
+.forced-booking-group-badge {
+  background: #ebe0f7;
+  color: #573681;
+  border-color: rgba(109, 74, 165, .25);
+}
+
+.forced-booking-notice {
+  display: grid;
+  gap: 3px;
+  margin: 9px 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(109, 74, 165, .28);
+  border-radius: 10px;
+  background: #f5effb;
+  color: #4f326f;
+}
+
+.forced-booking-notice strong { font-size: 13px; }
+.forced-booking-notice span { font-size: 12px; line-height: 1.4; }
+
+/* v163 강제 그룹은 한 열에 최대 3개씩 배치 */
+.classic-schedule-time-group.is-forced-group.forced-group-columns-2 { grid-column: span 2; }
+.classic-schedule-time-group.is-forced-group.forced-group-columns-3 { grid-column: span 3; }
+
+.classic-schedule-time-group.is-forced-group .classic-schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--forced-group-columns), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--forced-group-rows), auto);
+  grid-auto-flow: column;
+  gap: 5px;
+}
+
+.classic-schedule-card .compact-badges {
+  flex-wrap: nowrap;
+  gap: 3px;
+  padding-right: 70px;
+}
+
+.classic-schedule-card .compact-badges .badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 3px 5px;
+  font-size: 9px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.classic-schedule-card .compact-badges .category-badge {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1000px) {
+  .classic-schedule-time-group.is-forced-group.forced-group-columns-3 { grid-column: span 2; }
+}
+
+@media (max-width: 640px) {
+  .classic-schedule-time-group.is-forced-group {
+    grid-column: span 1 !important;
+  }
+
+  .classic-schedule-time-group.is-forced-group .classic-schedule-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-flow: row;
+  }
+
+  .classic-schedule-card .compact-badges { padding-right: 66px; }
+}
