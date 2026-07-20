@@ -5179,3 +5179,68 @@ tbody tr:hover td { background: rgba(31, 102, 80, .055); }
 
   .classic-schedule-card .compact-badges { padding-right: 66px; }
 }
+
+/* v165 그룹의 빈 슬롯에 다음 단독 상영작을 채우고 그룹 구성원을 구분 */
+.classic-schedule-time-group.has-schedule-fillers {
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.classic-schedule-time-group.has-schedule-fillers .classic-schedule-group-choice {
+  padding: 6px 8px;
+  border: 2px solid var(--schedule-card-accent, #2d6d96);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--schedule-card-accent, #2d6d96) 13%, #fff);
+}
+
+.classic-schedule-time-group.has-schedule-fillers.is-forced-group .classic-schedule-group-choice {
+  border-color: #6d4aa5;
+  background: #6d4aa5;
+}
+
+.classic-schedule-time-group.has-schedule-fillers .schedule-group-member-card {
+  outline: 2px solid var(--schedule-card-accent, #2d6d96);
+  outline-offset: -1px;
+}
+
+.classic-schedule-time-group.has-schedule-fillers.is-forced-group .schedule-group-member-card {
+  outline-color: #6d4aa5;
+}
+
+.classic-schedule-time-group.has-schedule-fillers .schedule-group-filler-card {
+  outline: 0;
+  box-shadow: var(--shadow-soft);
+}
+
+.admin-group-release {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 100%;
+  padding: 12px 13px;
+  border: 2px solid #d9c7b4;
+  border-radius: 12px;
+  background: #fffaf3;
+  cursor: pointer;
+}
+
+.admin-group-release input {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  accent-color: #b84332;
+}
+
+.admin-group-release span { display: grid; gap: 4px; }
+.admin-group-release strong { font-size: 14px; }
+.admin-group-release small { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.admin-group-release:has(input:checked) { border-color: #b84332; background: #fff0ed; }
+
+.group-release-badge {
+  border-color: rgba(184, 67, 50, .28);
+  background: #fff0ed;
+  color: #9f3023;
+}
