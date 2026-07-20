@@ -1945,14 +1945,12 @@ function renderScreeningSchedule() {
   }, []);
   dayGroups.forEach((group) => {
     group.bookingGroups = groupScreeningsForSchedule(group.screenings).map((screeningGroup) => {
-      const forcedColumnCount = screeningGroup.forced
-        ? Math.max(1, Math.ceil(screeningGroup.screenings.length / 3))
-        : 1;
+      const layoutColumnCount = Math.max(1, Math.ceil(screeningGroup.screenings.length / 3));
       return {
         ...screeningGroup,
         times: [...new Set(screeningGroup.screenings.map((screening) => formatTimePart(screening.startTime) || "시간 미정"))],
-        forcedColumnCount,
-        forcedRowCount: screeningGroup.forced ? Math.min(3, screeningGroup.screenings.length) : 1
+        layoutColumnCount,
+        layoutRowCount: Math.min(3, screeningGroup.screenings.length)
       };
     });
   });
@@ -1973,7 +1971,7 @@ function renderScreeningSchedule() {
             </div>
             <div class="classic-schedule-time-groups">
               ${group.bookingGroups.map((bookingGroup) => `
-                <section class="classic-schedule-time-group ${bookingGroup.forced ? `is-forced-group forced-group-columns-${Math.min(3, bookingGroup.forcedColumnCount)}` : (bookingGroup.screenings.length > 1 ? "is-conflict-group" : "")}" ${bookingGroup.forced ? `data-forced-booking-group="${esc(bookingGroup.label)}" style="--forced-group-columns:${bookingGroup.forcedColumnCount};--forced-group-rows:${bookingGroup.forcedRowCount}"` : ""}>
+                <section class="classic-schedule-time-group booking-group-columns-${Math.min(3, bookingGroup.layoutColumnCount)} ${bookingGroup.forced ? "is-forced-group" : (bookingGroup.screenings.length > 1 ? "is-conflict-group" : "")}" style="--booking-group-columns:${bookingGroup.layoutColumnCount};--booking-group-rows:${bookingGroup.layoutRowCount}" ${bookingGroup.forced ? `data-forced-booking-group="${esc(bookingGroup.label)}"` : ""}>
                   <div class="classic-schedule-group-choice ${bookingGroup.forced || bookingGroup.screenings.length > 1 ? "" : "is-placeholder"}" ${bookingGroup.forced || bookingGroup.screenings.length > 1 ? "" : `aria-hidden="true"`}>
                     ${bookingGroup.forced ? `
                       <strong>${bookingGroup.screenings.length}개 회차 중 1회만 예약 가능</strong>

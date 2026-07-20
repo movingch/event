@@ -5130,14 +5130,14 @@ tbody tr:hover td { background: rgba(31, 102, 80, .055); }
 .forced-booking-notice strong { font-size: 13px; }
 .forced-booking-notice span { font-size: 12px; line-height: 1.4; }
 
-/* v163 강제 그룹은 한 열에 최대 3개씩 배치 */
-.classic-schedule-time-group.is-forced-group.forced-group-columns-2 { grid-column: span 2; }
-.classic-schedule-time-group.is-forced-group.forced-group-columns-3 { grid-column: span 3; }
+/* v164 모든 예약 제한 그룹은 한 열에 최대 3개씩 배치 */
+.classic-schedule-time-group.booking-group-columns-2 { grid-column: span 2; }
+.classic-schedule-time-group.booking-group-columns-3 { grid-column: span 3; }
 
-.classic-schedule-time-group.is-forced-group .classic-schedule-grid {
+.classic-schedule-time-group .classic-schedule-grid {
   display: grid;
-  grid-template-columns: repeat(var(--forced-group-columns), minmax(0, 1fr));
-  grid-template-rows: repeat(var(--forced-group-rows), auto);
+  grid-template-columns: repeat(var(--booking-group-columns), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--booking-group-rows), auto);
   grid-auto-flow: column;
   gap: 5px;
 }
@@ -5163,15 +5163,15 @@ tbody tr:hover td { background: rgba(31, 102, 80, .055); }
 }
 
 @media (max-width: 1000px) {
-  .classic-schedule-time-group.is-forced-group.forced-group-columns-3 { grid-column: span 2; }
+  .classic-schedule-time-group.booking-group-columns-3 { grid-column: span 2; }
 }
 
 @media (max-width: 640px) {
-  .classic-schedule-time-group.is-forced-group {
+  .classic-schedule-time-group {
     grid-column: span 1 !important;
   }
 
-  .classic-schedule-time-group.is-forced-group .classic-schedule-grid {
+  .classic-schedule-time-group .classic-schedule-grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;
     grid-auto-flow: row;
