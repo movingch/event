@@ -4998,3 +4998,92 @@ tbody tr:hover td { background: rgba(31, 102, 80, .055); }
   .survey-question-table th:nth-child(7),
   .survey-question-table td:nth-child(7) { width: 169px; }
 }
+
+/* v157 상영작 분류별 카드 그라데이션 */
+.screening-category-color-1 { --category-accent: #176b55; --category-badge-bg: #d7eee5; --category-badge-ink: #125440; --category-border: rgba(23, 107, 85, .32); --category-grad-a: #edf8f3; --category-grad-b: #dceee7; }
+.screening-category-color-2 { --category-accent: #9a6214; --category-badge-bg: #f7e7c7; --category-badge-ink: #77480c; --category-border: rgba(154, 98, 20, .3); --category-grad-a: #fff8e9; --category-grad-b: #f6ead2; }
+.screening-category-color-3 { --category-accent: #2b628d; --category-badge-bg: #dbeaf5; --category-badge-ink: #204d70; --category-border: rgba(43, 98, 141, .3); --category-grad-a: #eff7fc; --category-grad-b: #dfeef7; }
+.screening-category-color-4 { --category-accent: #a54f3d; --category-badge-bg: #f5ded7; --category-badge-ink: #7f382b; --category-border: rgba(165, 79, 61, .3); --category-grad-a: #fff2ed; --category-grad-b: #f5e1da; }
+.screening-category-color-5 { --category-accent: #6c4f91; --category-badge-bg: #e9dff3; --category-badge-ink: #51366f; --category-border: rgba(108, 79, 145, .3); --category-grad-a: #f8f2fc; --category-grad-b: #e9e0f3; }
+.screening-category-color-6 { --category-accent: #82612e; --category-badge-bg: #eee2ca; --category-badge-ink: #65481f; --category-border: rgba(130, 97, 46, .3); --category-grad-a: #faf6eb; --category-grad-b: #eee6d4; }
+
+.screening-card[class*="screening-category-color-"] {
+  border-color: var(--category-border);
+}
+
+.screening-card[class*="screening-category-color-"] .screening-top {
+  background: linear-gradient(135deg, var(--category-grad-a) 0%, var(--category-grad-b) 100%);
+  border-bottom-color: var(--category-border);
+}
+
+.category-badge {
+  background: #eee6dc;
+  color: #4f4338;
+  border: 1px solid rgba(79, 67, 56, .12);
+  font-weight: 900;
+}
+
+.screening-card[class*="screening-category-color-"] .category-badge {
+  background: var(--category-badge-bg);
+  color: var(--category-badge-ink);
+  border-color: var(--category-border);
+}
+
+.screening-card[class*="screening-category-color-"] .screening-card-time {
+  color: var(--category-accent);
+}
+
+/* v158 시간표 카드 좌석상황·관람연령 표시 */
+.classic-screening-meta .screening-card-venue-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.classic-screening-meta .age-rating-badge,
+.classic-screening-meta .runtime-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 3px 7px;
+  border: 1px solid rgba(58, 41, 27, .13);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .72);
+  color: #51463d;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.classic-screening-meta .runtime-badge {
+  background: rgba(58, 41, 27, .07);
+  color: #42382f;
+}
+
+/* v161 상영시간 옆 감독 배지 */
+.classic-screening-meta .screening-card-time-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.classic-screening-meta .director-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 3px 7px;
+  border: 1px solid var(--category-border, rgba(58, 41, 27, .14));
+  border-radius: 7px;
+  background: var(--category-badge-bg, rgba(255, 255, 255, .72));
+  color: var(--category-badge-ink, #51463d);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+}

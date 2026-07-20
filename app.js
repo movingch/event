@@ -23,6 +23,8 @@ const PRIVACY_CONSENT_TEXT = "머내마을영화제에서는 상영작 경과보
 const FESTIVAL_START_DATE = "2026-09-09";
 const FESTIVAL_END_DATE = "2026-09-13";
 const FESTIVAL_PERIOD_LABEL = "9월 9일 ~ 9월 13일";
+const SCREENING_AGE_RATINGS = ["15세이상", "12세이상", "전체관람가"];
+const SCREENING_CATEGORY_COLOR_ASSIGNMENTS = new Map();
 const OPENING_FILM_ID = "scr-opening";
 const OPENING_MAIN_LEGACY_END_AT = "2026-09-09T23:59";
 const OPENING_MAIN_END_AT = "2026-07-17T23:59";
@@ -37,10 +39,14 @@ const OPENING_PROMO_COPY = "박정민배우를 만날 수 있는 개막식에 �
 
 const seedOpeningScreening = {
   id: OPENING_FILM_ID,
+  category: "개막작",
   title: "개막식 영화: 얼굴",
   venue: "동천농협강당",
   startTime: "2026-09-09T19:00",
   endTime: "2026-09-09T21:30",
+  runtimeMinutes: 150,
+  ageRating: "15세이상",
+  director: "조세영",
   capacity: 120,
   gvHost: "박정민 배우",
   moderator: "개막식 모더레이터",
@@ -71,10 +77,14 @@ const seedScreenings = [
   seedOpeningScreening,
   {
     id: "scr-001",
+    category: "마을영화",
     title: "마을의 첫 장면",
     venue: "동천농협강당",
     startTime: "2026-09-09T16:00",
     endTime: "2026-09-09T17:30",
+    runtimeMinutes: 90,
+    ageRating: "전체관람가",
+    director: "김머내",
     capacity: 120,
     gvHost: "김머내 감독",
     moderator: "박진행",
@@ -86,10 +96,14 @@ const seedScreenings = [
   },
   {
     id: "scr-002",
+    category: "다큐멘터리",
     title: "동네를 걷는 사람들",
     venue: "커뮤니티홀",
     startTime: "2026-09-10T14:00",
     endTime: "2026-09-10T15:35",
+    runtimeMinutes: 95,
+    ageRating: "12세이상",
+    director: "장다큐",
     capacity: 55,
     gvHost: "장다큐 감독",
     moderator: "한기획",
@@ -101,10 +115,14 @@ const seedScreenings = [
   },
   {
     id: "scr-003",
+    category: "어린이",
     title: "아이들의 영화관",
     venue: "작은도서관 상영실",
     startTime: "2026-09-11T10:30",
     endTime: "2026-09-11T11:50",
+    runtimeMinutes: 80,
+    ageRating: "전체관람가",
+    director: "오어린이",
     capacity: 35,
     gvHost: "",
     moderator: "",
@@ -116,10 +134,14 @@ const seedScreenings = [
   },
   {
     id: "scr-004",
+    category: "야외상영",
     title: "밤의 상영회",
     venue: "야외마당",
     startTime: "2026-09-11T19:30",
     endTime: "2026-09-11T21:10",
+    runtimeMinutes: 100,
+    ageRating: "12세이상",
+    director: "윤밤",
     capacity: 120,
     gvHost: "",
     moderator: "윤밤",
@@ -131,10 +153,14 @@ const seedScreenings = [
   },
   {
     id: "scr-005",
+    category: "단편",
     title: "청년 단편 모음",
     venue: "머내마을극장 2관",
     startTime: "2026-09-12T13:00",
     endTime: "2026-09-12T14:30",
+    runtimeMinutes: 90,
+    ageRating: "15세이상",
+    director: "단편 감독팀",
     capacity: 45,
     gvHost: "단편 감독팀",
     moderator: "서청년",
@@ -146,10 +172,14 @@ const seedScreenings = [
   },
   {
     id: "scr-006",
+    category: "폐막작",
     title: "폐막: 다시 만나는 마을",
     venue: "머내마을극장 1관",
     startTime: "2026-09-13T17:00",
     endTime: "2026-09-13T18:45",
+    runtimeMinutes: 105,
+    ageRating: "전체관람가",
+    director: "이현장",
     capacity: 80,
     gvHost: "폐막 게스트",
     moderator: "박진행",
@@ -165,10 +195,14 @@ const seedScreenings = [
 // 실제 신청 데이터나 원격 백업에는 저장되지 않습니다.
 const SAME_TIME_LAYOUT_PREVIEW_SCREENING = {
   id: "layout-preview-20260909-1600",
+  category: "마을영화",
   title: "같은 시간, 다른 이야기",
   venue: "커뮤니티홀",
   startTime: "2026-09-09T17:00",
   endTime: "2026-09-09T18:20",
+  runtimeMinutes: 80,
+  ageRating: "전체관람가",
+  director: "정마을",
   capacity: 60,
   gvHost: "정마을 감독",
   moderator: "김진행",
@@ -263,6 +297,48 @@ function cloneData(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function screeningRuntimeMinutes(screening = {}, fallback = {}) {
+  const explicit = Number(screening.runtimeMinutes || fallback.runtimeMinutes || 0);
+  if (explicit > 0) return Math.round(explicit);
+  const start = new Date(screening.startTime || fallback.startTime || "");
+  const end = new Date(screening.endTime || fallback.endTime || "");
+  const calculated = Math.round((end.getTime() - start.getTime()) / 60000);
+  return Number.isFinite(calculated) && calculated > 0 ? calculated : 60;
+}
+
+function screeningEndTimeFromRuntime(startTime, runtimeMinutes) {
+  const start = new Date(startTime || "");
+  if (Number.isNaN(start.getTime())) return "";
+  const end = new Date(start.getTime() + Math.max(1, Number(runtimeMinutes || 60)) * 60000);
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
+}
+
+function finalizeScreeningMetadata(screening = {}, fallback = {}) {
+  const runtimeMinutes = screeningRuntimeMinutes(screening, fallback);
+  const startTime = String(screening.startTime || fallback.startTime || "");
+  const ageRating = SCREENING_AGE_RATINGS.includes(screening.ageRating)
+    ? screening.ageRating
+    : (SCREENING_AGE_RATINGS.includes(fallback.ageRating) ? fallback.ageRating : "전체관람가");
+  return {
+    ...screening,
+    category: String(screening.category || fallback.category || (screening.isOpening ? "개막작" : "기타")).trim() || "기타",
+    runtimeMinutes,
+    ageRating,
+    director: String(screening.director || fallback.director || "").trim(),
+    startTime,
+    endTime: screeningEndTimeFromRuntime(startTime, runtimeMinutes)
+  };
+}
+
+function screeningCategoryColorIndex(category = "") {
+  const text = String(category || "기타").trim() || "기타";
+  if (!SCREENING_CATEGORY_COLOR_ASSIGNMENTS.has(text)) {
+    SCREENING_CATEGORY_COLOR_ASSIGNMENTS.set(text, (SCREENING_CATEGORY_COLOR_ASSIGNMENTS.size % 6) + 1);
+  }
+  return SCREENING_CATEGORY_COLOR_ASSIGNMENTS.get(text);
+}
+
 function normalizeScreening(screening) {
   const isOpening = screening?.isOpening === true || screening?.id === OPENING_FILM_ID || String(screening?.title || "").includes("얼굴");
   if (isOpening) {
@@ -295,7 +371,7 @@ function normalizeScreening(screening) {
     merged.maxTicketsPerReservation = Math.max(1, Number(merged.maxTicketsPerReservation || seedOpeningScreening.maxTicketsPerReservation));
     merged.seatPrefix = String(merged.seatPrefix || seedOpeningScreening.seatPrefix || "A").trim() || "A";
     merged.staffPin = String(merged.staffPin || seedOpeningScreening.staffPin || "").trim();
-    return merged;
+    return finalizeScreeningMetadata(merged, seedOpeningScreening);
   }
   const legacy = LEGACY_DEMO_SCREENING_MIGRATION[screening?.id];
   const seed = seedScreenings.find((item) => item.id === screening?.id && item.isOpening !== true);
@@ -307,9 +383,9 @@ function normalizeScreening(screening) {
     if (!screening.endTime || screening.endTime === legacy.endTime) migrated.endTime = seed.endTime;
     if (!screening.notes || screening.notes === legacy.notes) migrated.notes = seed.notes;
     migrated.staffPin = String(migrated.staffPin || seed?.staffPin || "").trim();
-    return migrated;
+    return finalizeScreeningMetadata(migrated, seed);
   }
-  return { ...screening, staffPin: String(screening?.staffPin || seed?.staffPin || "").trim(), isOpening: false };
+  return finalizeScreeningMetadata({ ...screening, staffPin: String(screening?.staffPin || seed?.staffPin || "").trim(), isOpening: false }, seed);
 }
 
 function cleanReservationNote(note = "") {
@@ -1869,7 +1945,7 @@ function renderApply() {
         </div>
       </div>
       <section class="filters all-screening-filters" aria-label="전체상영 필터">
-        <input class="input" id="searchInput" type="search" placeholder="영화 제목, 상영관, 담당자 검색" />
+        <input class="input" id="searchInput" type="search" placeholder="분류, 영화 제목, 상영관, 감독 검색" />
         <select class="select" id="venueFilter">
           <option value="">전체 상영관</option>
           ${venues.map((venue) => `<option value="${esc(venue)}">${esc(venue)}</option>`).join("")}
@@ -1901,17 +1977,20 @@ function screeningCard(screening, options = {}) {
   const full = remainingSeats(screening) <= 0;
   const bookingLabel = layoutPreview ? "배치 확인용" : (exposeOpening && phase ? (phase.allowBooking ? (full ? "대기 신청" : "관람신청") : phase.label) : (full ? "대기 신청" : "관람신청"));
   const dateParts = screeningDateParts(screening.startTime);
+  const category = String(screening.category || "기타").trim() || "기타";
+  const categoryColor = screeningCategoryColorIndex(category);
   return `
-    <article class="screening-card compact-screening-card ${options.schedule ? "classic-schedule-card" : ""} ${layoutPreview ? "layout-preview-card" : ""} ${exposeOpening ? "opening-card" : ""}" ${layoutPreview ? "" : `data-screening-card="${esc(screening.id)}"`}>
+    <article class="screening-card compact-screening-card screening-category-color-${categoryColor} ${options.schedule ? "classic-schedule-card" : ""} ${layoutPreview ? "layout-preview-card" : ""} ${exposeOpening ? "opening-card" : ""}" ${layoutPreview ? "" : `data-screening-card="${esc(screening.id)}"`}>
       <div class="screening-top">
         ${options.schedule ? `<span class="screening-corner-date"><strong>${esc(dateParts.day)}</strong><small>${esc(dateParts.weekday)}</small></span>` : ""}
         <div class="badges compact-badges">
-          ${exposeOpening ? `<span class="badge warn">개막작</span><span class="badge ${phase.className}">${esc(phase.label)}</span>` : `<span class="badge blue">${full ? "신청마감 · 대기접수" : esc(screening.status || "신청 가능")}</span>`}
+          <span class="badge category-badge">${esc(category)}</span>
+          ${exposeOpening ? `<span class="badge ${phase.className}">${esc(phase.label)}</span>` : `<span class="badge blue">${full ? "신청마감 · 대기접수" : esc(screening.status || "신청 가능")}</span>`}
           <span class="badge ${info.className}">${esc(info.text)}</span>
         </div>
         <h3 class="screening-title">${esc(screening.title)}</h3>
         ${options.schedule
-          ? `<p class="screening-meta classic-screening-meta"><strong class="screening-card-time">${esc(formatTimePart(screening.startTime))}</strong><span>${esc(screening.venue)}</span></p>`
+          ? `<p class="screening-meta classic-screening-meta"><span class="screening-card-time-line"><strong class="screening-card-time">${esc(formatTimePart(screening.startTime))}</strong><span class="badge director-badge">감독.${esc(screening.director || "미정")}</span></span><span class="screening-card-venue-line"><span>${esc(screening.venue)}</span><span class="badge age-rating-badge">${esc(screening.ageRating || "전체관람가")}</span><span class="badge runtime-badge">러닝타임 ${Number(screening.runtimeMinutes || 60)}분</span></span></p>`
           : `<p class="screening-meta">${esc(formatDateTime(screening.startTime))}<br>${esc(screening.venue)}</p>`}
       </div>
       <div class="screening-body compact-screening-body">
@@ -1929,7 +2008,7 @@ function screeningListRow(screening) {
   const info = statusInfo(screening);
   const full = remainingSeats(screening) <= 0;
   const dateParts = screeningDateParts(screening.startTime);
-  const progress = [screening.gvHost ? `GV ${screening.gvHost}` : "", screening.moderator ? `모더레이터 ${screening.moderator}` : ""].filter(Boolean).join(" · ") || "-";
+  const progress = [screening.category || "기타", screening.director ? `감독 ${screening.director}` : "", screening.runtimeMinutes ? `${screening.runtimeMinutes}분` : "", screening.ageRating || ""].filter(Boolean).join(" · ");
   return `
     <article class="all-screening-row ${full ? "is-full" : ""}" data-screening-card="${esc(screening.id)}" tabindex="0" role="button" aria-label="${esc(cleanMovieTitle(screening.title))} 영화 소개와 관람 신청 열기">
       <div class="all-screening-date"><strong>${esc(dateParts.date)}</strong><span>${esc(dateParts.weekday)}</span></div>
@@ -2344,7 +2423,7 @@ function screeningTable(screenings, options = {}) {
       <table>
         <thead>
           <tr>
-            <th>영화</th>
+            <th>분류·영화</th>
             <th>상영관</th>
             <th class="screening-status-heading">상태</th>
             <th>시간</th>
@@ -2365,7 +2444,7 @@ function screeningTable(screenings, options = {}) {
             const phase = isOpening ? openingPhaseInfo(screening) : null;
             return `
               <tr ${options.manage ? "" : `class="screening-roster-row" data-screening-roster-row="${esc(screening.id)}" tabindex="0" aria-label="${esc(screening.title)} 신청자 목록 열기"`}>
-                <td>${options.manage ? `<strong>${esc(screening.title)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.title)}</strong></button>`}${isOpening ? `<br><span class="help">개막작 신청 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
+                <td><span class="badge category-badge">${esc(screening.category || "기타")}</span><br>${options.manage ? `<strong>${esc(screening.title)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.title)}</strong></button>`}<br><span class="help">${screening.director ? `감독 ${esc(screening.director)} · ` : ""}${Number(screening.runtimeMinutes || 60)}분 · ${esc(screening.ageRating || "전체관람가")}</span>${isOpening ? `<br><span class="help">개막작 신청 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
                 <td>${options.manage ? `<strong>${esc(screening.venue)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.venue)}</strong></button>`}</td>
                 <td class="screening-status-cell">${options.manage ? `<span class="badge ${info.className}">${esc(info.text)}</span>` : `<button class="seat-status-button ${info.className}" type="button" data-action="view-roster" data-id="${esc(screening.id)}" aria-label="${esc(screening.title)} 좌석현황 ${esc(info.text)} · 신청자 목록 열기">${esc(info.text)}</button>`}${isOpening ? `<span class="screening-phase-badge badge ${phase.className}">${esc(phase.label)}</span>` : ""}</td>
                 <td>${esc(formatDateTime(screening.startTime))}</td>
@@ -2635,12 +2714,16 @@ function adminScreenings() {
       <div class="section-title">
         <div>
           <h2>${editing ? "영화·상영관 수정" : "영화·상영관 추가"}</h2>
-          <p>시간, 영화제목, GV담당자, 모더레이터, 담당스태프, 연락처, 기타 사항을 언제든지 바꿀 수 있습니다.</p>
+          <p>분류, 영화제목, 시작시간, 러닝타임, 관람연령, 감독과 운영 정보를 언제든지 바꿀 수 있습니다.</p>
         </div>
         ${editing ? `<button class="btn btn-outline" type="button" data-action="cancel-edit">신규 영화·상영관 추가로 전환</button>` : ""}
       </div>
       <form id="screeningForm" data-editing="${editing ? esc(editing.id) : ""}">
         <div class="form-grid">
+          <div>
+            <label class="label" for="screeningCategory">분류 <span class="required">*</span></label>
+            <input class="input" id="screeningCategory" name="category" value="${esc(editing?.category || "")}" placeholder="예: 다큐멘터리, 마을영화, 단편" required />
+          </div>
           <div>
             <label class="label" for="screeningTitle">영화 제목 <span class="required">*</span></label>
             <input class="input" id="screeningTitle" name="title" value="${esc(editing?.title || "")}" required />
@@ -2654,8 +2737,18 @@ function adminScreenings() {
             <input class="input" id="screeningStart" name="startTime" type="datetime-local" value="${esc(toLocalInputValue(editing?.startTime || ""))}" required />
           </div>
           <div>
-            <label class="label" for="screeningEnd">상영 종료</label>
-            <input class="input" id="screeningEnd" name="endTime" type="datetime-local" value="${esc(toLocalInputValue(editing?.endTime || ""))}" />
+            <label class="label" for="screeningRuntime">영화 러닝타임(분) <span class="required">*</span></label>
+            <input class="input" id="screeningRuntime" name="runtimeMinutes" type="number" min="1" step="1" value="${esc(editing?.runtimeMinutes || "")}" placeholder="예: 95" required />
+          </div>
+          <div>
+            <label class="label" for="screeningAgeRating">관람연령</label>
+            <select class="select" id="screeningAgeRating" name="ageRating">
+              ${SCREENING_AGE_RATINGS.map((rating) => `<option value="${esc(rating)}" ${rating === (editing?.ageRating || "전체관람가") ? "selected" : ""}>${esc(rating)}</option>`).join("")}
+            </select>
+          </div>
+          <div>
+            <label class="label" for="screeningDirector">감독 이름</label>
+            <input class="input" id="screeningDirector" name="director" value="${esc(editing?.director || "")}" />
           </div>
           <div>
             <label class="label" for="screeningCapacity">정원 <span class="required">*</span></label>
@@ -4037,6 +4130,7 @@ function movieBookingIntroHtml(screening) {
   return `
     <section class="movie-booking-intro ${full ? "is-full" : ""}" aria-label="영화 소개">
       <div class="badges">
+        <span class="badge category-badge">${esc(screening.category || "기타")}</span>
         <span class="badge blue">${esc(screening.venue || "상영관")}</span>
         <span class="badge ${statusInfo(screening).className}">${full ? "신청마감 · 대기접수" : esc(statusInfo(screening).text)}</span>
       </div>
@@ -4044,6 +4138,9 @@ function movieBookingIntroHtml(screening) {
       <p class="movie-booking-time"><strong>${esc(formatDateTime(screening.startTime))}</strong>${screening.endTime ? ` ~ ${esc(formatTimePart(screening.endTime))}` : ""}</p>
       ${screening.notes ? `<p class="movie-booking-description">${esc(screening.notes)}</p>` : ""}
       <dl class="movie-booking-facts">
+        ${screening.director ? `<div><dt>감독</dt><dd>${esc(screening.director)}</dd></div>` : ""}
+        <div><dt>러닝타임</dt><dd>${Number(screening.runtimeMinutes || 60)}분</dd></div>
+        <div><dt>관람연령</dt><dd>${esc(screening.ageRating || "전체관람가")}</dd></div>
         ${screening.gvHost ? `<div><dt>GV</dt><dd>${esc(screening.gvHost)}</dd></div>` : ""}
         ${screening.moderator ? `<div><dt>진행</dt><dd>${esc(screening.moderator)}</dd></div>` : ""}
         <div><dt>정원</dt><dd>${Number(screening.capacity || 0)}명</dd></div>
@@ -4268,7 +4365,7 @@ function updateScreeningList() {
   const list = document.getElementById("screeningList");
   if (!list) return;
   const filtered = sortedScreenings().filter((screening) => {
-    const text = `${screening.title} ${screening.venue} ${screening.gvHost} ${screening.moderator} ${screening.staff}`.toLowerCase();
+    const text = `${screening.category} ${screening.title} ${screening.venue} ${screening.director} ${screening.ageRating} ${screening.gvHost} ${screening.moderator} ${screening.staff}`.toLowerCase();
     const info = statusInfo(screening);
     const matchSearch = !search || text.includes(search);
     const matchVenue = !venue || screening.venue === venue;
@@ -5006,11 +5103,18 @@ function submitAdminPinChange(form) {
 
 function submitScreening(form) {
   const data = formDataObject(form);
-  const payload = {
+  const editingId = form.dataset.editing;
+  const existing = editingId ? state.screenings.find((screening) => screening.id === editingId) : null;
+  const payload = normalizeScreening({
+    ...(existing || {}),
+    id: existing?.id || uid("scr"),
+    category: String(data.category || "기타").trim() || "기타",
     title: data.title.trim(),
     venue: data.venue.trim(),
     startTime: data.startTime,
-    endTime: data.endTime,
+    runtimeMinutes: Math.max(1, Number(data.runtimeMinutes || 60)),
+    ageRating: SCREENING_AGE_RATINGS.includes(data.ageRating) ? data.ageRating : "전체관람가",
+    director: String(data.director || "").trim(),
     capacity: Math.max(1, Number(data.capacity || 1)),
     gvHost: data.gvHost.trim(),
     moderator: data.moderator.trim(),
@@ -5019,14 +5123,13 @@ function submitScreening(form) {
     staffPin: String(data.staffPin || "").trim(),
     status: data.status,
     notes: data.notes.trim()
-  };
-  const editingId = form.dataset.editing;
+  });
   if (editingId) {
-    state.screenings = state.screenings.map((screening) => screening.id === editingId ? { ...screening, ...payload } : screening);
+    state.screenings = state.screenings.map((screening) => screening.id === editingId ? payload : screening);
     selectedScreeningId = null;
     toast("상영 회차를 수정했습니다.");
   } else {
-    state.screenings.push({ id: uid("scr"), ...payload });
+    state.screenings.push(payload);
     toast("상영 회차를 추가했습니다.");
   }
   persist();
@@ -5345,10 +5448,10 @@ function buildReservationRows() {
 }
 
 function buildScreeningRows() {
-  const rows = [["회차ID", "영화", "상영관", "시작", "종료", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석확인건수", "참석인원", "미참석건수", "미참석인원", "신청률", "참석률", "상태", "개막작여부", "GV", "모더레이터", "담당스태프", "연락처", "기타"]];
+  const rows = [["회차ID", "분류", "영화", "상영관", "시작", "러닝타임(분)", "관람연령", "감독", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석확인건수", "참석인원", "미참석건수", "미참석인원", "신청률", "참석률", "상태", "개막작여부", "GV", "모더레이터", "담당스태프", "연락처", "기타"]];
   sortedScreenings().forEach((s) => {
     const stats = isOpeningScreening(s) ? openingStats(s) : null;
-    rows.push([s.id, s.title, s.venue, s.startTime, s.endTime, s.capacity, applicationCount(s.id), appliedSeats(s.id), stats ? stats.earlybirdSeats : 0, stats ? stats.generalSeats : 0, attendedApplicationCount(s.id), actualAttendees(s.id), canceledApplicationCount(s.id), canceledSeats(s.id), `${occupancyRate(s)}%`, `${attendanceRate(s.id)}%`, s.status, isOpeningScreening(s) ? "개막작" : "", s.gvHost, s.moderator, s.staff, s.staffPhone, s.notes]);
+    rows.push([s.id, s.category || "기타", s.title, s.venue, s.startTime, s.runtimeMinutes || 60, s.ageRating || "전체관람가", s.director || "", s.capacity, applicationCount(s.id), appliedSeats(s.id), stats ? stats.earlybirdSeats : 0, stats ? stats.generalSeats : 0, attendedApplicationCount(s.id), actualAttendees(s.id), canceledApplicationCount(s.id), canceledSeats(s.id), `${occupancyRate(s)}%`, `${attendanceRate(s.id)}%`, s.status, isOpeningScreening(s) ? "개막작" : "", s.gvHost, s.moderator, s.staff, s.staffPhone, s.notes]);
   });
   return rows;
 }
@@ -5501,9 +5604,13 @@ function buildDriveStats() {
     const stats = isOpeningScreening(s) ? openingStats(s) : null;
     const phase = isOpeningScreening(s) ? openingPhaseInfo(s) : null;
     return {
+      category: s.category || "기타",
       movieTitle: s.title || "",
       venue: s.venue || "",
       screeningTime: s.startTime || "",
+      runtimeMinutes: Number(s.runtimeMinutes || 60),
+      ageRating: s.ageRating || "전체관람가",
+      director: s.director || "",
       capacity: Number(s.capacity || 0),
       applicationCount: applicationCount(s.id),
       applicantCount: appliedSeats(s.id),
@@ -5527,11 +5634,15 @@ function buildDriveScreenings() {
     const stats = isOpeningScreening(s) ? openingStats(s) : null;
     const phase = isOpeningScreening(s) ? openingPhaseInfo(s) : null;
     return {
+      category: s.category || "기타",
       movieTitle: s.title || "",
       venue: s.venue || "",
       screeningId: s.id || "",
       startTime: s.startTime || "",
       endTime: s.endTime || "",
+      runtimeMinutes: Number(s.runtimeMinutes || 60),
+      ageRating: s.ageRating || "전체관람가",
+      director: s.director || "",
       capacity: Number(s.capacity || 0),
       applicationCount: applicationCount(s.id),
       applicantCount: appliedSeats(s.id),
