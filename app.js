@@ -1594,6 +1594,7 @@ function render() {
   if (!route) view = renderHome();
   else if (route === "opening") view = renderOpeningTicketing();
   else if (route === "apply") view = renderApply();
+  else if (route === "schedule") view = renderFullSchedule();
   else if (route === "donate" && sub === "transfer") view = renderDonationTransferPage();
   else if (route === "donate") view = renderDonationPage();
   else if (route === "staff") view = renderStaff(sub || "");
@@ -2020,7 +2021,10 @@ function renderScreeningSchedule() {
     <section class="screening-schedule-section" aria-labelledby="screeningScheduleTitle">
       <div class="section-title compact-title">
         <div>
-          <h2 id="screeningScheduleTitle">제9회 상영시간표</h2>
+          <div class="schedule-title-action-row">
+            <h2 id="screeningScheduleTitle">제9회 상영시간표</h2>
+            <a class="btn btn-outline schedule-full-view-btn" href="#/schedule">영화시간표 전체보기</a>
+          </div>
           <p>앞뒤 1시간 이내 영화와 별도 예약 그룹은 각 그룹에서 1편(1회)만 예약신청 가능합니다</p>
         </div>
       </div>
@@ -2037,7 +2041,7 @@ function renderScreeningSchedule() {
                   <div class="classic-schedule-group-choice ${bookingGroup.forced || bookingGroup.screenings.length > 1 ? "" : "is-placeholder"}" ${bookingGroup.forced || bookingGroup.screenings.length > 1 ? "" : `aria-hidden="true"`}>
                     ${bookingGroup.forced ? `
                       <strong>${bookingGroup.screenings.length}개 회차 중 1회만 예약 가능</strong>
-                      <span>강제 예약 그룹 · ${esc(bookingGroup.label)}</span>` : bookingGroup.screenings.length > 1 ? `
+                      <span>${esc(bookingGroup.label)}</span>` : bookingGroup.screenings.length > 1 ? `
                       <strong>${bookingGroup.screenings.length}편 중 1편 선택 가능</strong>
                       <span>동시간대·앞뒤 1시간 이내 중복신청 제한</span>` : `
                       <strong>선택 제한 없음</strong>
@@ -2051,6 +2055,99 @@ function renderScreeningSchedule() {
             </div>
           </section>`).join("")}
       </div>
+    </section>`;
+}
+
+function screeningMinuteOfDay(value = "") {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : (date.getHours() * 60) + date.getMinutes();
+}
+
+function layoutTimelineDay(screenings = []) {
+  const laneEnds = [];
+  const items = [...screenings]
+    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)) || String(a.title).localeCompare(String(b.title)))
+    .map((screening) => {
+      const startMinute = screeningMinuteOfDay(screening.startTime);
+      const endMinute = startMinute + Math.max(1, Number(screening.runtimeMinutes || 60));
+      let lane = laneEnds.findIndex((end) => end <= startMinute);
+      if (lane < 0) lane = laneEnds.length;
+      laneEnds[lane] = endMinute;
+      return { screening, startMinute, endMinute, lane };
+    });
+  const laneCount = Math.max(1, laneEnds.length);
+  return items.map((item) => ({ ...item, laneCount }));
+}
+
+function renderFullSchedule() {
+  const screenings = sortedScreenings();
+  if (!screenings.length) return `<section class="card"><div class="empty">등록된 상영작이 없습니다.</div></section>`;
+  const dayMap = new Map();
+  screenings.forEach((screening) => {
+    const key = String(screening.startTime || "").slice(0, 10) || "undated";
+    if (!dayMap.has(key)) dayMap.set(key, []);
+    dayMap.get(key).push(screening);
+  });
+  const days = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const startMinutes = screenings.map((screening) => screeningMinuteOfDay(screening.startTime));
+  const endMinutes = screenings.map((screening) => screeningMinuteOfDay(screening.startTime) + Math.max(1, Number(screening.runtimeMinutes || 60)));
+  const timelineStart = Math.min(10 * 60, Math.floor(Math.min(...startMinutes) / 60) * 60);
+  const timelineEnd = Math.max(22 * 60, Math.ceil(Math.max(...endMinutes) / 60) * 60);
+  const pixelsPerMinute = 0.9;
+  const timelineHeight = Math.max(540, Math.round((timelineEnd - timelineStart) * pixelsPerMinute));
+  const hourMarks = [];
+  for (let minute = timelineStart; minute <= timelineEnd; minute += 60) {
+    hourMarks.push({
+      minute,
+      label: `${String(Math.floor(minute / 60)).padStart(2, "0")}:00`,
+      top: Math.round((minute - timelineStart) * pixelsPerMinute)
+    });
+  }
+  return `
+    <section class="full-schedule-page">
+      <div class="full-schedule-heading">
+        <div>
+          <span class="eyebrow">제9회 머내마을영화제</span>
+          <h1>영화시간표 전체보기</h1>
+          <p>상영작을 누르면 영화 소개와 관람 신청서가 열립니다. 날짜·시간·상영 장소를 확인해 주세요.</p>
+        </div>
+        <a class="btn btn-outline" href="#/">메인으로 돌아가기</a>
+      </div>
+      <div class="timeline-legend" aria-label="시간표 안내">
+        <span><i class="legend-dot is-bookable"></i>신청 가능</span>
+        <span><i class="legend-dot is-full"></i>마감·대기 접수</span>
+        <strong>모든 영화 무료 관람</strong>
+      </div>
+      <div class="festival-timeline-scroll">
+        <div class="festival-timeline" style="--timeline-days:${days.length};--timeline-height:${timelineHeight}px;min-width:${Math.max(720, 56 + (days.length * 155))}px">
+          <div class="timeline-time-heading">시작시간</div>
+          ${days.map(([key, dayScreenings]) => {
+            const parts = screeningDateParts(dayScreenings[0]?.startTime);
+            return `<div class="timeline-day-heading"><strong>${esc(parts.date)}</strong><span>${esc(parts.weekday)}</span><small>${dayScreenings.length}편</small></div>`;
+          }).join("")}
+          <div class="timeline-time-axis" style="height:${timelineHeight}px">
+            ${hourMarks.map((mark) => `<span style="top:${mark.top}px">${esc(mark.label)}</span>`).join("")}
+          </div>
+          ${days.map(([key, dayScreenings], dayIndex) => `
+            <div class="timeline-day-column timeline-day-tone-${(dayIndex % 5) + 1}" style="height:${timelineHeight}px">
+              ${hourMarks.map((mark) => `<i class="timeline-hour-line" style="top:${mark.top}px"></i>`).join("")}
+              ${layoutTimelineDay(dayScreenings).map(({ screening, startMinute, endMinute, lane, laneCount }) => {
+                const categoryColor = screeningCategoryColorIndex(screening.category || "기타");
+                const full = remainingSeats(screening) <= 0;
+                const top = Math.round((startMinute - timelineStart) * pixelsPerMinute);
+                const height = Math.max(54, Math.round((endMinute - startMinute) * pixelsPerMinute));
+                const left = (lane / laneCount) * 100;
+                const width = 100 / laneCount;
+                return `<button class="timeline-movie screening-category-color-${categoryColor} ${full ? "is-full" : ""}" type="button" data-action="book" data-id="${esc(screening.id)}" style="top:${top}px;height:${height}px;left:calc(${left}% + 3px);width:calc(${width}% - 6px)" aria-label="${esc(cleanMovieTitle(screening.title))} ${esc(formatTimePart(screening.startTime))} 관람 신청">
+                  <strong>${esc(cleanMovieTitle(screening.title))}</strong>
+                  <span>${esc(formatTimePart(screening.startTime))} · ${esc(screening.venue)}</span>
+                  <small>${esc(screening.category || "기타")} · ${Number(screening.runtimeMinutes || 60)}분</small>
+                </button>`;
+              }).join("")}
+            </div>`).join("")}
+        </div>
+      </div>
+      <p class="timeline-footnote">같은 시간대 또는 앞뒤 1시간 이내의 영화는 1편만 예약 신청할 수 있습니다.</p>
     </section>`;
 }
 
@@ -2898,7 +2995,7 @@ function adminScreenings() {
             <input class="input" id="screeningDirector" name="director" value="${esc(editing?.director || "")}" />
           </div>
           <div>
-            <label class="label" for="screeningBookingGroup">강제 예약 그룹</label>
+            <label class="label" for="screeningBookingGroup">예약 제한 그룹</label>
             <input class="input" id="screeningBookingGroup" name="bookingGroup" value="${esc(editing?.bookingGroup || "")}" placeholder="예: 과달카날 레퀴엠 연속상영" />
             <span class="help">같은 그룹명을 입력한 회차는 별도 박스로 묶이며, 한 사람은 그룹 안에서 1회만 예약할 수 있습니다.</span>
           </div>
@@ -4359,7 +4456,7 @@ function openOpeningBooking(screening) {
           <textarea class="textarea" id="guestNote" name="note" placeholder="접근성 지원, 동행자 정보, 기타 요청사항"></textarea>
         </div>
       </div>
-      <p class="help">개막식 신청은 현장 안내에 따라 입장합니다. 같은 날짜의 동시간대·앞뒤 1시간 이내 영화와 강제 예약 그룹은 각 그룹에서 한 편(한 회차)만 신청할 수 있습니다.</p>
+      <p class="help">개막식 신청은 현장 안내에 따라 입장합니다. 같은 날짜의 동시간대·앞뒤 1시간 이내 영화와 별도 예약 그룹은 각 그룹에서 한 편(한 회차)만 신청할 수 있습니다.</p>
       <label class="checkbox-line sms-consent-line">
         <input type="checkbox" name="smsConsent" checked />
         <span>예약 확정 시 입력한 연락처로 예약 확인 문자를 받겠습니다.</span>
@@ -4420,7 +4517,7 @@ function openBooking(screeningId) {
           <textarea class="textarea" id="guestNote" name="note" placeholder="접근성 지원, 단체 참석, 기타 요청사항"></textarea>
         </div>
       </div>
-      <p class="help">정원이 모두 찼거나 잔여 인원보다 많이 신청하면 대기상태로 접수됩니다. 한 사람은 영화제 기간 동안 최대 5회까지 신청할 수 있으며, 같은 날짜의 동시간대·앞뒤 1시간 이내 영화와 강제 예약 그룹은 각 그룹에서 한 편(한 회차)만 신청할 수 있습니다.</p>
+      <p class="help">정원이 모두 찼거나 잔여 인원보다 많이 신청하면 대기상태로 접수됩니다. 한 사람은 영화제 기간 동안 최대 5회까지 신청할 수 있으며, 같은 날짜의 동시간대·앞뒤 1시간 이내 영화와 별도 예약 그룹은 각 그룹에서 한 편(한 회차)만 신청할 수 있습니다.</p>
       <label class="checkbox-line sms-consent-line">
         <input type="checkbox" name="smsConsent" checked />
         <span>예약 확정 시 입력한 연락처로 예약 확인 문자를 받겠습니다.</span>
@@ -5609,7 +5706,7 @@ function buildReservationRows() {
 }
 
 function buildScreeningRows() {
-  const rows = [["회차ID", "분류", "강제예약그룹", "예약그룹해제", "영화", "상영관", "시작", "러닝타임(분)", "관람연령", "감독", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석확인건수", "참석인원", "미참석건수", "미참석인원", "신청률", "참석률", "상태", "개막작여부", "GV", "모더레이터", "담당스태프", "연락처", "기타"]];
+  const rows = [["회차ID", "분류", "예약제한그룹", "예약그룹해제", "영화", "상영관", "시작", "러닝타임(분)", "관람연령", "감독", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석확인건수", "참석인원", "미참석건수", "미참석인원", "신청률", "참석률", "상태", "개막작여부", "GV", "모더레이터", "담당스태프", "연락처", "기타"]];
   sortedScreenings().forEach((s) => {
     const stats = isOpeningScreening(s) ? openingStats(s) : null;
     rows.push([s.id, s.category || "기타", s.bookingGroup || "", s.bookingGroupDisabled ? "해제" : "", s.title, s.venue, s.startTime, s.runtimeMinutes || 60, s.ageRating || "전체관람가", s.director || "", s.capacity, applicationCount(s.id), appliedSeats(s.id), stats ? stats.earlybirdSeats : 0, stats ? stats.generalSeats : 0, attendedApplicationCount(s.id), actualAttendees(s.id), canceledApplicationCount(s.id), canceledSeats(s.id), `${occupancyRate(s)}%`, `${attendanceRate(s.id)}%`, s.status, isOpeningScreening(s) ? "개막작" : "", s.gvHost, s.moderator, s.staff, s.staffPhone, s.notes]);
