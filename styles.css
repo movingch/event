@@ -5767,3 +5767,149 @@ tbody tr:hover td { background: rgba(31, 102, 80, .055); }
   .festival-text-movie { padding: 12px 11px; }
   .festival-text-movie > strong { font-size: 16px; }
 }
+
+/* v170 동일 영화·장소의 반복 회차를 하나의 연속상영으로 표시 */
+.continuous-series-card { width: 100%; max-width: none; }
+.continuous-series-card .screening-top { min-height: 0; }
+.continuous-series-meta { display: grid; gap: 4px; margin-top: 5px; }
+.continuous-series-time {
+  color: var(--category-accent, #1e6d57);
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -.5px;
+  font-variant-numeric: tabular-nums;
+}
+.continuous-series-meta > strong { color: #624516; font-size: 14px; }
+.continuous-series-meta > span { color: #50473f; font-size: 12px; font-weight: 800; }
+.continuous-series-card .compact-book-btn { font-size: 14px; }
+
+.festival-text-series {
+  background: rgba(255, 249, 225, .78);
+  box-shadow: inset 4px 0 0 #d0931f;
+}
+.festival-text-series .festival-text-movie-topline b { font-size: 18px; }
+.festival-text-series-interval {
+  color: #9a6410;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.continuous-series-booking-intro {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 14px;
+  padding: 16px;
+  border: 2px solid #d5a343;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #fffaf0, #f8efd9);
+}
+.continuous-series-booking-intro h3 { margin: 2px 0; font-size: 25px; }
+.continuous-series-booking-intro p { margin: 0; color: #53493f; line-height: 1.5; }
+
+.continuous-series-time-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.continuous-series-time-option {
+  display: grid;
+  gap: 3px;
+  min-height: 88px;
+  padding: 12px 9px;
+  border: 2px solid #b9d5ca;
+  border-radius: 11px;
+  background: #f0f8f4;
+  color: #1d2522;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.continuous-series-time-option:hover { border-color: #26775f; background: #e2f2eb; }
+.continuous-series-time-option:focus-visible { outline: 4px solid #efb52e; outline-offset: 2px; }
+.continuous-series-time-option strong { color: #12694f; font-size: 24px; font-variant-numeric: tabular-nums; }
+.continuous-series-time-option span { font-size: 11px; font-weight: 900; }
+.continuous-series-time-option small { color: #675e55; font-size: 9px; }
+.continuous-series-time-option.is-full { border-color: #e0b8b1; background: #fff0ed; }
+.continuous-series-time-option.is-full strong { color: #a43f31; }
+.continuous-series-time-option:disabled { opacity: .45; cursor: default; }
+
+@media (max-width: 600px) {
+  .continuous-series-time-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* v171 실제 관객 화면과 동일한 최고관리자 카드 배치 편집 */
+.schedule-arrange-days { gap: 10px; }
+.schedule-arrange-day {
+  transition: background-color .15s ease, box-shadow .15s ease;
+}
+.schedule-arrange-day.is-drag-over {
+  background-color: rgba(255, 235, 164, .46);
+  box-shadow: inset 0 0 0 4px rgba(217, 155, 43, .32);
+}
+.schedule-arrange-card {
+  position: relative;
+  cursor: grab;
+  user-select: none;
+  transition: opacity .15s ease, transform .15s ease, outline-color .15s ease;
+}
+.schedule-arrange-card:active { cursor: grabbing; }
+.schedule-arrange-card.is-dragging { opacity: .34; transform: scale(.97); }
+.schedule-arrange-card.is-drop-target {
+  outline: 5px solid #efb52e;
+  outline-offset: 2px;
+}
+.schedule-edit-drag-handle {
+  position: absolute;
+  z-index: 5;
+  top: 7px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 25px;
+  padding: 3px 7px;
+  border: 1px solid rgba(34, 28, 24, .22);
+  border-radius: 7px;
+  background: rgba(33, 28, 24, .9);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1;
+  box-shadow: 0 3px 8px rgba(38, 30, 24, .18);
+  pointer-events: none;
+}
+.schedule-edit-drag-handle span { font-size: 9px; letter-spacing: 0; }
+.schedule-arrange-card .screening-top { padding-top: 40px; }
+.schedule-arrange-card .compact-book-btn:disabled { opacity: 1; }
+
+.schedule-empty-slot {
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 214px;
+  padding: 14px;
+  border: 3px dashed rgba(45, 101, 87, .42);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, .48);
+  color: #2d6557;
+  font: inherit;
+  text-align: center;
+  cursor: default;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.schedule-empty-slot strong { font-size: 18px; font-weight: 950; }
+.schedule-empty-slot span { font-size: 11px; font-weight: 850; }
+.schedule-empty-slot.is-drop-target {
+  border-color: #d38b13;
+  background: #fff0b7;
+  color: #6d4200;
+  transform: scale(.985);
+}
+.schedule-day-empty-slot { min-height: 230px; align-self: stretch; }
+
+@media (max-width: 640px) {
+  .schedule-arrange-card .screening-top { padding-top: 39px; }
+  .schedule-empty-slot { min-height: 145px; }
+}
