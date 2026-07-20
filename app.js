@@ -343,6 +343,7 @@ if (localStorage.getItem(STAFF_PIN_MIGRATION_KEY) !== "done") {
   localStorage.setItem(STAFF_PIN_MIGRATION_KEY, "done");
 }
 let selectedScreeningId = null;
+let draggedScheduleCardId = "";
 let reservationSmsSelectMode = false;
 let selectedReservationSmsIds = new Set();
 let selectedReservationActionId = null;
@@ -378,6 +379,10 @@ function finalizeScreeningMetadata(screening = {}, fallback = {}) {
   const ageRating = SCREENING_AGE_RATINGS.includes(screening.ageRating)
     ? screening.ageRating
     : (SCREENING_AGE_RATINGS.includes(fallback.ageRating) ? fallback.ageRating : "전체관람가");
+  const rawScheduleOrder = screening.scheduleOrder ?? fallback.scheduleOrder;
+  const scheduleOrder = rawScheduleOrder === "" || rawScheduleOrder == null || !Number.isFinite(Number(rawScheduleOrder))
+    ? null
+    : Math.max(0, Number(rawScheduleOrder));
   return {
     ...screening,
     category: String(screening.category || fallback.category || (screening.isOpening ? "개막작" : "기타")).trim() || "기타",
@@ -386,6 +391,7 @@ function finalizeScreeningMetadata(screening = {}, fallback = {}) {
     director: String(screening.director || fallback.director || "").trim(),
     bookingGroup,
     bookingGroupDisabled,
+    scheduleOrder,
     startTime,
     endTime: screeningEndTimeFromRuntime(startTime, runtimeMinutes)
   };
@@ -984,7 +990,7 @@ function groupScreeningsByBookingConflict(screenings = []) {
         group.push(remaining.splice(candidateIndex, 1)[0]);
       }
     }
-    group.sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)) || String(a.title).localeCompare(String(b.title)));
+    group.sort(compareSchedulePosition);
     groups.push(group);
   }
   return groups;
@@ -1015,7 +1021,7 @@ function groupScreeningsForSchedule(screenings = []) {
   forcedGroups.forEach((group) => groups.push({
     forced: true,
     label: group.label,
-    screenings: group.screenings.sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)) || String(a.title).localeCompare(String(b.title)))
+    screenings: group.screenings.sort(compareSchedulePosition)
   }));
   releasedScreenings.forEach((screening) => groups.push({
     forced: false,
@@ -1023,7 +1029,13 @@ function groupScreeningsForSchedule(screenings = []) {
     label: "",
     screenings: [screening]
   }));
-  return groups.sort((a, b) => String(a.screenings[0]?.startTime || "").localeCompare(String(b.screenings[0]?.startTime || "")) || String(a.label || "").localeCompare(String(b.label || ""), "ko"));
+  return groups.sort((a, b) => {
+    const firstOrder = Math.min(...a.screenings.map((screening) => screeningScheduleOrder(screening)));
+    const secondOrder = Math.min(...b.screenings.map((screening) => screeningScheduleOrder(screening)));
+    return (firstOrder - secondOrder)
+      || String(a.screenings[0]?.startTime || "").localeCompare(String(b.screenings[0]?.startTime || ""))
+      || String(a.label || "").localeCompare(String(b.label || ""), "ko");
+  });
 }
 
 function packScheduleBookingGroups(groups = []) {
@@ -1131,6 +1143,26 @@ function reservationStatusClass(reservation) {
 
 function sortedScreenings() {
   return [...state.screenings].sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)) || a.title.localeCompare(b.title));
+}
+
+function screeningScheduleOrder(screening, fallback = Number.MAX_SAFE_INTEGER) {
+  const value = screening?.scheduleOrder;
+  if (value === "" || value == null || !Number.isFinite(Number(value))) return fallback;
+  return Math.max(0, Number(value));
+}
+
+function compareSchedulePosition(first, second) {
+  const orderGap = screeningScheduleOrder(first) - screeningScheduleOrder(second);
+  if (orderGap) return orderGap;
+  return String(first?.startTime || "").localeCompare(String(second?.startTime || ""))
+    || String(first?.title || "").localeCompare(String(second?.title || ""), "ko");
+}
+
+function scheduleSortedScreenings(screenings = state.screenings) {
+  return [...screenings].sort((first, second) => {
+    const dateGap = String(first?.startTime || "").slice(0, 10).localeCompare(String(second?.startTime || "").slice(0, 10));
+    return dateGap || compareSchedulePosition(first, second);
+  });
 }
 
 function uniqueValues(key) {
@@ -1997,8 +2029,7 @@ function renderScreeningSchedule() {
     || new URLSearchParams(window.location.search).get("sameTimePreview") === "1";
   const showForcedGroupPreview = new URLSearchParams(window.location.search).get("forcedGroupPreview") === "1";
   const showPackedGroupPreview = new URLSearchParams(window.location.search).get("packedGroupPreview") === "1";
-  const screenings = [...sortedScreenings(), ...(showSameTimePreview ? [SAME_TIME_LAYOUT_PREVIEW_SCREENING] : []), ...(showForcedGroupPreview ? FORCED_GROUP_LAYOUT_PREVIEW_SCREENINGS : []), ...(showPackedGroupPreview ? PACKED_GROUP_LAYOUT_PREVIEW_SCREENINGS : [])]
-    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)) || String(a.title).localeCompare(String(b.title)));
+  const screenings = scheduleSortedScreenings([...state.screenings, ...(showSameTimePreview ? [SAME_TIME_LAYOUT_PREVIEW_SCREENING] : []), ...(showForcedGroupPreview ? FORCED_GROUP_LAYOUT_PREVIEW_SCREENINGS : []), ...(showPackedGroupPreview ? PACKED_GROUP_LAYOUT_PREVIEW_SCREENINGS : [])]);
   const dayGroups = screenings.reduce((groups, screening) => {
     const key = String(screening.startTime || "").slice(0, 10) || "undated";
     const current = groups[groups.length - 1];
@@ -2080,7 +2111,7 @@ function layoutTimelineDay(screenings = []) {
 }
 
 function renderFullSchedule() {
-  const screenings = sortedScreenings();
+  const screenings = scheduleSortedScreenings();
   if (!screenings.length) return `<section class="card"><div class="empty">등록된 상영작이 없습니다.</div></section>`;
   const dayMap = new Map();
   screenings.forEach((screening) => {
@@ -2089,20 +2120,6 @@ function renderFullSchedule() {
     dayMap.get(key).push(screening);
   });
   const days = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
-  const startMinutes = screenings.map((screening) => screeningMinuteOfDay(screening.startTime));
-  const endMinutes = screenings.map((screening) => screeningMinuteOfDay(screening.startTime) + Math.max(1, Number(screening.runtimeMinutes || 60)));
-  const timelineStart = Math.min(10 * 60, Math.floor(Math.min(...startMinutes) / 60) * 60);
-  const timelineEnd = Math.max(22 * 60, Math.ceil(Math.max(...endMinutes) / 60) * 60);
-  const pixelsPerMinute = 0.9;
-  const timelineHeight = Math.max(540, Math.round((timelineEnd - timelineStart) * pixelsPerMinute));
-  const hourMarks = [];
-  for (let minute = timelineStart; minute <= timelineEnd; minute += 60) {
-    hourMarks.push({
-      minute,
-      label: `${String(Math.floor(minute / 60)).padStart(2, "0")}:00`,
-      top: Math.round((minute - timelineStart) * pixelsPerMinute)
-    });
-  }
   return `
     <section class="full-schedule-page">
       <div class="full-schedule-heading">
@@ -2118,34 +2135,38 @@ function renderFullSchedule() {
         <span><i class="legend-dot is-full"></i>마감·대기 접수</span>
         <strong>모든 영화 무료 관람</strong>
       </div>
-      <div class="festival-timeline-scroll">
-        <div class="festival-timeline" style="--timeline-days:${days.length};--timeline-height:${timelineHeight}px;min-width:${Math.max(720, 56 + (days.length * 155))}px">
-          <div class="timeline-time-heading">시작시간</div>
-          ${days.map(([key, dayScreenings]) => {
-            const parts = screeningDateParts(dayScreenings[0]?.startTime);
-            return `<div class="timeline-day-heading"><strong>${esc(parts.date)}</strong><span>${esc(parts.weekday)}</span><small>${dayScreenings.length}편</small></div>`;
-          }).join("")}
-          <div class="timeline-time-axis" style="height:${timelineHeight}px">
-            ${hourMarks.map((mark) => `<span style="top:${mark.top}px">${esc(mark.label)}</span>`).join("")}
-          </div>
-          ${days.map(([key, dayScreenings], dayIndex) => `
-            <div class="timeline-day-column timeline-day-tone-${(dayIndex % 5) + 1}" style="height:${timelineHeight}px">
-              ${hourMarks.map((mark) => `<i class="timeline-hour-line" style="top:${mark.top}px"></i>`).join("")}
-              ${layoutTimelineDay(dayScreenings).map(({ screening, startMinute, endMinute, lane, laneCount }) => {
-                const categoryColor = screeningCategoryColorIndex(screening.category || "기타");
-                const full = remainingSeats(screening) <= 0;
-                const top = Math.round((startMinute - timelineStart) * pixelsPerMinute);
-                const height = Math.max(54, Math.round((endMinute - startMinute) * pixelsPerMinute));
-                const left = (lane / laneCount) * 100;
-                const width = 100 / laneCount;
-                return `<button class="timeline-movie screening-category-color-${categoryColor} ${full ? "is-full" : ""}" type="button" data-action="book" data-id="${esc(screening.id)}" style="top:${top}px;height:${height}px;left:calc(${left}% + 3px);width:calc(${width}% - 6px)" aria-label="${esc(cleanMovieTitle(screening.title))} ${esc(formatTimePart(screening.startTime))} 관람 신청">
-                  <strong>${esc(cleanMovieTitle(screening.title))}</strong>
-                  <span>${esc(formatTimePart(screening.startTime))} · ${esc(screening.venue)}</span>
-                  <small>${esc(screening.category || "기타")} · ${Number(screening.runtimeMinutes || 60)}분</small>
-                </button>`;
-              }).join("")}
-            </div>`).join("")}
-        </div>
+      <div class="festival-text-schedule" style="--schedule-days:${days.length}" role="table" aria-label="제9회 영화 상영시간표">
+        ${days.map(([key, dayScreenings], dayIndex) => {
+          const parts = screeningDateParts(dayScreenings[0]?.startTime);
+          return `
+            <section class="festival-text-day timeline-day-tone-${(dayIndex % 5) + 1}" role="rowgroup" aria-labelledby="fullScheduleDay${dayIndex}">
+              <header class="festival-text-day-heading" id="fullScheduleDay${dayIndex}">
+                <strong>${esc(parts.date)}</strong>
+                <span>${esc(parts.weekday)}</span>
+                <small>${dayScreenings.length}편</small>
+              </header>
+              <div class="festival-text-movie-list">
+                ${dayScreenings.map((screening) => {
+                  const full = remainingSeats(screening) <= 0;
+                  const info = statusInfo(screening);
+                  return `<button class="festival-text-movie ${full ? "is-full" : ""}" type="button" data-action="book" data-id="${esc(screening.id)}" aria-label="${esc(cleanMovieTitle(screening.title))} ${esc(formatTimePart(screening.startTime))} 관람 신청">
+                    <span class="festival-text-movie-topline">
+                      <b>${esc(formatTimePart(screening.startTime))}</b>
+                      <em class="${esc(info.className)}">${full ? "대기접수" : "신청가능"}</em>
+                    </span>
+                    <strong>${esc(cleanMovieTitle(screening.title))}</strong>
+                    <span class="festival-text-venue">${esc(screening.venue)}</span>
+                    <span class="festival-text-meta">
+                      <i>${esc(screening.ageRating || "전체관람가")}</i>
+                      <i>${Number(screening.runtimeMinutes || 60)}분</i>
+                      ${screening.director ? `<i>감독 ${esc(screening.director)}</i>` : ""}
+                    </span>
+                    ${screening.bookingGroup ? `<small>${esc(screening.bookingGroup)} · 그룹 중 1회만 예약</small>` : ""}
+                  </button>`;
+                }).join("")}
+              </div>
+            </section>`;
+        }).join("")}
       </div>
       <p class="timeline-footnote">같은 시간대 또는 앞뒤 1시간 이내의 영화는 1편만 예약 신청할 수 있습니다.</p>
     </section>`;
@@ -2951,9 +2972,56 @@ function adminOpening() {
   `;
 }
 
+function renderScheduleOrderEditor() {
+  if (!isMasterAdminAuthed()) return "";
+  const dayGroups = scheduleSortedScreenings().reduce((groups, screening) => {
+    const key = String(screening.startTime || "").slice(0, 10) || "undated";
+    const current = groups[groups.length - 1];
+    if (current?.key === key) current.screenings.push(screening);
+    else groups.push({ key, date: screeningDateParts(screening.startTime), screenings: [screening] });
+    return groups;
+  }, []);
+  return `
+    <section class="card schedule-order-editor" aria-labelledby="scheduleOrderEditorTitle">
+      <div class="section-title schedule-order-editor-heading">
+        <div>
+          <span class="eyebrow">최고관리자 전용</span>
+          <h2 id="scheduleOrderEditorTitle">시간표 카드 배치 편집</h2>
+          <p>카드의 <b>이동 손잡이</b>를 누른 채 원하는 위치로 끌어 놓으세요. 같은 날짜 안에서만 이동하며 놓는 즉시 자동 저장됩니다.</p>
+        </div>
+        <button class="btn btn-outline" type="button" data-action="reset-schedule-order">시간순으로 초기화</button>
+      </div>
+      <div class="schedule-order-days">
+        ${dayGroups.map((group, dayIndex) => `
+          <section class="schedule-order-day schedule-day-color-${(dayIndex % 5) + 1}" data-schedule-order-day="${esc(group.key)}">
+            <div class="schedule-order-day-title">
+              <h3>${esc(group.date.date)} <span>${esc(group.date.weekday)}</span></h3>
+              <strong>${group.screenings.length}편</strong>
+            </div>
+            <div class="schedule-order-grid" data-schedule-order-grid="${esc(group.key)}">
+              ${group.screenings.map((screening, index) => `
+                <article class="schedule-order-card screening-category-color-${screeningCategoryColorIndex(screening.category || "기타")}" draggable="true" data-schedule-drag-id="${esc(screening.id)}" data-schedule-day="${esc(group.key)}" tabindex="0">
+                  <div class="schedule-drag-handle" aria-label="${esc(cleanMovieTitle(screening.title))} 카드 이동">⋮⋮ <span>이동</span></div>
+                  <div class="schedule-order-card-index">${index + 1}</div>
+                  <strong>${esc(cleanMovieTitle(screening.title))}</strong>
+                  <span>${esc(formatTimePart(screening.startTime))} · ${esc(screening.venue)}</span>
+                  <small>${esc(screening.category || "기타")}${screening.bookingGroup ? ` · 예약그룹` : ""}</small>
+                  <div class="schedule-order-card-actions">
+                    <button type="button" data-action="move-schedule-card" data-id="${esc(screening.id)}" data-direction="-1" ${index === 0 ? "disabled" : ""}>← 앞</button>
+                    <button type="button" data-action="move-schedule-card" data-id="${esc(screening.id)}" data-direction="1" ${index === group.screenings.length - 1 ? "disabled" : ""}>뒤 →</button>
+                  </div>
+                </article>`).join("")}
+            </div>
+          </section>`).join("")}
+      </div>
+    </section>`;
+}
+
 function adminScreenings() {
   const editing = selectedScreeningId ? state.screenings.find((s) => s.id === selectedScreeningId) : null;
   return `
+    ${renderScheduleOrderEditor()}
+
     <section class="card">
       <div class="section-title">
         <div>
@@ -5357,6 +5425,60 @@ function submitAdminPinChange(form) {
   toast("일반관리자 비밀번호를 저장했습니다.");
 }
 
+function scheduleDayKey(screening) {
+  return String(screening?.startTime || "").slice(0, 10) || "undated";
+}
+
+function orderedScreeningsForDay(dayKey) {
+  return scheduleSortedScreenings().filter((screening) => scheduleDayKey(screening) === dayKey);
+}
+
+function saveScheduleDayOrder(dayKey, orderedIds) {
+  const positions = new Map(orderedIds.map((id, index) => [id, index + 1]));
+  state.screenings.forEach((screening) => {
+    if (scheduleDayKey(screening) !== dayKey) return;
+    screening.scheduleOrder = positions.has(screening.id) ? positions.get(screening.id) : null;
+  });
+  persist();
+}
+
+function reorderScheduleCard(sourceId, targetId = "", placeAfter = false) {
+  if (!isMasterAdminAuthed()) return toast("최고관리자만 시간표 배치를 바꿀 수 있습니다.");
+  const source = state.screenings.find((screening) => screening.id === sourceId);
+  if (!source) return;
+  const dayKey = scheduleDayKey(source);
+  const target = targetId ? state.screenings.find((screening) => screening.id === targetId) : null;
+  if (target && scheduleDayKey(target) !== dayKey) return toast("날짜가 다른 칸으로는 옮길 수 없습니다. 상영 시작일을 먼저 수정해 주세요.");
+  const ordered = orderedScreeningsForDay(dayKey).filter((screening) => screening.id !== sourceId);
+  let insertIndex = target ? ordered.findIndex((screening) => screening.id === target.id) : ordered.length;
+  if (insertIndex < 0) insertIndex = ordered.length;
+  if (target && placeAfter) insertIndex += 1;
+  ordered.splice(insertIndex, 0, source);
+  saveScheduleDayOrder(dayKey, ordered.map((screening) => screening.id));
+  render();
+  toast(`“${cleanMovieTitle(source.title)}” 카드 위치를 저장했습니다.`);
+}
+
+function moveScheduleCardByStep(id, direction) {
+  const source = state.screenings.find((screening) => screening.id === id);
+  if (!source) return;
+  const ordered = orderedScreeningsForDay(scheduleDayKey(source));
+  const currentIndex = ordered.findIndex((screening) => screening.id === id);
+  const nextIndex = Math.max(0, Math.min(ordered.length - 1, currentIndex + Number(direction || 0)));
+  if (currentIndex < 0 || currentIndex === nextIndex) return;
+  const target = ordered[nextIndex];
+  reorderScheduleCard(id, target.id, Number(direction) > 0);
+}
+
+function resetScheduleOrder() {
+  if (!isMasterAdminAuthed()) return toast("최고관리자만 시간표 배치를 초기화할 수 있습니다.");
+  if (!confirm("시간표 카드의 수동 배치를 지우고 날짜·시간 순서로 되돌릴까요?")) return;
+  state.screenings.forEach((screening) => { screening.scheduleOrder = null; });
+  persist();
+  render();
+  toast("시간표를 날짜·시간 순서로 초기화했습니다.");
+}
+
 function submitScreening(form) {
   const data = formDataObject(form);
   const editingId = form.dataset.editing;
@@ -5706,10 +5828,10 @@ function buildReservationRows() {
 }
 
 function buildScreeningRows() {
-  const rows = [["회차ID", "분류", "예약제한그룹", "예약그룹해제", "영화", "상영관", "시작", "러닝타임(분)", "관람연령", "감독", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석확인건수", "참석인원", "미참석건수", "미참석인원", "신청률", "참석률", "상태", "개막작여부", "GV", "모더레이터", "담당스태프", "연락처", "기타"]];
+  const rows = [["회차ID", "분류", "시간표순서", "예약제한그룹", "예약그룹해제", "영화", "상영관", "시작", "러닝타임(분)", "관람연령", "감독", "정원", "신청건수", "신청인원", "개막작신청인원", "일반신청인원", "참석확인건수", "참석인원", "미참석건수", "미참석인원", "신청률", "참석률", "상태", "개막작여부", "GV", "모더레이터", "담당스태프", "연락처", "기타"]];
   sortedScreenings().forEach((s) => {
     const stats = isOpeningScreening(s) ? openingStats(s) : null;
-    rows.push([s.id, s.category || "기타", s.bookingGroup || "", s.bookingGroupDisabled ? "해제" : "", s.title, s.venue, s.startTime, s.runtimeMinutes || 60, s.ageRating || "전체관람가", s.director || "", s.capacity, applicationCount(s.id), appliedSeats(s.id), stats ? stats.earlybirdSeats : 0, stats ? stats.generalSeats : 0, attendedApplicationCount(s.id), actualAttendees(s.id), canceledApplicationCount(s.id), canceledSeats(s.id), `${occupancyRate(s)}%`, `${attendanceRate(s.id)}%`, s.status, isOpeningScreening(s) ? "개막작" : "", s.gvHost, s.moderator, s.staff, s.staffPhone, s.notes]);
+    rows.push([s.id, s.category || "기타", screeningScheduleOrder(s, ""), s.bookingGroup || "", s.bookingGroupDisabled ? "해제" : "", s.title, s.venue, s.startTime, s.runtimeMinutes || 60, s.ageRating || "전체관람가", s.director || "", s.capacity, applicationCount(s.id), appliedSeats(s.id), stats ? stats.earlybirdSeats : 0, stats ? stats.generalSeats : 0, attendedApplicationCount(s.id), actualAttendees(s.id), canceledApplicationCount(s.id), canceledSeats(s.id), `${occupancyRate(s)}%`, `${attendanceRate(s.id)}%`, s.status, isOpeningScreening(s) ? "개막작" : "", s.gvHost, s.moderator, s.staff, s.staffPhone, s.notes]);
   });
   return rows;
 }
@@ -5863,6 +5985,7 @@ function buildDriveStats() {
     const phase = isOpeningScreening(s) ? openingPhaseInfo(s) : null;
     return {
       category: s.category || "기타",
+      scheduleOrder: screeningScheduleOrder(s, ""),
       bookingGroup: s.bookingGroup || "",
       bookingGroupDisabled: s.bookingGroupDisabled === true,
       movieTitle: s.title || "",
@@ -5895,6 +6018,7 @@ function buildDriveScreenings() {
     const phase = isOpeningScreening(s) ? openingPhaseInfo(s) : null;
     return {
       category: s.category || "기타",
+      scheduleOrder: screeningScheduleOrder(s, ""),
       bookingGroup: s.bookingGroup || "",
       bookingGroupDisabled: s.bookingGroupDisabled === true,
       movieTitle: s.title || "",
@@ -6844,6 +6968,50 @@ function goAdminTab(tab) {
   else window.location.hash = nextHash;
 }
 
+document.addEventListener("dragstart", (event) => {
+  const card = event.target.closest?.("[data-schedule-drag-id]");
+  if (!card || !isMasterAdminAuthed()) return;
+  draggedScheduleCardId = card.dataset.scheduleDragId || "";
+  card.classList.add("is-dragging");
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", draggedScheduleCardId);
+  }
+});
+
+document.addEventListener("dragover", (event) => {
+  if (!draggedScheduleCardId) return;
+  const grid = event.target.closest?.("[data-schedule-order-grid]");
+  if (!grid) return;
+  const source = state.screenings.find((screening) => screening.id === draggedScheduleCardId);
+  if (!source || grid.dataset.scheduleOrderGrid !== scheduleDayKey(source)) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  document.querySelectorAll(".schedule-order-card.is-drop-target").forEach((card) => card.classList.remove("is-drop-target"));
+  event.target.closest?.("[data-schedule-drag-id]")?.classList.add("is-drop-target");
+  grid.classList.add("is-drag-over");
+});
+
+document.addEventListener("drop", (event) => {
+  if (!draggedScheduleCardId) return;
+  const grid = event.target.closest?.("[data-schedule-order-grid]");
+  if (!grid) return;
+  event.preventDefault();
+  const targetCard = event.target.closest?.("[data-schedule-drag-id]");
+  const targetId = targetCard?.dataset.scheduleDragId || "";
+  const rect = targetCard?.getBoundingClientRect();
+  const placeAfter = Boolean(rect && (event.clientY > rect.top + (rect.height / 2)));
+  const sourceId = draggedScheduleCardId;
+  draggedScheduleCardId = "";
+  if (sourceId !== targetId) reorderScheduleCard(sourceId, targetId, placeAfter);
+});
+
+document.addEventListener("dragend", () => {
+  draggedScheduleCardId = "";
+  document.querySelectorAll(".schedule-order-card.is-dragging, .schedule-order-card.is-drop-target").forEach((card) => card.classList.remove("is-dragging", "is-drop-target"));
+  document.querySelectorAll(".schedule-order-grid.is-drag-over").forEach((grid) => grid.classList.remove("is-drag-over"));
+});
+
 document.addEventListener("click", (event) => {
   const row = event.target.closest("[data-reservation-row]");
   if (row && !event.target.closest("button, input, select, textarea, a, label")) {
@@ -6942,6 +7110,8 @@ document.addEventListener("click", (event) => {
   if (action === "edit-screening") { selectedScreeningId = id; window.location.hash = "#/screenings"; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
   if (action === "cancel-edit") { selectedScreeningId = null; render(); }
   if (action === "delete-screening") deleteScreening(id);
+  if (action === "move-schedule-card") moveScheduleCardByStep(id, Number(button.dataset.direction || 0));
+  if (action === "reset-schedule-order") resetScheduleOrder();
   if (action === "save-master-staff-pin") saveMasterStaffPin();
   if (action === "clear-master-staff-present") clearMasterStaffPresent();
   if (action === "save-staff-pin") saveStaffPin(id);
