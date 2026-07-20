@@ -5511,3 +5511,259 @@ tbody tr:hover td { background: rgba(31, 102, 80, .055); }
   .schedule-title-action-row .schedule-full-view-btn { width: auto; }
   .festival-timeline { grid-template-columns: 54px repeat(var(--timeline-days), minmax(150px, 1fr)); }
 }
+
+/* v168 최고관리자 시간표 드래그 편집 + 전체시간표 가독성 개선 */
+.schedule-order-editor {
+  border: 2px solid #2d6557;
+  background: linear-gradient(150deg, #fffdf8, #eef7f3);
+}
+
+.schedule-order-editor-heading { align-items: flex-start; }
+.schedule-order-editor-heading h2 { margin: 3px 0 5px; font-size: 26px; }
+.schedule-order-editor-heading p { max-width: 760px; margin: 0; font-size: 14px; line-height: 1.6; }
+
+.schedule-order-days { display: grid; gap: 13px; }
+.schedule-order-day { overflow: hidden; border: 1px solid #d8c9b8; border-radius: 15px; background: #fffaf2; }
+.schedule-order-day-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-bottom: 1px solid #dccfc0;
+  background: rgba(255, 255, 255, .58);
+}
+.schedule-order-day-title h3 { margin: 0; color: #543f2d; font-size: 20px; }
+.schedule-order-day-title h3 span { font-size: 15px; }
+.schedule-order-day-title strong { color: #2d6557; font-size: 13px; }
+
+.schedule-order-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 92px;
+  padding: 9px;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.schedule-order-grid.is-drag-over { background: rgba(255, 224, 120, .2); box-shadow: inset 0 0 0 3px rgba(207, 139, 20, .28); }
+
+.schedule-order-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  min-width: 0;
+  padding: 9px 10px 8px;
+  border: 2px solid var(--category-border, #bfd8cf);
+  border-left: 6px solid var(--category-accent, #2d6557);
+  border-radius: 11px;
+  background: linear-gradient(145deg, var(--category-grad-a, #f4faf7), var(--category-grad-b, #e4f1eb));
+  box-shadow: 0 3px 8px rgba(61, 48, 35, .1);
+  cursor: grab;
+  user-select: none;
+}
+.schedule-order-card:active { cursor: grabbing; }
+.schedule-order-card.is-dragging { opacity: .38; transform: scale(.97); }
+.schedule-order-card.is-drop-target { outline: 4px solid #efb52e; outline-offset: 2px; }
+.schedule-order-card-index {
+  grid-row: 2 / span 3;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 8px;
+  background: #211c18;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 950;
+}
+.schedule-drag-handle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--category-accent, #2d6557);
+  font-size: 18px;
+  font-weight: 950;
+  letter-spacing: 1px;
+}
+.schedule-drag-handle span { font-size: 11px; letter-spacing: 0; }
+.schedule-order-card > strong { min-width: 0; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
+.schedule-order-card > span { color: #3d352d; font-size: 12px; font-weight: 850; }
+.schedule-order-card > small { color: #6c5f52; font-size: 10px; font-weight: 750; }
+.schedule-order-card-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 5px; }
+.schedule-order-card-actions button {
+  min-height: 30px;
+  border: 1px solid #cdbdab;
+  border-radius: 7px;
+  background: #fffdf9;
+  color: #302821;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.schedule-order-card-actions button:disabled { opacity: .35; cursor: default; }
+
+.timeline-day-heading strong { font-size: 19px; letter-spacing: -.35px; }
+.timeline-day-heading span { font-size: 14px; font-weight: 900; }
+.timeline-day-heading small { font-size: 9px; }
+.timeline-time-axis span { font-size: 11px; font-weight: 900; }
+.timeline-movie {
+  gap: 3px;
+  padding: 6px 7px 5px;
+  border-width: 2px;
+  border-left-width: 5px;
+  box-shadow: 0 4px 11px rgba(57, 48, 39, .14);
+}
+.timeline-movie strong { font-size: 16px; font-weight: 950; line-height: 1.16; letter-spacing: -.25px; }
+.timeline-movie span { font-size: 11.5px; font-weight: 950; line-height: 1.2; }
+.timeline-movie small { color: #574d44; font-size: 10px; font-weight: 800; line-height: 1.2; }
+.timeline-movie.is-narrow { padding-right: 4px; padding-left: 5px; }
+.timeline-movie.is-narrow strong { font-size: 13px; }
+.timeline-movie.is-narrow span { font-size: 9.5px; }
+.timeline-movie.is-narrow small { font-size: 8.5px; }
+
+@media (max-width: 900px) {
+  .schedule-order-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .schedule-order-grid { grid-template-columns: 1fr; }
+  .schedule-order-editor-heading .btn { width: 100%; }
+}
+
+/* v169 달력형 텍스트 중심 전체 상영시간표 */
+.festival-text-schedule {
+  display: grid;
+  grid-template-columns: repeat(var(--schedule-days), minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #bbb5ad;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.festival-text-day {
+  min-width: 0;
+  border-right: 1px solid #cbc6bf;
+  background-image: none;
+}
+.festival-text-day:last-child { border-right: 0; }
+
+.festival-text-day-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  min-height: 48px;
+  padding: 10px 5px 8px;
+  border-bottom: 2px solid #8c867e;
+  background: rgba(248, 247, 245, .92);
+  color: #161616;
+  text-align: center;
+}
+.festival-text-day-heading strong { font-size: 19px; line-height: 1; }
+.festival-text-day-heading span { font-size: 14px; font-weight: 950; }
+.festival-text-day-heading small {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #eceae6;
+  color: #655f57;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.festival-text-movie-list { display: flex; flex-direction: column; }
+
+.festival-text-movie {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  min-width: 0;
+  padding: 11px 9px 10px;
+  border: 0;
+  border-bottom: 1px solid #d8d4cd;
+  background: transparent;
+  color: #171717;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.festival-text-movie:last-child { border-bottom: 0; }
+.festival-text-movie:hover { background: rgba(255, 255, 255, .82); box-shadow: inset 4px 0 0 #0878ed; }
+.festival-text-movie:focus-visible { outline: 3px solid #f0aa1c; outline-offset: -3px; }
+.festival-text-movie.is-full { background: rgba(248, 242, 239, .72); }
+
+.festival-text-movie-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  min-width: 0;
+}
+.festival-text-movie-topline b {
+  color: #006ee6;
+  font-size: 17px;
+  font-weight: 950;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.festival-text-movie-topline em {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: #248360;
+  color: #fff;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 900;
+}
+.festival-text-movie-topline em.warn { background: #d17a10; }
+.festival-text-movie-topline em.danger { background: #bd4335; }
+
+.festival-text-movie > strong {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1.25;
+  letter-spacing: -.2px;
+  overflow-wrap: anywhere;
+}
+.festival-text-venue {
+  color: #3d3a36;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.festival-text-meta { display: flex; flex-wrap: wrap; gap: 3px; }
+.festival-text-meta i {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #e8edf3;
+  color: #3d4854;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.35;
+}
+.festival-text-movie > small {
+  color: #8e5a0e;
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1.3;
+}
+
+@media (max-width: 900px) {
+  .festival-text-schedule { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .festival-text-day { border-bottom: 1px solid #bbb5ad; }
+}
+
+@media (max-width: 560px) {
+  .festival-text-schedule { grid-template-columns: 1fr; }
+  .festival-text-day { border-right: 0; }
+  .festival-text-movie { padding: 12px 11px; }
+  .festival-text-movie > strong { font-size: 16px; }
+}
