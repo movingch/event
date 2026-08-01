@@ -5913,3 +5913,78 @@ tbody tr:hover td { background: rgba(31, 102, 80, .055); }
   .schedule-arrange-card .screening-top { padding-top: 39px; }
   .schedule-empty-slot { min-height: 145px; }
 }
+
+/* v172 공개 로그인 비밀번호 안내 제거 + 신청자 명단 큰 글씨·최소 열 여백 */
+.reservation-table {
+  min-width: 900px !important;
+  table-layout: fixed !important;
+}
+.reservation-table th,
+.reservation-table td {
+  padding: 5px 3px !important;
+  font-size: 15px !important;
+  line-height: 1.28 !important;
+  vertical-align: middle !important;
+}
+.reservation-table th {
+  font-size: 14px !important;
+  letter-spacing: -.025em;
+  white-space: nowrap;
+}
+.reservation-table .help,
+.reservation-table .applicant-phone,
+.reservation-table .applicant-email {
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+}
+.reservation-table .participant-history-badge {
+  margin-top: 3px;
+  padding: 2px 4px;
+  font-size: 11px;
+}
+.reservation-table .badge,
+.reservation-table .status-index {
+  padding: 3px 4px !important;
+  font-size: 10px !important;
+}
+.reservation-table .reservation-manage-compact {
+  gap: 2px !important;
+}
+.reservation-table .reservation-manage-compact .btn,
+.reservation-table .btn-small {
+  min-height: 29px !important;
+  padding: 4px 2px !important;
+  font-size: 11px !important;
+}
+
+@media (max-width: 760px) {
+  .reservation-table-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .reservation-table {
+    min-width: 650px !important;
+  }
+  .reservation-table th,
+  .reservation-table td {
+    padding: 4px 2px !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+  }
+  .reservation-table th { font-size: 12px !important; }
+  .reservation-table .help,
+  .reservation-table .applicant-phone,
+  .reservation-table .applicant-email {
+    font-size: 10.5px !important;
+    line-height: 1.12 !important;
+  }
+  .reservation-table .participant-history-badge {
+    padding: 2px 3px;
+    font-size: 9.5px;
+  }
+  .reservation-table .reservation-manage-compact .btn,
+  .reservation-table .btn-small {
+    min-height: 27px !important;
+    font-size: 10px !important;
+  }
+}
