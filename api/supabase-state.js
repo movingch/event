@@ -82,6 +82,20 @@ function preserveConcurrentSurveyData(remoteState, incomingState, reason) {
   const destructiveReasons = ['clear-survey-responses', 'clear-survey-dispatches', 'delete-survey-response', 'delete-survey-dispatch', 'manual-force-migration'];
   if (destructiveReasons.some((prefix) => String(reason || '').startsWith(prefix))) return incomingState;
   const next = { ...incomingState };
+  // 관객 본인 취소와 대기자 자동확정은 서버에서 원자적으로 처리됩니다.
+  // 이후 오래 열린 브라우저가 예전 전체 state를 저장하더라도 최신 취소/승급 상태가 되돌아가지 않게 보호합니다.
+  const remoteReservations = Array.isArray(remoteState?.reservations) ? remoteState.reservations : [];
+  const incomingReservations = Array.isArray(incomingState?.reservations) ? incomingState.reservations : [];
+  const remoteById = new Map(remoteReservations.map((item) => [String(item?.id || ''), item]));
+  next.reservations = incomingReservations.map((incoming) => {
+    const remote = remoteById.get(String(incoming?.id || ''));
+    if (!remote) return incoming;
+    if (remote.status === '취소' && incoming.status !== '취소') return remote;
+    const remotePromotionAt = Date.parse(remote.waitlistPromotedAt || remote.updatedAt || '') || 0;
+    const incomingUpdateAt = Date.parse(incoming.updatedAt || '') || 0;
+    if (remote.waitlistPromotedAt && remote.status === '확정' && incoming.status === '대기' && remotePromotionAt >= incomingUpdateAt) return remote;
+    return incoming;
+  });
   next.surveyResponses = mergeSurveyRecords(remoteState?.surveyResponses, incomingState?.surveyResponses);
   next.surveyDispatches = mergeSurveyRecords(remoteState?.surveyDispatches, incomingState?.surveyDispatches).map((dispatch) => {
     const remote = (Array.isArray(remoteState?.surveyDispatches) ? remoteState.surveyDispatches : []).find((item) => recordKey(item) === recordKey(dispatch));

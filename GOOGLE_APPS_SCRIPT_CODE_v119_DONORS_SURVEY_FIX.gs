@@ -101,6 +101,10 @@ function exportApplicants_(ss) {
     return {
       createdAt: r['신청일시'] || '',
       reservationNumber: r['예약번호'] || '',
+      reservationStatus: r['예약상태'] || '확정',
+      canceledAt: r['취소일시'] || '',
+      canceledBy: r['취소주체'] || '',
+      cancelReason: r['취소사유'] || '',
       attendanceStatus: normalizeAttendance_(r['참석여부'] || '신청'),
       name: r['신청자'] || '',
       phone: r['연락처'] || '',
@@ -428,7 +432,7 @@ function normalizeCsv_(csv) {
 function writeApplicantsSheet(ss, applicants, now) {
   const sheet = resetSheet_(ss, '신청자현황');
   const headers = [
-    'No', '신청일시', '예약번호', '참석여부', '신청자', '연락처', '영화명', '상영일', '상영시간', '상영관',
+    'No', '신청일시', '예약번호', '예약상태', '취소일시', '취소주체', '취소사유', '참석여부', '신청자', '연락처', '영화명', '상영일', '상영시간', '상영관',
     '신청인원', '참석인원', '후원자명/입금자명', '문자수신', '개인정보·초상권동의', '동의시각', '동의서버전', '문자상태', '문자발송일', '메모', '저장시각'
   ];
 
@@ -437,6 +441,10 @@ function writeApplicantsSheet(ss, applicants, now) {
       index + 1,
       valueOf(r, ['createdAt', '신청일', '신청일시']),
       valueOf(r, ['reservationNumber', '예약번호', 'reservationCode', 'reservationNo', 'code']),
+      valueOf(r, ['reservationStatus', '예약상태', 'status']) || '확정',
+      valueOf(r, ['canceledAt', '취소일시']),
+      valueOf(r, ['canceledBy', '취소주체']),
+      valueOf(r, ['cancelReason', '취소사유']),
       normalizeAttendance_(valueOf(r, ['attendanceStatus', '참석여부', 'status', '상태'])),
       valueOf(r, ['name', '신청자', 'applicantName']),
       valueOf(r, ['phone', '연락처', 'tel']),
@@ -458,25 +466,30 @@ function writeApplicantsSheet(ss, applicants, now) {
     ];
   });
 
-  const attended = rows.filter(function (row) { return String(row[3]).indexOf('참석') >= 0 && String(row[3]).indexOf('미참석') < 0; }).length;
-  const canceled = rows.filter(function (row) { return String(row[3]).indexOf('미참석') >= 0; }).length;
+  const attended = rows.filter(function (row) { return String(row[7]).indexOf('참석') >= 0 && String(row[7]).indexOf('미참석') < 0; }).length;
+  const unattended = rows.filter(function (row) { return String(row[7]).indexOf('미참석') >= 0; }).length;
+  const canceled = rows.filter(function (row) { return String(row[3]) === '취소'; }).length;
   const title = '제9회 머내마을영화제 신청자현황';
-  const summary = '기준시각: ' + formatDateTime(now) + '    총 신청자: ' + rows.length + '명    참석: ' + attended + '명    미참석: ' + canceled + '명';
+  const summary = '기준시각: ' + formatDateTime(now) + '    전체 기록: ' + rows.length + '건    참석: ' + attended + '건    미참석: ' + unattended + '건    취소: ' + canceled + '건';
   writeDesignedTable_(sheet, title, summary, headers, rows, 4);
-  setDropdown_(sheet, 4, 4, ['신청', '참석', '미참석']);
-  setDropdown_(sheet, 4, 18, ['미발송', '발송완료', '실패', '대기']);
+  setDropdown_(sheet, 4, 4, ['확정', '대기', '취소']);
+  setDropdown_(sheet, 4, 8, ['신청', '참석', '미참석']);
+  setDropdown_(sheet, 4, 22, ['미발송', '발송완료', '실패', '대기']);
   paintStatusColumn_(sheet, 5, 4, rows.length);
-  paintStatusColumn_(sheet, 5, 18, rows.length);
-  sheet.getRange('F:F').setNumberFormat('@');
+  paintStatusColumn_(sheet, 5, 8, rows.length);
+  paintStatusColumn_(sheet, 5, 22, rows.length);
+  sheet.getRange('J:J').setNumberFormat('@');
   sheet.getRange('B:B').setNumberFormat('yyyy-mm-dd hh:mm');
-  sheet.getRange('H:H').setNumberFormat('yyyy-mm-dd');
-  capWidths_(sheet, {5: 90, 6: 120, 7: 180, 10: 150, 13: 160, 17: 260});
+  sheet.getRange('E:E').setNumberFormat('yyyy-mm-dd hh:mm');
+  sheet.getRange('L:L').setNumberFormat('yyyy-mm-dd');
+  capWidths_(sheet, {7: 180, 9: 90, 10: 120, 11: 180, 14: 150, 17: 160, 21: 260});
 }
 
 function writePrintableApplicantsSheet(ss, applicants, now) {
   const sheet = resetSheet_(ss, '신청자현황_출력용');
   const headers = ['No', '예약번호', '신청자', '연락처 뒷자리', '영화명', '상영일', '상영시간', '상영관', '인원', '참석체크', '메모'];
-  const rows = applicants.map(function (r, index) {
+  const activeApplicants = applicants.filter(function (r) { return String(valueOf(r, ['reservationStatus', '예약상태', 'status'])) !== '취소'; });
+  const rows = activeApplicants.map(function (r, index) {
     const phone = String(valueOf(r, ['phone', '연락처', 'tel']) || '').replace(/\D/g, '');
     const count = valueOf(r, ['count', '신청인원', 'people', 'quantity', '인원']);
     const attendedCount = valueOf(r, ['attendedCount', '참석인원', 'actualCount', '실제참석인원']);
@@ -502,7 +515,7 @@ function writePrintableApplicantsSheet(ss, applicants, now) {
 function writeStatsSheet(ss, stats, now) {
   const sheet = resetSheet_(ss, '통계');
   const headers = [
-    'No', '영화명', '상영관', '상영시간', '정원', '신청건수', '신청인원', '참석인원', '미참석인원', '잔여인원', '신청률', '참석률', '정원상태', '저장시각'
+    'No', '영화명', '상영관', '상영시간', '정원', '신청건수', '신청인원', '참석인원', '미참석인원', '취소인원', '잔여인원', '신청률', '참석률', '정원상태', '저장시각'
   ];
   const rows = stats.map(function (r, index) {
     return [
@@ -514,7 +527,8 @@ function writeStatsSheet(ss, stats, now) {
       numberOrText_(valueOf(r, ['applicationCount', '신청건수', '신청'])),
       numberOrText_(valueOf(r, ['applicantCount', '신청인원', 'applied', 'applicants', 'reserved'])),
       numberOrText_(valueOf(r, ['attendedCount', '참석인원', 'attended', 'attendance', '참석'])),
-      numberOrText_(valueOf(r, ['unattendedSeats', 'canceledSeats', '미참석인원', '취소인원', '취소'])),
+      numberOrText_(valueOf(r, ['unattendedSeats', '미참석인원'])),
+      numberOrText_(valueOf(r, ['canceledSeats', '취소인원', '취소'])),
       numberOrText_(valueOf(r, ['remainingCount', 'remainingSeats', '잔여인원'])),
       valueOf(r, ['applicationRate', '신청률', 'applyRate']),
       valueOf(r, ['attendanceRate', '참석률']),
@@ -526,8 +540,9 @@ function writeStatsSheet(ss, stats, now) {
   const totalCapacity = sumColumn_(rows, 4);
   const totalApplied = sumColumn_(rows, 6);
   const totalAttended = sumColumn_(rows, 7);
-  const totalCanceled = sumColumn_(rows, 8);
-  const totalRemaining = sumColumn_(rows, 9);
+  const totalUnattended = sumColumn_(rows, 8);
+  const totalCanceled = sumColumn_(rows, 9);
+  const totalRemaining = sumColumn_(rows, 10);
   const attendanceRate = totalApplied ? Math.round((totalAttended / totalApplied) * 1000) / 10 + '%' : '0%';
 
   sheet.clear();
@@ -537,7 +552,7 @@ function writeStatsSheet(ss, stats, now) {
   sheet.getRange(2, 1, 1, headers.length).merge().setValue('기준시각: ' + formatDateTime(now) + '    총 회차: ' + rows.length + '개')
     .setBackground(BRAND.grayBg).setFontColor(BRAND.navy).setFontWeight('bold');
   const cards = [
-    ['총 정원', totalCapacity], ['신청인원', totalApplied], ['참석인원', totalAttended], ['미참석인원', totalCanceled], ['잔여인원', totalRemaining], ['참석률', attendanceRate]
+    ['총 정원', totalCapacity], ['신청인원', totalApplied], ['참석인원', totalAttended], ['미참석인원', totalUnattended], ['취소인원', totalCanceled], ['잔여인원', totalRemaining], ['참석률', attendanceRate]
   ];
   for (var i = 0; i < cards.length; i++) {
     var col = i * 2 + 1;
@@ -551,10 +566,10 @@ function writeStatsSheet(ss, stats, now) {
   addFilter_(sheet, headerRow, headers.length, Math.max(rows.length, 1));
   sheet.setFrozenRows(headerRow);
   styleTableBody_(sheet, headerRow + 1, headers.length, rows.length);
-  paintRateColumns_(sheet, headerRow + 1, 11, rows.length);
   paintRateColumns_(sheet, headerRow + 1, 12, rows.length);
-  paintRemainingColumn_(sheet, headerRow + 1, 10, rows.length);
-  capWidths_(sheet, {2: 220, 3: 150, 13: 110});
+  paintRateColumns_(sheet, headerRow + 1, 13, rows.length);
+  paintRemainingColumn_(sheet, headerRow + 1, 11, rows.length);
+  capWidths_(sheet, {2: 220, 3: 150, 14: 110});
 }
 
 function writeScreeningsSheet(ss, screenings, now) {

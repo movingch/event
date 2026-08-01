@@ -15,6 +15,7 @@ const STAFF_PIN_MIGRATION_KEY = "munaeFilmFest9.staffPin0909.v14";
 const ADMIN_PIN = "0909";
 const SMS_API_ENDPOINT = "/api/send-sms";
 const SUPABASE_STATE_API_ENDPOINT = "/api/supabase-state";
+const RESERVATION_MANAGE_API_ENDPOINT = "/api/reservation-manage";
 const AUTO_SEND_SMS_ON_CONFIRMED_RESERVATION = true;
 const PRIVACY_CONSENT_VERSION = "2026-07-19-v1";
 const PRIVACY_CONSENT_TITLE = "개인정보 수집·이용 및 초상권 사용에 대한 동의서";
@@ -348,6 +349,13 @@ let reservationSmsSelectMode = false;
 let selectedReservationSmsIds = new Set();
 let selectedReservationActionId = null;
 let reservationSmsHistoryOpen = false;
+const RESERVATION_MANAGE_SESSION_KEY = "munaeFilmFest9.reservationManageSession";
+let reservationManageChallenge = "";
+let reservationManagePhone = "";
+let reservationManageSession = sessionStorage.getItem(RESERVATION_MANAGE_SESSION_KEY) || "";
+let reservationManageItems = [];
+let reservationManageLoading = false;
+let reservationManageMessage = "";
 
 function cloneData(value) {
   return JSON.parse(JSON.stringify(value));
@@ -478,8 +486,8 @@ function normalizeReservation(reservation = {}) {
   const rawAttendanceStatus = String(base.attendanceStatus || "").trim();
   const normalizedAttendanceStatus = attended
     ? "참석"
-    : (rawAttendanceStatus === "미참석" || rawAttendanceStatus === "취소" || base.status === "취소" ? "미참석" : "신청");
-  const normalizedStatus = base.status === "취소" ? "확정" : (base.status || "확정");
+    : (rawAttendanceStatus === "미참석" ? "미참석" : "신청");
+  const normalizedStatus = ["확정", "대기", "취소"].includes(String(base.status || "")) ? String(base.status) : "확정";
   return {
     ...base,
     reservationNumber: base.reservationNumber || "",
@@ -489,6 +497,9 @@ function normalizeReservation(reservation = {}) {
     attendedSeats,
     attendanceStatus: normalizedAttendanceStatus,
     attendedAt: attended ? (base.attendedAt || base.updatedAt || base.createdAt || new Date().toISOString()) : "",
+    canceledAt: base.canceledAt || "",
+    canceledBy: base.canceledBy || "",
+    cancelReason: base.cancelReason || "",
     ticketType,
     seatType,
     seatAssignment: "",
@@ -536,12 +547,16 @@ function normalizeGeneralAdmins(data = {}) {
 function reservationAttendanceState(reservation = {}) {
   const status = String(reservation.attendanceStatus || "").trim();
   if (reservation.attended === true || status === "참석") return "참석";
-  if (status === "미참석" || status === "취소" || reservation.status === "취소") return "미참석";
+  if (status === "미참석") return "미참석";
   return "신청";
 }
 
 function isUnattendedReservation(reservation = {}) {
-  return reservationAttendanceState(reservation) === "미참석";
+  return reservation.status !== "취소" && reservationAttendanceState(reservation) === "미참석";
+}
+
+function isCanceledReservation(reservation = {}) {
+  return String(reservation.status || "") === "취소";
 }
 
 
@@ -854,6 +869,13 @@ function normalizePhoneForSms(phone) {
   return digits;
 }
 
+function formatPhone(phone) {
+  const digits = normalizePhoneForSms(phone);
+  if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return String(phone || "");
+}
+
 function formatDateOnly(value) {
   if (!value) return "미정";
   const date = new Date(value);
@@ -936,7 +958,7 @@ function reservationMatchesPerson(reservation, name, phone) {
 }
 
 function reservationsForPerson(name, phone) {
-  return state.reservations.filter((reservation) => reservationMatchesPerson(reservation, name, phone));
+  return state.reservations.filter((reservation) => !isCanceledReservation(reservation) && reservationMatchesPerson(reservation, name, phone));
 }
 
 function screeningTimesConflict(first, second) {
@@ -1168,12 +1190,20 @@ function canceledApplicationCount(screeningId = "") {
   return getReservations(screeningId).filter(isUnattendedReservation).length;
 }
 
+function canceledReservationSeats(screeningId = "") {
+  return getReservations(screeningId).filter(isCanceledReservation).reduce((sum, r) => sum + Number(r.seats || 0), 0);
+}
+
+function canceledReservationCount(screeningId = "") {
+  return getReservations(screeningId).filter(isCanceledReservation).length;
+}
+
 function appliedSeats(screeningId) {
-  return getReservations(screeningId).reduce((sum, r) => sum + Number(r.seats || 0), 0);
+  return getReservations(screeningId).filter((reservation) => !isCanceledReservation(reservation)).reduce((sum, r) => sum + Number(r.seats || 0), 0);
 }
 
 function applicationCount(screeningId, status = "") {
-  return getReservations(screeningId).filter((reservation) => !status || reservation.status === status).length;
+  return getReservations(screeningId).filter((reservation) => status ? reservation.status === status : !isCanceledReservation(reservation)).length;
 }
 
 function attendedApplicationCount(screeningId = "") {
@@ -1522,7 +1552,7 @@ function assignDesignatedSeats(screening, count) {
 }
 
 function openingStats(screening = getOpeningScreening()) {
-  const reservations = getReservations(screening.id);
+  const reservations = getReservations(screening.id).filter((reservation) => !isCanceledReservation(reservation));
   const earlybird = reservations.filter((r) => r.ticketType === "사전신청");
   const general = reservations.filter((r) => r.ticketType !== "사전신청");
   const earlybirdConfirmed = earlybird.filter((r) => r.status === "확정");
@@ -1656,6 +1686,7 @@ function appHeader() {
       <nav class="nav" aria-label="주요 메뉴">
         <a href="https://www.meonaeff.com/" target="_blank" rel="noopener noreferrer" class="festival-home-link">머내마을영화제 홈페이지</a>
         <a href="/?v=141&fresh=1#/apply">영화 신청</a>
+        <a href="/?v=141&fresh=1#/manage">내 예약 확인·취소</a>
         <a href="/?v=141&fresh=1#/donate">후원하기</a>
         <a href="/?v=141&fresh=1#/staff" class="staff-link utility-link">STAFF</a>
         <a href="${esc(adminHref)}" class="primary-link admin-link utility-link">ADMIN</a>
@@ -1705,6 +1736,7 @@ function render() {
   else if (route === "opening") view = renderOpeningTicketing();
   else if (route === "apply") view = renderApply();
   else if (route === "schedule") view = renderFullSchedule();
+  else if (route === "manage") view = renderReservationManagePage();
   else if (route === "donate" && sub === "transfer") view = renderDonationTransferPage();
   else if (route === "donate") view = renderDonationPage();
   else if (route === "staff") view = renderStaff(sub || "");
@@ -1958,6 +1990,157 @@ function renderOpeningTicketing() {
       </div>
     </section>
   `;
+}
+
+function reservationManageStatusBadge(item = {}) {
+  if (item.status === "취소") return `<span class="badge danger">취소완료</span>`;
+  if (item.status === "대기") return `<span class="badge warn">대기</span>`;
+  return `<span class="badge ok">예약확정</span>`;
+}
+
+function renderReservationManagePage() {
+  let content = "";
+  if (!reservationManageSession && !reservationManageChallenge) {
+    content = `<form class="reservation-manage-form" id="reservationLookupForm">
+      <label class="field full"><span>예약할 때 입력한 휴대폰 번호</span><input class="input reservation-manage-phone" type="tel" name="phone" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000" required /></label>
+      <button class="btn btn-dark reservation-manage-primary" type="submit" ${reservationManageLoading ? "disabled" : ""}>${reservationManageLoading ? "확인 중…" : "인증번호 받기"}</button>
+    </form>`;
+  } else if (!reservationManageSession) {
+    content = `<form class="reservation-manage-form" id="reservationVerifyForm">
+      <p class="reservation-manage-sent"><strong>${esc(formatPhone(reservationManagePhone))}</strong>로 보낸 6자리 인증번호를 입력해 주세요.</p>
+      <label class="field full"><span>문자 인증번호</span><input class="input reservation-manage-code" type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required /></label>
+      <div class="reservation-manage-actions"><button class="btn btn-dark reservation-manage-primary" type="submit" ${reservationManageLoading ? "disabled" : ""}>${reservationManageLoading ? "확인 중…" : "내 예약 확인"}</button><button class="btn btn-outline" type="button" data-action="reset-reservation-manage">번호 다시 입력</button></div>
+    </form>`;
+  } else {
+    const cards = reservationManageItems.length ? reservationManageItems.map((item) => `<article class="reservation-manage-card ${item.status === "취소" ? "is-canceled" : ""}">
+      <div class="reservation-manage-card-head"><div>${reservationManageStatusBadge(item)} <span class="reservation-manage-number">예약번호 ${esc(item.reservationNumber || "확인 중")}</span></div><strong>${esc(item.seats)}명</strong></div>
+      <h3>${esc(item.movieTitle)}</h3>
+      <dl><div><dt>일시</dt><dd>${esc(formatDateTime(item.startTime))}</dd></div><div><dt>장소</dt><dd>${esc(item.venue || "미정")}</dd></div></dl>
+      ${item.status === "취소" ? `<p class="reservation-canceled-note">${esc(formatDateTime(item.canceledAt))} 취소됨${item.cancelReason ? ` · ${esc(item.cancelReason)}` : ""}</p>` : (item.canCancel ? `<button class="btn btn-danger reservation-cancel-button" type="button" data-action="cancel-own-reservation" data-id="${esc(item.id)}">이 예약 취소하기</button>` : `<p class="reservation-canceled-note">상영 시작 후 또는 참석 처리된 예약은 영화제 본부로 문의해 주세요.</p>`)}
+    </article>`).join("") : `<div class="empty-state"><strong>표시할 예약이 없습니다.</strong><p>예약 정보가 갱신되지 않으면 다시 인증해 주세요.</p></div>`;
+    content = `<div class="reservation-manage-toolbar"><p>본인 인증이 완료되었습니다. 취소할 영화를 정확히 확인해 주세요.</p><button class="btn btn-outline" type="button" data-action="reset-reservation-manage">다른 번호 확인</button></div><div class="reservation-manage-list">${reservationManageLoading ? `<div class="empty-state">예약 정보를 불러오는 중입니다.</div>` : cards}</div>`;
+  }
+  return `<section class="page reservation-manage-page">
+    <div class="reservation-manage-shell">
+      <div class="section-title reservation-manage-title"><div><span class="eyebrow">MY RESERVATION</span><h1>내 예약 확인·취소</h1><p>개인정보 보호를 위해 휴대폰 문자 인증 후 예약을 보여드립니다.</p></div></div>
+      ${reservationManageMessage ? `<div class="reservation-manage-message" role="status">${esc(reservationManageMessage)}</div>` : ""}
+      ${content}
+      <aside class="reservation-manage-help"><strong>취소 안내</strong><p>취소된 예약은 5회 신청 제한과 동시간대 중복 제한에서 제외되며 좌석도 즉시 복원됩니다. 대기자가 있으면 신청 순서대로 자동 확정됩니다.</p><p>상영 시작 후 변경이나 문자 인증 문의는 영화제 본부로 부탁합니다.</p></aside>
+    </div>
+  </section>`;
+}
+
+async function reservationManageRequest(payload) {
+  const response = await fetch(RESERVATION_MANAGE_API_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), cache: "no-store" });
+  let data = null;
+  try { data = await response.json(); } catch (error) {}
+  if (!response.ok || !data?.ok) throw new Error(data?.message || "예약 정보를 처리하지 못했습니다.");
+  return data;
+}
+
+async function submitReservationLookup(form) {
+  if (reservationManageLoading) return;
+  const phone = normalizePhoneForSms(new FormData(form).get("phone"));
+  if (!/^01[0-9]{8,9}$/.test(phone)) return toast("휴대폰 번호를 확인해 주세요.");
+  reservationManageLoading = true;
+  reservationManageMessage = "";
+  render();
+  try {
+    const data = await reservationManageRequest({ action: "request-code", phone });
+    reservationManagePhone = phone;
+    reservationManageChallenge = data.challenge;
+    reservationManageMessage = "인증번호를 문자로 보냈습니다. 5분 안에 입력해 주세요.";
+  } catch (error) {
+    reservationManageMessage = error.message;
+  } finally {
+    reservationManageLoading = false;
+    render();
+  }
+}
+
+async function submitReservationVerification(form) {
+  if (reservationManageLoading) return;
+  const code = String(new FormData(form).get("code") || "").replace(/\D/g, "");
+  if (code.length !== 6) return toast("6자리 인증번호를 입력해 주세요.");
+  reservationManageLoading = true;
+  reservationManageMessage = "";
+  render();
+  try {
+    const data = await reservationManageRequest({ action: "verify-code", challenge: reservationManageChallenge, code });
+    reservationManageSession = data.session;
+    reservationManageItems = data.reservations || [];
+    sessionStorage.setItem(RESERVATION_MANAGE_SESSION_KEY, reservationManageSession);
+    reservationManageChallenge = "";
+    reservationManageMessage = `예약 ${reservationManageItems.length}건을 확인했습니다.`;
+  } catch (error) {
+    reservationManageMessage = error.message;
+  } finally {
+    reservationManageLoading = false;
+    render();
+  }
+}
+
+async function loadManagedReservations() {
+  if (!reservationManageSession || reservationManageLoading) return;
+  reservationManageLoading = true;
+  render();
+  try {
+    const data = await reservationManageRequest({ action: "list", session: reservationManageSession });
+    reservationManageItems = data.reservations || [];
+  } catch (error) {
+    sessionStorage.removeItem(RESERVATION_MANAGE_SESSION_KEY);
+    reservationManageSession = "";
+    reservationManageMessage = error.message;
+  } finally {
+    reservationManageLoading = false;
+    render();
+  }
+}
+
+function resetReservationManage() {
+  reservationManageChallenge = "";
+  reservationManagePhone = "";
+  reservationManageSession = "";
+  reservationManageItems = [];
+  reservationManageMessage = "";
+  sessionStorage.removeItem(RESERVATION_MANAGE_SESSION_KEY);
+  render();
+}
+
+async function cancelOwnReservation(id) {
+  const item = reservationManageItems.find((reservation) => reservation.id === id);
+  if (!item || !item.canCancel) return;
+  if (!confirm(`〈${item.movieTitle}〉 예약을 취소할까요?\n\n취소 후에는 같은 예약을 되돌릴 수 없습니다.`)) return;
+  reservationManageLoading = true;
+  reservationManageMessage = "예약을 취소하고 있습니다.";
+  render();
+  try {
+    const data = await reservationManageRequest({ action: "cancel", session: reservationManageSession, reservationId: id, reason: "관객 본인 취소" });
+    reservationManageItems = data.reservations || [];
+    const canceled = state.reservations.find((reservation) => reservation.id === id);
+    if (canceled) {
+      canceled.status = "취소";
+      canceled.attendanceStatus = "신청";
+      canceled.attended = false;
+      canceled.attendedSeats = 0;
+      canceled.canceledAt = new Date().toISOString();
+      canceled.canceledBy = "관객 본인";
+      canceled.cancelReason = "관객 본인 취소";
+    }
+    (data.promotedIds || []).forEach((promotedId) => {
+      const promoted = state.reservations.find((reservation) => reservation.id === promotedId);
+      if (promoted) promoted.status = "확정";
+    });
+    persist({ autoSync: false });
+    reservationManageMessage = data.smsResults?.some((entry) => entry.type === "cancel" && entry.ok === false)
+      ? "예약은 취소되었습니다. 취소 확인 문자 발송은 실패하여 영화제 본부에서 확인이 필요합니다."
+      : "예약을 취소했습니다. 취소 확인 문자를 보냈습니다.";
+  } catch (error) {
+    reservationManageMessage = error.message;
+  } finally {
+    reservationManageLoading = false;
+    render();
+  }
 }
 
 function renderDonationPage() {
@@ -2466,6 +2649,7 @@ function canManageReservation(reservation) {
 }
 
 function reservationAttendanceIndex(reservation) {
+  if (reservation.status === "취소") return `<span class="badge status-index danger">취소</span>`;
   const stateLabel = reservationAttendanceState(reservation);
   if (stateLabel === "참석") return `<span class="badge status-index ok">참석</span>`;
   if (stateLabel === "미참석") return `<span class="badge status-index warn">미참석</span>`;
@@ -3296,7 +3480,7 @@ function adminScreenings() {
 
 function participantReservationGroups() {
   const groups = [];
-  state.reservations.forEach((reservation) => {
+  state.reservations.filter((reservation) => !isCanceledReservation(reservation)).forEach((reservation) => {
     const nameKey = normalizedPersonName(reservation.name);
     const phoneKey = normalizedPersonPhone(reservation.phone);
     const matches = groups.filter((group) => (nameKey && group.names.has(nameKey)) || (phoneKey && group.phones.has(phoneKey)));
@@ -3454,7 +3638,7 @@ function adminReservations() {
       <section class="filters reservation-filters" aria-label="신청자 필터">
         <input class="input" id="reservationSearch" type="search" placeholder="검색" />
         <select class="select" id="reservationScreeningFilter" aria-label="영화선택" title="영화선택"><option value="">영화선택: 전체</option>${options}</select>
-        <select class="select" id="reservationAttendanceFilter" aria-label="참석여부"><option value="">참석여부: 전체</option><option value="applied">신청</option><option value="attended">참석</option><option value="unattended">미참석</option></select>
+        <select class="select" id="reservationAttendanceFilter" aria-label="참석여부"><option value="">참석여부: 전체</option><option value="applied">신청</option><option value="attended">참석</option><option value="unattended">미참석</option><option value="canceled">예약취소</option></select>
         <select class="select" id="reservationDatePreset" aria-label="날짜"><option value="">전체날짜</option>${dateOptions}</select>
         <input class="input" id="reservationDateFilter" type="date" aria-label="날짜 직접 선택" />
         <button class="btn btn-outline" type="button" data-action="clear-reservation-filter">전체 보기</button>
@@ -3798,7 +3982,7 @@ function groupByMovie() {
   const map = new Map();
   state.screenings.forEach((screening) => {
     const key = screening.title || "제목 미정";
-    const movieReservations = state.reservations.filter((r) => r.screeningId === screening.id);
+    const movieReservations = state.reservations.filter((r) => r.screeningId === screening.id && !isCanceledReservation(r));
     const current = map.get(key) || { name: key, screenings: 0, capacity: 0, confirmed: 0, attended: 0, waitlist: 0 };
     current.screenings += 1;
     current.capacity += Number(screening.capacity || 0);
@@ -3818,7 +4002,7 @@ function groupByVenue() {
   const map = new Map();
   state.screenings.forEach((screening) => {
     const key = screening.venue || "미정";
-    const venueReservations = state.reservations.filter((r) => r.screeningId === screening.id);
+    const venueReservations = state.reservations.filter((r) => r.screeningId === screening.id && !isCanceledReservation(r));
     const current = map.get(key) || { name: key, screenings: 0, capacity: 0, applications: 0, applicants: 0, confirmed: 0, attended: 0, canceledApplications: 0, canceledSeats: 0, waitlist: 0 };
     current.screenings += 1;
     current.capacity += Number(screening.capacity || 0);
@@ -4920,6 +5104,9 @@ function closeModals() {
 }
 
 function hydrateRoute(route, sub) {
+  if (route === "manage" && reservationManageSession && !reservationManageItems.length && !reservationManageLoading) {
+    window.setTimeout(loadManagedReservations, 0);
+  }
   if (route === "apply") {
     updateScreeningList();
     ["searchInput", "venueFilter", "dateFilter", "seatFilter"].forEach((id) => {
@@ -5006,9 +5193,10 @@ function updateReservationTable() {
       const text = `${reservation.id} ${reservation.name} ${reservation.phone} ${reservation.email} ${reservation.note} ${reservation.donorName || ""} ${screening?.title || ""} ${screening?.venue || ""}`.toLowerCase();
       const attendanceState = reservationAttendanceState(reservation);
       const matchAttendance = !attendance
-        || (attendance === "applied" && attendanceState === "신청")
+        || (attendance === "applied" && attendanceState === "신청" && reservation.status !== "취소")
         || (attendance === "attended" && attendanceState === "참석")
-        || (attendance === "unattended" && attendanceState === "미참석");
+        || (attendance === "unattended" && attendanceState === "미참석")
+        || (attendance === "canceled" && reservation.status === "취소");
       const matchDate = !date || String(screening?.startTime || "").slice(0, 10) === date;
       return (!search || text.includes(search)) && (!screeningId || reservation.screeningId === screeningId) && matchAttendance && matchDate;
     });
@@ -5863,16 +6051,23 @@ function setReservationStatus(id, status) {
     reservation.seatAssignment = "";
   }
 
-  reservation.status = status === "취소" ? "확정" : status;
-  if (status === "취소" || status === "미참석") {
+  reservation.status = status;
+  if (status === "취소") {
     reservation.attended = false;
-    reservation.attendanceStatus = "미참석";
+    reservation.attendanceStatus = "신청";
     reservation.attendedSeats = 0;
     reservation.attendedAt = "";
+    reservation.canceledAt = new Date().toISOString();
+    reservation.canceledBy = isMasterAdminAuthed() ? "최고관리자" : (isAdminAuthed() ? "관리자" : "스태프");
+    reservation.cancelReason = reservation.cancelReason || "운영진 취소";
+  } else {
+    reservation.canceledAt = "";
+    reservation.canceledBy = "";
+    reservation.cancelReason = "";
   }
   persist();
   render();
-  toast(`참석여부를 ${reservationAttendanceState(reservation)}(으)로 변경했습니다.`);
+  toast(`예약상태를 ${reservation.status}(으)로 변경했습니다.`);
   if (status === "확정" && previousStatus !== "확정") autoSendReservationSms(reservation, screening, status);
 }
 
@@ -6114,12 +6309,15 @@ function rowsToExcelHtml(title, rows, options = {}) {
 }
 
 function buildReservationRows() {
-  const rows = [["예약번호", "상태", "후원자명/입금자명", "참석여부", "참석처리일", "영화", "상영관", "상영시간", "신청자", "연락처", "이메일", "문자수신동의", "개인정보·초상권동의", "동의시각", "동의서버전", "문자상태", "문자발송일", "문자요청ID", "신청인원", "실제참석인원", "신청일", "메모"]];
+  const rows = [["예약번호", "상태", "취소일시", "취소주체", "취소사유", "후원자명/입금자명", "참석여부", "참석처리일", "영화", "상영관", "상영시간", "신청자", "연락처", "이메일", "문자수신동의", "개인정보·초상권동의", "동의시각", "동의서버전", "문자상태", "문자발송일", "문자요청ID", "신청인원", "실제참석인원", "신청일", "메모"]];
   state.reservations.forEach((reservation) => {
     const screening = state.screenings.find((s) => s.id === reservation.screeningId);
     rows.push([
       reservationDisplayNumber(reservation, screening),
       reservation.status,
+      reservation.canceledAt || "",
+      reservation.canceledBy || "",
+      reservation.cancelReason || "",
       reservation.donorName || "",
       reservation.attended === true ? "참석" : (reservation.attendanceStatus || "신청"),
       reservation.attendedAt || "",
@@ -6278,6 +6476,10 @@ function buildDriveApplicants() {
       screeningDate: formatDatePart(screening?.startTime || ""),
       screeningTime: formatTimePart(screening?.startTime || ""),
       reservationNumber: reservationDisplayNumber(reservation, screening),
+      reservationStatus: reservation.status || "확정",
+      canceledAt: reservation.canceledAt || "",
+      canceledBy: reservation.canceledBy || "",
+      cancelReason: reservation.cancelReason || "",
       name: reservation.name || "",
       phone: reservation.phone || "",
       email: reservation.email || "",
@@ -6320,8 +6522,8 @@ function buildDriveStats() {
       attendedCount: actualAttendees(s.id),
       unattendedCount: canceledApplicationCount(s.id),
       unattendedSeats: canceledSeats(s.id),
-      canceledCount: canceledApplicationCount(s.id),
-      canceledSeats: canceledSeats(s.id),
+      canceledCount: canceledReservationCount(s.id),
+      canceledSeats: canceledReservationSeats(s.id),
       remainingCount: remainingSeats(s),
       applicationRate: `${occupancyRate(s)}%`,
       attendanceRate: `${attendanceRate(s.id)}%`,
@@ -6355,8 +6557,8 @@ function buildDriveScreenings() {
       attendedCount: actualAttendees(s.id),
       unattendedCount: canceledApplicationCount(s.id),
       unattendedSeats: canceledSeats(s.id),
-      canceledCount: canceledApplicationCount(s.id),
-      canceledSeats: canceledSeats(s.id),
+      canceledCount: canceledReservationCount(s.id),
+      canceledSeats: canceledReservationSeats(s.id),
       applicationRate: `${occupancyRate(s)}%`,
       attendanceRate: `${attendanceRate(s.id)}%`,
       status: s.status || "",
@@ -7368,6 +7570,8 @@ document.addEventListener("click", (event) => {
     return;
   }
   if (action === "donate") handleDonate();
+  if (action === "reset-reservation-manage") resetReservationManage();
+  if (action === "cancel-own-reservation") cancelOwnReservation(id);
   if (action === "copy-donation-account") {
     copyTextToClipboard(DONATION_ACCOUNT_NUMBER);
     toast("계좌번호를 복사했습니다.");
@@ -7496,6 +7700,8 @@ document.addEventListener("submit", (event) => {
   event.preventDefault();
   const form = event.target;
   if (form.id === "bookingForm") submitBooking(form);
+  if (form.id === "reservationLookupForm") submitReservationLookup(form);
+  if (form.id === "reservationVerifyForm") submitReservationVerification(form);
   if (form.id === "donationForm") submitDonation(form);
   if (form.id === "adminLoginForm") submitAdminLogin(form);
   if (form.id === "adminPinChangeForm") submitAdminPinChange(form);

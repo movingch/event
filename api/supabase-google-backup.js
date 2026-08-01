@@ -42,12 +42,15 @@ function datePart(v) { return String(v || '').slice(0, 10); }
 function timePart(v) { const s = String(v || ''); return s.includes('T') ? s.slice(11, 16) : s.slice(0, 5); }
 function screeningById(state, id) { return arr(state.screenings).find((s) => String(s.id) === String(id)) || null; }
 function reservationsFor(state, screeningId) { return arr(state.reservations).filter((r) => String(r.screeningId) === String(screeningId)); }
-function isCanceled(r) { return r.attended === false || r.attendanceStatus === '미참석' || r.status === '취소' || r.status === '미참석'; }
+function isCanceled(r) { return r.status === '취소'; }
+function isUnattended(r) { return !isCanceled(r) && r.attended !== true && r.attendanceStatus === '미참석'; }
 function appliedSeats(state, id) { return reservationsFor(state, id).filter((r) => !isCanceled(r)).reduce((sum, r) => sum + num(r.seats || r.count), 0); }
 function applicationCount(state, id) { return reservationsFor(state, id).filter((r) => !isCanceled(r)).length; }
 function attendedSeats(state, id) { return reservationsFor(state, id).filter((r) => r.attended === true || r.attendanceStatus === '참석').reduce((sum, r) => sum + num(r.attendedSeats || r.seats || r.count), 0); }
 function canceledCount(state, id) { return reservationsFor(state, id).filter(isCanceled).length; }
 function canceledSeats(state, id) { return reservationsFor(state, id).filter(isCanceled).reduce((sum, r) => sum + num(r.seats || r.count), 0); }
+function unattendedCount(state, id) { return reservationsFor(state, id).filter(isUnattended).length; }
+function unattendedSeats(state, id) { return reservationsFor(state, id).filter(isUnattended).reduce((sum, r) => sum + num(r.seats || r.count), 0); }
 function rate(a, b) { return b ? `${Math.round((a / b) * 100)}%` : '0%'; }
 function reservationNumber(state, r, s) {
   if (r.reservationNumber) return r.reservationNumber;
@@ -59,7 +62,7 @@ function reservationNumber(state, r, s) {
 }
 function attendanceState(r) {
   if (r.attended === true || r.attendanceStatus === '참석') return '참석';
-  if (isCanceled(r)) return '미참석';
+  if (isUnattended(r)) return '미참석';
   return '신청';
 }
 function buildApplicants(state) {
@@ -71,6 +74,10 @@ function buildApplicants(state) {
       screeningDate: datePart(s?.startTime || r.screeningTime || r.createdAt),
       screeningTime: timePart(s?.startTime || r.screeningTime),
       reservationNumber: reservationNumber(state, r, s),
+      reservationStatus: r.status || '확정',
+      canceledAt: r.canceledAt || '',
+      canceledBy: r.canceledBy || '',
+      cancelReason: r.cancelReason || '',
       name: r.name || '',
       phone: r.phone || '',
       email: r.email || '',
@@ -98,7 +105,7 @@ function buildStats(state) {
       movieTitle: s.title || '', venue: s.venue || '', screeningTime: s.startTime || '', capacity: cap,
       applicationCount: applicationCount(state, s.id), applicantCount: applied,
       openingApplicantCount: 0, generalApplicantCount: applied,
-      attendedCount: attended, unattendedCount: canceledCount(state, s.id), unattendedSeats: canceledSeats(state, s.id),
+      attendedCount: attended, unattendedCount: unattendedCount(state, s.id), unattendedSeats: unattendedSeats(state, s.id),
       canceledCount: canceledCount(state, s.id), canceledSeats: canceledSeats(state, s.id), remainingCount: Math.max(0, cap - applied),
       applicationRate: rate(applied, cap), attendanceRate: rate(attended, applied), status: s.status || ''
     };
@@ -112,7 +119,7 @@ function buildScreenings(state) {
     return {
       movieTitle: s.title || '', venue: s.venue || '', screeningId: s.id || '', startTime: s.startTime || '', endTime: s.endTime || '', capacity: cap,
       applicationCount: applicationCount(state, s.id), applicantCount: applied, openingApplicantCount: 0, generalApplicantCount: applied,
-      attendedCount: attended, unattendedCount: canceledCount(state, s.id), unattendedSeats: canceledSeats(state, s.id), canceledCount: canceledCount(state, s.id), canceledSeats: canceledSeats(state, s.id),
+      attendedCount: attended, unattendedCount: unattendedCount(state, s.id), unattendedSeats: unattendedSeats(state, s.id), canceledCount: canceledCount(state, s.id), canceledSeats: canceledSeats(state, s.id),
       applicationRate: rate(applied, cap), attendanceRate: rate(attended, applied), status: s.status || '', opening: s.opening ? '개막작' : '', gvHost: s.gvHost || '', moderator: s.moderator || '', staff: s.staff || '', staffPhone: s.staffPhone || '', notes: s.notes || ''
     };
   });
