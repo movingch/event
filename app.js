@@ -3014,8 +3014,8 @@ function adminOverview() {
 function screeningTable(screenings, options = {}) {
   if (!screenings.length) return `<div class="empty">등록된 영화가 없습니다.</div>`;
   return `
-    <div class="table-wrap">
-      <table>
+    <div class="table-wrap screening-admin-table-wrap">
+      <table class="screening-admin-table ${options.manage ? "is-manage-table" : "is-overview-table"}">
         <thead>
           <tr>
             <th>분류·영화</th>
@@ -3039,17 +3039,17 @@ function screeningTable(screenings, options = {}) {
             const phase = isOpening ? openingPhaseInfo(screening) : null;
             return `
               <tr ${options.manage ? "" : `class="screening-roster-row" data-screening-roster-row="${esc(screening.id)}" tabindex="0" aria-label="${esc(screening.title)} 신청자 목록 열기"`}>
-                <td><span class="badge category-badge">${esc(screening.category || "기타")}</span>${screening.bookingGroupDisabled ? ` <span class="badge group-release-badge">예약그룹 해제</span>` : (screening.bookingGroup ? ` <span class="badge forced-booking-group-badge">예약그룹 · ${esc(screening.bookingGroup)}</span>` : "")}<br>${options.manage ? `<strong>${esc(screening.title)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.title)}</strong></button>`}<br><span class="help">${screening.director ? `감독 ${esc(screening.director)} · ` : ""}${Number(screening.runtimeMinutes || 60)}분 · ${esc(screening.ageRating || "전체관람가")}</span>${isOpening ? `<br><span class="help">개막작 신청 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
-                <td>${options.manage ? `<strong>${esc(screening.venue)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.venue)}</strong></button>`}</td>
-                <td class="screening-status-cell">${options.manage ? `<span class="badge ${info.className}">${esc(info.text)}</span>` : `<button class="seat-status-button ${info.className}" type="button" data-action="view-roster" data-id="${esc(screening.id)}" aria-label="${esc(screening.title)} 좌석현황 ${esc(info.text)} · 신청자 목록 열기">${esc(info.text)}</button>`}${isOpening ? `<span class="screening-phase-badge badge ${phase.className}">${esc(phase.label)}</span>` : ""}</td>
-                <td>${esc(formatDateTime(screening.startTime))}</td>
-                <td>${Number(screening.capacity || 0)}명</td>
-                <td>${applicationCount(screening.id)}건 / ${appliedSeats(screening.id)}명</td>
-                <td>${attendedApplicationCount(screening.id)}건 / ${actualAttendees(screening.id)}명<br><span class="help">신청 대비 ${attendanceRate(screening.id)}%</span></td>
-                <td>${canceledApplicationCount(screening.id)}건 / ${canceledSeats(screening.id)}명</td>
-                <td>${esc(screening.gvHost || "-")}<br><span class="help">${esc(screening.moderator || "-")}</span></td>
-                <td>${esc(screening.staff || "-")}<br><span class="help">${esc(screening.staffPhone || "-")}</span></td>
-                ${options.manage ? `<td><div class="row-actions"><button class="btn btn-outline btn-small" type="button" data-action="edit-screening" data-id="${esc(screening.id)}">수정</button><button class="btn btn-danger btn-small" type="button" data-action="delete-screening" data-id="${esc(screening.id)}">삭제</button></div></td>` : ""}
+                <td data-label="영화"><span class="badge category-badge">${esc(screening.category || "기타")}</span>${screening.bookingGroupDisabled ? ` <span class="badge group-release-badge">예약그룹 해제</span>` : (screening.bookingGroup ? ` <span class="badge forced-booking-group-badge">예약그룹 · ${esc(screening.bookingGroup)}</span>` : "")}<br>${options.manage ? `<strong>${esc(screening.title)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.title)}</strong></button>`}<br><span class="help">${screening.director ? `감독 ${esc(screening.director)} · ` : ""}${Number(screening.runtimeMinutes || 60)}분 · ${esc(screening.ageRating || "전체관람가")}</span>${isOpening ? `<br><span class="help">개막작 신청 ${openStats.earlybirdSeats}명 · 일반 ${openStats.generalSeats}명 · 지정잔여 ${openStats.designatedRemaining}석</span>` : ""}</td>
+                <td data-label="상영관">${options.manage ? `<strong>${esc(screening.venue)}</strong>` : `<button class="roster-link" type="button" data-action="view-roster" data-id="${esc(screening.id)}"><strong>${esc(screening.venue)}</strong></button>`}</td>
+                <td data-label="상태" class="screening-status-cell">${options.manage ? `<span class="badge ${info.className}">${esc(info.text)}</span>` : `<button class="seat-status-button ${info.className}" type="button" data-action="view-roster" data-id="${esc(screening.id)}" aria-label="${esc(screening.title)} 좌석현황 ${esc(info.text)} · 신청자 목록 열기">${esc(info.text)}</button>`}${isOpening ? `<span class="screening-phase-badge badge ${phase.className}">${esc(phase.label)}</span>` : ""}</td>
+                <td data-label="시간">${esc(formatDateTime(screening.startTime))}</td>
+                <td data-label="정원">${Number(screening.capacity || 0)}명</td>
+                <td data-label="신청">${applicationCount(screening.id)}건 / ${appliedSeats(screening.id)}명</td>
+                <td data-label="참석">${attendedApplicationCount(screening.id)}건 / ${actualAttendees(screening.id)}명<br><span class="help">신청 대비 ${attendanceRate(screening.id)}%</span></td>
+                <td data-label="미참석">${canceledApplicationCount(screening.id)}건 / ${canceledSeats(screening.id)}명</td>
+                <td data-label="GV·모더레이터">${esc(screening.gvHost || "-")}<br><span class="help">${esc(screening.moderator || "-")}</span></td>
+                <td data-label="담당">${esc(screening.staff || "-")}<br><span class="help">${esc(screening.staffPhone || "-")}</span></td>
+                ${options.manage ? `<td data-label="관리"><div class="row-actions"><button class="btn btn-outline btn-small" type="button" data-action="edit-screening" data-id="${esc(screening.id)}">수정</button><button class="btn btn-danger btn-small" type="button" data-action="delete-screening" data-id="${esc(screening.id)}">삭제</button></div></td>` : ""}
               </tr>
             `;
           }).join("")}
@@ -3696,20 +3696,20 @@ function reservationTable(reservations, options = {}) {
             return `
               <tr class="reservation-click-row ${attended ? "attended-row" : ""} ${selected ? "is-selected" : ""}" data-reservation-row="${esc(reservation.id)}" tabindex="0" title="클릭하면 상세 관리 버튼이 열립니다.">
                 ${options.smsSelectMode ? `<td class="screen-only sms-check-col"><input type="checkbox" class="reservation-sms-check" data-reservation-check="${esc(reservation.id)}" ${selectedReservationSmsIds.has(reservation.id) ? "checked" : ""} aria-label="${esc(reservation.name)} 문자 발송 선택" /></td>` : ""}
-                <td class="col-venue"><strong>${esc(screening?.venue || "삭제된 상영관")}</strong></td>
-                <td class="col-screening">${screening ? `<strong>${esc(screening.title)}</strong><br><span class="help">${esc(formatDateTime(screening.startTime))}</span>` : "삭제된 회차"}</td>
-                <td class="applicant-cell col-applicant">
+                <td class="col-venue" data-label="상영관"><strong>${esc(screening?.venue || "삭제된 상영관")}</strong></td>
+                <td class="col-screening" data-label="영화·시간">${screening ? `<strong>${esc(screening.title)}</strong><br><span class="help">${esc(formatDateTime(screening.startTime))}</span>` : "삭제된 회차"}</td>
+                <td class="applicant-cell col-applicant" data-label="신청자">
                   <div class="applicant-name-line"><strong>${esc(reservation.name)}</strong>${reservationAttendanceIndex(reservation)}</div>
                   <span class="help applicant-phone">${esc(reservation.phone || "-")}</span>
                   ${reservation.email ? `<span class="help applicant-email">${esc(reservation.email)}</span>` : ""}
                   <span class="participant-history-badge">신청 ${history.applications}회 · 참석 ${history.attended}회${history.waitlist ? ` · 대기 ${history.waitlist}회` : ""}</span>
                   <span class="print-only print-attendance-text">${attended ? `참석 ${Number(reservation.attendedSeats || reservation.seats || 0)}명` : ""}</span>
                 </td>
-                <td class="col-reservation-no"><strong>${esc(reservationDisplayNumber(reservation, screening))}</strong></td>
-                <td class="col-seats">${Number(reservation.seats || 0)}명</td>
-                <td class="col-created">${esc(formatDateTime(reservation.createdAt))}</td>
-                <td class="table-note col-note">${esc(reservation.note || "-")}</td>
-                <td class="screen-only col-manage">
+                <td class="col-reservation-no" data-label="예약번호"><strong>${esc(reservationDisplayNumber(reservation, screening))}</strong></td>
+                <td class="col-seats" data-label="인원">${Number(reservation.seats || 0)}명</td>
+                <td class="col-created" data-label="신청일">${esc(formatDateTime(reservation.createdAt))}</td>
+                <td class="table-note col-note" data-label="메모">${esc(reservation.note || "-")}</td>
+                <td class="screen-only col-manage" data-label="참석처리">
                   <div class="row-actions reservation-manage-compact">
                     <button class="btn btn-outline btn-small attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true" title="참석 인원 입력">참석</button>
                     <button class="btn btn-outline btn-small" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="false">미참석</button>
