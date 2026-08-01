@@ -14,6 +14,7 @@ const STAFF_SESSION_KEY = "munaeFilmFest9.staff";
 const STAFF_PIN_MIGRATION_KEY = "munaeFilmFest9.staffPin0909.v14";
 const ADMIN_PIN = "0909";
 const SMS_API_ENDPOINT = "/api/send-sms";
+const CANCELED_SMS_BLOCK_MESSAGE = "취소건의 대해서는 예약문자발송이 안됩니다";
 const SUPABASE_STATE_API_ENDPOINT = "/api/supabase-state";
 const RESERVATION_MANAGE_API_ENDPOINT = "/api/reservation-manage";
 const AUTO_SEND_SMS_ON_CONFIRMED_RESERVATION = true;
@@ -3679,7 +3680,51 @@ function reservationTable(reservations, options = {}) {
   const colSpan = options.smsSelectMode ? 9 : 8;
   const visibleIds = sortedReservations.map((reservation) => reservation.id);
   const allVisibleSelected = Boolean(visibleIds.length) && visibleIds.every((id) => selectedReservationSmsIds.has(id));
+  const mobileCards = sortedReservations.map((reservation) => {
+    const screening = state.screenings.find((item) => item.id === reservation.screeningId);
+    const attended = reservation.attended === true;
+    const selected = selectedReservationActionId === reservation.id;
+    const history = participantHistoryFor(reservation);
+    return `
+      <article class="mobile-reservation-card ${attended ? "attended-row" : ""} ${selected ? "is-selected" : ""}" data-reservation-row="${esc(reservation.id)}" tabindex="0" title="누르면 상세 관리 버튼이 열립니다.">
+        <div class="mobile-reservation-card-head">
+          <div><span>상영관</span><strong>${esc(screening?.venue || "삭제된 상영관")}</strong></div>
+          <div class="mobile-reservation-seat"><span>인원</span><strong>${Number(reservation.seats || 0)}명</strong></div>
+          ${options.smsSelectMode ? `<label class="mobile-reservation-sms-check"><input type="checkbox" class="reservation-sms-check" data-reservation-check="${esc(reservation.id)}" ${selectedReservationSmsIds.has(reservation.id) ? "checked" : ""} aria-label="${esc(reservation.name)} 문자 발송 선택" /><span>문자 선택</span></label>` : ""}
+        </div>
+        <div class="mobile-reservation-movie">
+          <span>영화·시간</span>
+          <strong>${esc(screening?.title || "삭제된 회차")}</strong>
+          ${screening ? `<small>${esc(formatDateTime(screening.startTime))}</small>` : ""}
+        </div>
+        <div class="mobile-reservation-applicant">
+          <span>신청자</span>
+          <div class="applicant-name-line"><strong>${esc(reservation.name)}</strong>${reservationAttendanceIndex(reservation)}</div>
+          <small>${esc(reservation.phone || "-")}</small>
+          ${reservation.email ? `<small>${esc(reservation.email)}</small>` : ""}
+          <span class="participant-history-badge">신청 ${history.applications}회 · 참석 ${history.attended}회${history.waitlist ? ` · 대기 ${history.waitlist}회` : ""}</span>
+        </div>
+        <div class="mobile-reservation-attendance">
+          <span>참석처리</span>
+          <div>
+            <button class="btn btn-outline attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true">참석</button>
+            <button class="btn btn-outline" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="false">미참석</button>
+          </div>
+        </div>
+        ${selected ? `<div class="mobile-reservation-actions">
+          <button class="btn btn-outline" type="button" data-action="staff-edit-reservation" data-id="${esc(reservation.id)}">수정</button>
+          ${reservation.status === "대기" ? `<button class="btn btn-primary" type="button" data-action="set-reservation-status" data-status="확정" data-id="${esc(reservation.id)}">대기→확정</button>` : ""}
+          <button class="btn btn-danger" type="button" data-action="delete-reservation" data-id="${esc(reservation.id)}">삭제</button>
+          <button class="btn btn-dark" type="button" data-action="send-sms" data-id="${esc(reservation.id)}">예약문자</button>
+          <button class="btn btn-primary" type="button" data-action="open-single-notice-sms" data-id="${esc(reservation.id)}">별도안내문자</button>
+        </div>` : ""}
+      </article>`;
+  }).join("");
   return `
+    <div class="mobile-reservation-list">
+      ${options.smsSelectMode ? `<label class="mobile-reservation-select-all"><input type="checkbox" class="reservation-check-all" data-action="toggle-visible-reservation-checks" ${allVisibleSelected ? "checked" : ""} aria-label="현재 명단 전체 선택 또는 해제" /><span>현재 명단 전체선택</span></label>` : ""}
+      ${mobileCards}
+    </div>
     <div class="table-wrap reservation-table-wrap">
       <table class="reservation-table ${options.smsSelectMode ? "reservation-table-sms" : ""}">
         <thead>
@@ -5267,26 +5312,32 @@ function clearBulkSmsSelection() {
 }
 
 async function bulkSendReservationSms() {
-  const reservations = getSelectedReservationsForSms();
-  if (!reservations.length) return toast("문자를 보낼 신청자를 체크해 주세요.");
-  if (!confirm(`선택한 ${reservations.length}명에게 예약 관련 문자를 다시 보낼까요?`)) return;
+  const selected = getSelectedReservationsForSms();
+  if (!selected.length) return toast("문자를 보낼 신청자를 체크해 주세요.");
+  const reservations = selected.filter((reservation) => !isCanceledReservation(reservation));
+  if (!reservations.length) return toast(CANCELED_SMS_BLOCK_MESSAGE);
+  const canceledCount = selected.length - reservations.length;
+  if (!confirm(`선택한 ${reservations.length}명에게 예약 관련 문자를 다시 보낼까요?${canceledCount ? `\n취소건 ${canceledCount}건은 발송 대상에서 제외됩니다.` : ""}`)) return;
   let success = 0;
   for (const reservation of reservations) {
     const screening = state.screenings.find((item) => item.id === reservation.screeningId);
     if (await sendReservationSms(reservation, screening, { manual: true })) success += 1;
   }
-  toast(`예약 관련 문자 발송 요청 완료: ${success}/${reservations.length}명`);
+  toast(canceledCount ? `${CANCELED_SMS_BLOCK_MESSAGE} 발송 완료: ${success}/${reservations.length}명` : `예약 관련 문자 발송 요청 완료: ${success}/${reservations.length}명`);
 }
 
 function openNoticeSmsModalForReservations(reservations) {
   if (!reservations.length) return toast("별도 안내문자를 보낼 신청자를 선택해 주세요.");
+  const eligibleReservations = reservations.filter((reservation) => !isCanceledReservation(reservation));
+  if (!eligibleReservations.length) return toast(CANCELED_SMS_BLOCK_MESSAGE);
+  if (eligibleReservations.length !== reservations.length) toast(CANCELED_SMS_BLOCK_MESSAGE);
   const modal = document.getElementById("bookingModal");
   const body = document.getElementById("bookingBody");
   if (!modal || !body) return;
   document.getElementById("bookingTitle").textContent = "별도 안내문자 보내기";
   body.innerHTML = `
     <form id="bulkSmsNoticeForm" class="form-stack">
-      <p class="help">선택한 ${reservations.length}명에게 같은 안내문자를 보냅니다. 예약번호가 필요한 경우 본문에 직접 입력해 주세요.</p>
+      <p class="help">선택한 ${eligibleReservations.length}명에게 같은 안내문자를 보냅니다. 예약번호가 필요한 경우 본문에 직접 입력해 주세요.</p>
       <label class="label" for="bulkSmsNoticeMessage">안내문자 내용</label>
       <textarea class="textarea" id="bulkSmsNoticeMessage" name="message" rows="8" placeholder="예: 오늘 상영은 예정대로 진행됩니다. 상영 10분 전까지 도착해 주세요." required></textarea>
       <div class="form-actions">
@@ -5295,7 +5346,7 @@ function openNoticeSmsModalForReservations(reservations) {
       </div>
     </form>
   `;
-  selectedReservationSmsIds = new Set(reservations.map((reservation) => reservation.id));
+  selectedReservationSmsIds = new Set(eligibleReservations.map((reservation) => reservation.id));
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
 }
@@ -5314,6 +5365,10 @@ function openSingleNoticeSmsModal(id) {
 
 
 async function sendNoticeSms(reservation, message) {
+  if (isCanceledReservation(reservation)) {
+    toast(CANCELED_SMS_BLOCK_MESSAGE);
+    return false;
+  }
   const phone = normalizePhoneForSms(reservation.phone);
   if (!phone || phone.length < 10) {
     reservation.noticeSmsStatus = "발송실패";
@@ -5498,8 +5553,8 @@ async function sendReservationSms(reservationOrId, screening = null, options = {
     return false;
   }
   const targetScreening = screening || state.screenings.find((item) => item.id === reservation.screeningId);
-  if (!["확정", "대기"].includes(reservation.status)) {
-    if (manual) toast("확정 또는 대기 상태의 신청자에게만 문자를 발송할 수 있습니다.");
+  if (isCanceledReservation(reservation)) {
+    if (manual) toast(CANCELED_SMS_BLOCK_MESSAGE);
     return false;
   }
   if (reservation.smsConsent === false && !manual) return false;
