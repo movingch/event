@@ -5761,6 +5761,10 @@ tbody tr:hover td { background: rgba(31, 102, 80, .055); }
   letter-spacing: -.05em;
 }
 
+.full-schedule-heading .eyebrow {
+  color: #171515 !important;
+}
+
 .full-schedule-heading p { margin: 0; color: #665c52; line-height: 1.55; }
 
 .timeline-legend {

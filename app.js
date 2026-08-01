@@ -1122,7 +1122,7 @@ function continuousRepeatSeries(screenings = []) {
 
 function continuousSeriesIntervalLabel(series) {
   const minutes = Number(series?.intervalMinutes || 60);
-  if (minutes === 60) return "1시간 연속상영";
+  if (minutes === 60) return `1시간씩 ${Math.max(1, Number(series?.slotCount || 1))}회상영`;
   if (minutes % 60 === 0) return `${minutes / 60}시간 간격 연속상영`;
   return `${minutes}분 간격 연속상영`;
 }
@@ -2329,7 +2329,6 @@ function renderScreeningSchedule() {
           <section class="classic-schedule-day-group schedule-day-color-${(index % 5) + 1}" aria-labelledby="scheduleDay${index}">
             <div class="classic-schedule-day-heading">
               <h3 id="scheduleDay${index}">${esc(group.date.date)} <span>${esc(group.date.weekday)}</span></h3>
-              <strong>${group.programCount}개 프로그램 · ${group.screenings.length}회차</strong>
             </div>
             <div class="classic-schedule-time-groups">
               ${group.bookingGroups.map((bookingGroup) => `
@@ -2550,7 +2549,7 @@ function screeningCard(screening, options = {}) {
         </div>
         <h3 class="screening-title">${esc(screening.title)}</h3>
         ${options.schedule
-          ? `<p class="screening-meta classic-screening-meta"><span class="screening-card-time-line"><strong class="screening-card-time">${esc(formatTimePart(screening.startTime))}</strong><span class="badge director-badge">감독.${esc(screening.director || "미정")}</span></span><span class="screening-card-venue-line"><span>${esc(screening.venue)}</span><span class="badge age-rating-badge">${esc(screening.ageRating || "전체관람가")}</span><span class="badge runtime-badge">러닝타임 ${Number(screening.runtimeMinutes || 60)}분</span></span></p>`
+          ? `<p class="screening-meta classic-screening-meta"><span class="screening-card-time-line"><strong class="screening-card-time">${esc(formatTimePart(screening.startTime))}</strong>${screening.director ? `<span class="badge director-badge">감독.${esc(screening.director)}</span>` : ""}</span><span class="screening-card-venue-line"><span>${esc(screening.venue)}</span><span class="badge age-rating-badge">${esc(screening.ageRating || "전체관람가")}</span><span class="badge runtime-badge">러닝타임 ${Number(screening.runtimeMinutes || 60)}분</span></span></p>`
           : `<p class="screening-meta">${esc(formatDateTime(screening.startTime))}<br>${esc(screening.venue)}</p>`}
       </div>
       <div class="screening-body compact-screening-body">
