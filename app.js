@@ -2554,7 +2554,7 @@ function renderStaffLogin(preselectedId = "") {
       <div class="login-card">
         <div class="eyebrow">상영관 담당자 전용</div>
         <h1>신청자 확인</h1>
-        <p>담당 상영 영화를 선택하고 스탭 비밀번호를 입력하세요. 임시 스탭 비밀번호는 <strong>0909</strong>입니다.</p>
+        <p>로그인 비번 등 문의는 영화제 본부로 부탁합니다.</p>
         <form id="staffLoginForm">
           <label class="label" for="staffScreeningId">담당 상영관-영화</label>
           <select class="select" id="staffScreeningId" name="screeningId" required>
@@ -2720,14 +2720,12 @@ function renderAdmin(tab) {
 
 function renderAdminLogin() {
   const master = isMasterAdminPath();
-  const showTempNotice = !master && (state.generalAdmins || []).some((admin) => admin.name === "일반관리자" && admin.password === ADMIN_PIN);
   return `
     <section class="admin-login">
       <div class="login-card">
         <div class="eyebrow" style="background:rgba(179,63,47,.1);color:var(--brand-dark);">${master ? "마스타관리자 전용" : "운영자 전용"}</div>
         <h1>${master ? "마스타관리자 로그인" : "관리자 로그인"}</h1>
-        ${showTempNotice ? `<p>임시 계정은 이름 <strong>일반관리자</strong>, 비밀번호 <strong>0909</strong>입니다. 최고관리자 화면에서 운영 계정을 추가한 뒤 임시 계정을 삭제하세요.</p>` : ""}
-        ${master ? `<p>마스타관리자는 후원자 관리, 백업·연동, 만족도조사 설정을 포함한 모든 메뉴를 관리합니다.</p>` : ""}
+        <p>로그인 비번 등 문의는 영화제 본부로 부탁합니다.</p>
         <form id="adminLoginForm">
           ${master ? "" : `<label class="label" for="adminName">관리자 이름</label><input class="input" id="adminName" name="name" type="text" autocomplete="username" required />`}
           <label class="label" for="adminPin">${master ? "마스타관리자 PIN" : "관리자 비밀번호"}</label>
