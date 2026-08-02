@@ -144,32 +144,6 @@ function safeReservation(state, reservation) {
   };
 }
 
-function activeConfirmedSeats(state, screeningId) {
-  return (Array.isArray(state.reservations) ? state.reservations : [])
-    .filter((item) => String(item.screeningId) === String(screeningId) && item.status === '확정')
-    .reduce((sum, item) => sum + Math.max(1, Number(item.seats || 1)), 0);
-}
-
-function promoteWaitlist(state, screeningId, now) {
-  const screening = (Array.isArray(state.screenings) ? state.screenings : []).find((item) => String(item.id) === String(screeningId));
-  if (!screening) return [];
-  let remaining = Math.max(0, Number(screening.capacity || 0) - activeConfirmedSeats(state, screeningId));
-  const waiting = (Array.isArray(state.reservations) ? state.reservations : [])
-    .filter((item) => String(item.screeningId) === String(screeningId) && item.status === '대기')
-    .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
-  const promoted = [];
-  for (const reservation of waiting) {
-    const seats = Math.max(1, Number(reservation.seats || 1));
-    if (seats > remaining) continue;
-    reservation.status = '확정';
-    reservation.waitlistPromotedAt = now;
-    reservation.updatedAt = now;
-    promoted.push(reservation);
-    remaining -= seats;
-  }
-  return promoted;
-}
-
 function rateLimited(req, phone) {
   const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
   const key = `${ip}:${phone}`;
@@ -276,7 +250,6 @@ module.exports = async function handler(req, res) {
       const payload = verifyToken(body.session, 'session');
       let saved = null;
       let canceled = null;
-      let promoted = [];
       let state = null;
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const row = await readState();
@@ -286,7 +259,6 @@ module.exports = async function handler(req, res) {
         const safe = safeReservation(state, reservation);
         if (reservation.status === '취소') return json(res, 409, { ok: false, message: '이미 취소된 예약입니다.' });
         if (!safe.canCancel) return json(res, 409, { ok: false, message: '상영이 시작되었거나 참석 처리된 예약은 관객 화면에서 취소할 수 없습니다. 영화제 본부로 문의해 주세요.' });
-        const wasConfirmed = reservation.status === '확정';
         const now = new Date().toISOString();
         reservation.status = '취소';
         reservation.attended = false;
@@ -296,7 +268,6 @@ module.exports = async function handler(req, res) {
         reservation.canceledBy = '관객 본인';
         reservation.cancelReason = String(body.reason || '관객 본인 취소').trim().slice(0, 200) || '관객 본인 취소';
         reservation.updatedAt = now;
-        promoted = wasConfirmed ? promoteWaitlist(state, reservation.screeningId, now) : [];
         try {
           saved = await writeState(state, row.updated_at);
           canceled = reservation;
@@ -311,16 +282,9 @@ module.exports = async function handler(req, res) {
         await sendSens(payload.phone, `[머내마을영화제]\n예약이 취소되었습니다.\n영화: ${screening?.title || '상영작'}\n일시: ${formatScreening(screening)}\n예약번호: ${canceled.reservationNumber || ''}`);
         smsResults.push({ type: 'cancel', ok: true });
       } catch (error) { smsResults.push({ type: 'cancel', ok: false, error: error.message }); }
-      for (const reservation of promoted) {
-        try {
-          const promotedScreening = screeningOf(state, reservation);
-          await sendSens(normalizePhone(reservation.phone), `[머내마을영화제]\n대기 예약이 확정되었습니다.\n영화: ${promotedScreening?.title || '상영작'}\n일시: ${formatScreening(promotedScreening)}\n예약번호: ${reservation.reservationNumber || ''}`);
-          smsResults.push({ type: 'promotion', reservationId: reservation.id, ok: true });
-        } catch (error) { smsResults.push({ type: 'promotion', reservationId: reservation.id, ok: false, error: error.message }); }
-      }
       await triggerGoogleBackup(req);
       const reservations = reservationsForPhone(saved.state, payload.phone).map((item) => safeReservation(saved.state, item)).sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)));
-      return json(res, 200, { ok: true, message: '예약을 취소했습니다.', reservations, promotedIds: promoted.map((item) => item.id), smsResults, updatedAt: saved.updated_at });
+      return json(res, 200, { ok: true, message: '예약을 취소했습니다.', reservations, smsResults, updatedAt: saved.updated_at });
     }
 
     return json(res, 400, { ok: false, message: '지원하지 않는 요청입니다.' });

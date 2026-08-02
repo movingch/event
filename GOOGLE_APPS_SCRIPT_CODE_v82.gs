@@ -456,7 +456,7 @@ function writeApplicantsSheet(ss, applicants, now) {
   const summary = '기준시각: ' + formatDateTime(now) + '    총 신청자: ' + rows.length + '명    참석: ' + attended + '명    미참석: ' + canceled + '명';
   writeDesignedTable_(sheet, title, summary, headers, rows, 4);
   setDropdown_(sheet, 4, 4, ['신청', '참석', '미참석']);
-  setDropdown_(sheet, 4, 15, ['미발송', '발송완료', '실패', '대기']);
+  setDropdown_(sheet, 4, 15, ['미발송', '발송완료', '실패']);
   paintStatusColumn_(sheet, 5, 4, rows.length);
   paintStatusColumn_(sheet, 5, 15, rows.length);
   sheet.getRange('F:F').setNumberFormat('@');
@@ -771,7 +771,7 @@ function paintStatusColumn_(sheet, startRow, column, rowCount) {
     if (v.indexOf('참석') >= 0 && v.indexOf('미참석') < 0) return [BRAND.greenBg];
     if (v.indexOf('발송완료') >= 0 || v.indexOf('성공') >= 0 || v.indexOf('진행중') >= 0) return [BRAND.greenBg];
     if (v.indexOf('실패') >= 0 || v.indexOf('오류') >= 0) return [BRAND.redBg];
-    if (v.indexOf('대기') >= 0 || v.indexOf('예정') >= 0 || v.indexOf('확인') >= 0) return [BRAND.amberBg];
+    if (v.indexOf('예정') >= 0 || v.indexOf('확인') >= 0 || v.indexOf('미발송') >= 0) return [BRAND.amberBg];
     return [BRAND.grayBg];
   });
   sheet.getRange(startRow, column, rowCount, 1).setBackgrounds(colors).setFontWeight('bold').setHorizontalAlignment('center');

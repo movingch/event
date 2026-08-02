@@ -128,13 +128,27 @@ function exportScreenings_(ss) {
   return rows.map(function (r, index) {
     return {
       screeningId: r['회차ID'] || ('scr-sheet-' + (index + 1)),
+      category: r['분류'] || '',
+      scheduleOrder: r['시간표순서'] || '',
+      scheduleRow: r['배치행'] || '',
+      scheduleColumn: r['배치열'] || '',
+      scheduleGroupOrientation: r['그룹방향'] || 'horizontal',
+      bookingGroup: r['예약제한그룹'] || '',
+      bookingGroupDisabled: r['예약그룹해제'] === '해제',
       movieTitle: r['영화명'] || '',
       venue: r['상영관'] || '',
+      startTime: r['시작일시'] || '',
+      endTime: r['종료일시'] || '',
       screeningDate: r['상영일'] || '',
       screeningTime: r['상영시간'] || '',
+      runtimeMinutes: r['러닝타임(분)'] || '',
+      ageRating: r['관람연령'] || '',
+      director: r['감독'] || '',
       capacity: r['정원'] || '',
       status: r['상태'] || '',
       opening: r['개막작'] || '',
+      gvHost: r['GV'] || '',
+      moderator: r['모더레이터'] || '',
       staff: r['담당STAFF'] || r['담당스태프'] || '',
       staffPhone: r['연락처'] || '',
       notes: r['기타'] || ''
@@ -472,9 +486,9 @@ function writeApplicantsSheet(ss, applicants, now) {
   const title = '제9회 머내마을영화제 신청자현황';
   const summary = '기준시각: ' + formatDateTime(now) + '    전체 기록: ' + rows.length + '건    참석: ' + attended + '건    미참석: ' + unattended + '건    취소: ' + canceled + '건';
   writeDesignedTable_(sheet, title, summary, headers, rows, 4);
-  setDropdown_(sheet, 4, 4, ['확정', '대기', '취소']);
+  setDropdown_(sheet, 4, 4, ['확정', '취소']);
   setDropdown_(sheet, 4, 8, ['신청', '참석', '미참석']);
-  setDropdown_(sheet, 4, 22, ['미발송', '발송완료', '실패', '대기']);
+  setDropdown_(sheet, 4, 22, ['미발송', '발송완료', '실패']);
   paintStatusColumn_(sheet, 5, 4, rows.length);
   paintStatusColumn_(sheet, 5, 8, rows.length);
   paintStatusColumn_(sheet, 5, 22, rows.length);
@@ -574,22 +588,43 @@ function writeStatsSheet(ss, stats, now) {
 
 function writeScreeningsSheet(ss, screenings, now) {
   const sheet = resetSheet_(ss, '상영관영화');
-  const headers = ['No', '상영일', '상영시간', '영화명', '상영관', '회차ID', '정원', '신청인원', '참석인원', '잔여인원', '상태', '개막작', '담당STAFF', '연락처', '기타', '저장시각'];
+  const headers = ['No', '분류', '시간표순서', '배치행', '배치열', '그룹방향', '예약제한그룹', '예약그룹해제', '영화명', '상영관', '회차ID', '시작일시', '종료일시', '상영일', '상영시간', '러닝타임(분)', '관람연령', '감독', '정원', '신청건수', '신청인원', '참석인원', '미참석건수', '미참석인원', '취소건수', '취소인원', '잔여인원', '신청률', '참석률', '상태', '개막작', 'GV', '모더레이터', '담당STAFF', '연락처', '기타', '저장시각'];
   const rows = screenings.map(function (r, index) {
     const start = valueOf(r, ['startTime', '시작']);
     return [
       index + 1,
-      valueOf(r, ['screeningDate', '상영일']) || datePart_(start),
-      valueOf(r, ['screeningTime', '상영시간', 'time']) || timePart_(start),
+      valueOf(r, ['category', '분류']),
+      valueOf(r, ['scheduleOrder', '시간표순서']),
+      valueOf(r, ['scheduleRow', '배치행']),
+      valueOf(r, ['scheduleColumn', '배치열']),
+      valueOf(r, ['scheduleGroupOrientation', '그룹방향']),
+      valueOf(r, ['bookingGroup', '예약제한그룹']),
+      valueOf(r, ['bookingGroupDisabled', '예약그룹해제']) ? '해제' : '',
       valueOf(r, ['movieTitle', '영화명', '영화', 'title']),
       valueOf(r, ['venue', '상영관', 'theater']),
       valueOf(r, ['screeningId', '회차ID', 'id']),
+      start,
+      valueOf(r, ['endTime', '종료']),
+      valueOf(r, ['screeningDate', '상영일']) || datePart_(start),
+      valueOf(r, ['screeningTime', '상영시간', 'time']) || timePart_(start),
+      numberOrText_(valueOf(r, ['runtimeMinutes', '러닝타임(분)'])),
+      valueOf(r, ['ageRating', '관람연령']),
+      valueOf(r, ['director', '감독']),
       numberOrText_(valueOf(r, ['capacity', '정원'])),
+      numberOrText_(valueOf(r, ['applicationCount', '신청건수'])),
       numberOrText_(valueOf(r, ['applicantCount', '신청인원'])),
       numberOrText_(valueOf(r, ['attendedCount', '참석인원'])),
+      numberOrText_(valueOf(r, ['unattendedCount', '미참석건수'])),
+      numberOrText_(valueOf(r, ['unattendedSeats', '미참석인원'])),
+      numberOrText_(valueOf(r, ['canceledCount', '취소건수'])),
+      numberOrText_(valueOf(r, ['canceledSeats', '취소인원'])),
       numberOrText_(valueOf(r, ['remainingCount', 'remainingSeats', '잔여인원'])),
+      valueOf(r, ['applicationRate', '신청률']),
+      valueOf(r, ['attendanceRate', '참석률']),
       valueOf(r, ['status', '상태']) || '예정',
       valueOf(r, ['opening', '개막작여부']),
+      valueOf(r, ['gvHost', 'GV']),
+      valueOf(r, ['moderator', '모더레이터']),
       valueOf(r, ['staff', '담당스태프', 'STAFF']),
       valueOf(r, ['staffPhone', '연락처']),
       valueOf(r, ['notes', '기타']),
@@ -597,11 +632,11 @@ function writeScreeningsSheet(ss, screenings, now) {
     ];
   });
   writeDesignedTable_(sheet, '제9회 머내마을영화제 상영관·영화 운영표', '기준시각: ' + formatDateTime(now) + '    상영회차: ' + rows.length + '개', headers, rows, 4);
-  setDropdown_(sheet, 4, 11, ['예정', '진행중', '종료', '마감']);
-  setDropdown_(sheet, 4, 12, ['개막작', '일반', 'TRUE', 'FALSE']);
-  paintStatusColumn_(sheet, 5, 11, rows.length);
-  paintRemainingColumn_(sheet, 5, 10, rows.length);
-  capWidths_(sheet, {4: 220, 5: 150, 6: 140, 14: 130, 16: 260});
+  setDropdown_(sheet, 4, 30, ['예정', '진행중', '종료', '마감']);
+  setDropdown_(sheet, 4, 31, ['개막작', '일반', 'TRUE', 'FALSE']);
+  paintStatusColumn_(sheet, 5, 30, rows.length);
+  paintRemainingColumn_(sheet, 5, 27, rows.length);
+  capWidths_(sheet, {7: 170, 9: 220, 10: 150, 11: 140, 12: 150, 13: 150, 18: 110, 32: 140, 33: 140, 34: 120, 35: 130, 36: 260});
 }
 
 
@@ -823,7 +858,7 @@ function paintStatusColumn_(sheet, startRow, column, rowCount) {
     if (v.indexOf('참석') >= 0 && v.indexOf('미참석') < 0) return [BRAND.greenBg];
     if (v.indexOf('발송완료') >= 0 || v.indexOf('성공') >= 0 || v.indexOf('진행중') >= 0) return [BRAND.greenBg];
     if (v.indexOf('실패') >= 0 || v.indexOf('오류') >= 0) return [BRAND.redBg];
-    if (v.indexOf('대기') >= 0 || v.indexOf('예정') >= 0 || v.indexOf('확인') >= 0) return [BRAND.amberBg];
+    if (v.indexOf('예정') >= 0 || v.indexOf('확인') >= 0 || v.indexOf('미발송') >= 0) return [BRAND.amberBg];
     return [BRAND.grayBg];
   });
   sheet.getRange(startRow, column, rowCount, 1).setBackgrounds(colors).setFontWeight('bold').setHorizontalAlignment('center');

@@ -102,7 +102,9 @@ function buildStats(state) {
     const applied = appliedSeats(state, s.id);
     const attended = attendedSeats(state, s.id);
     return {
-      movieTitle: s.title || '', venue: s.venue || '', screeningTime: s.startTime || '', capacity: cap,
+      category: s.category || '기타', scheduleOrder: s.scheduleOrder ?? '', scheduleRow: s.scheduleRow ?? '', scheduleColumn: s.scheduleColumn ?? '',
+      scheduleGroupOrientation: s.scheduleGroupOrientation || 'horizontal', bookingGroup: s.bookingGroup || '', bookingGroupDisabled: s.bookingGroupDisabled === true,
+      movieTitle: s.title || '', venue: s.venue || '', screeningTime: s.startTime || '', runtimeMinutes: num(s.runtimeMinutes || 60), ageRating: s.ageRating || '전체관람가', director: s.director || '', capacity: cap,
       applicationCount: applicationCount(state, s.id), applicantCount: applied,
       openingApplicantCount: 0, generalApplicantCount: applied,
       attendedCount: attended, unattendedCount: unattendedCount(state, s.id), unattendedSeats: unattendedSeats(state, s.id),
@@ -117,10 +119,12 @@ function buildScreenings(state) {
     const applied = appliedSeats(state, s.id);
     const attended = attendedSeats(state, s.id);
     return {
-      movieTitle: s.title || '', venue: s.venue || '', screeningId: s.id || '', startTime: s.startTime || '', endTime: s.endTime || '', capacity: cap,
+      category: s.category || '기타', scheduleOrder: s.scheduleOrder ?? '', scheduleRow: s.scheduleRow ?? '', scheduleColumn: s.scheduleColumn ?? '',
+      scheduleGroupOrientation: s.scheduleGroupOrientation || 'horizontal', bookingGroup: s.bookingGroup || '', bookingGroupDisabled: s.bookingGroupDisabled === true,
+      movieTitle: s.title || '', venue: s.venue || '', screeningId: s.id || '', startTime: s.startTime || '', endTime: s.endTime || '', runtimeMinutes: num(s.runtimeMinutes || 60), ageRating: s.ageRating || '전체관람가', director: s.director || '', capacity: cap,
       applicationCount: applicationCount(state, s.id), applicantCount: applied, openingApplicantCount: 0, generalApplicantCount: applied,
-      attendedCount: attended, unattendedCount: unattendedCount(state, s.id), unattendedSeats: unattendedSeats(state, s.id), canceledCount: canceledCount(state, s.id), canceledSeats: canceledSeats(state, s.id),
-      applicationRate: rate(applied, cap), attendanceRate: rate(attended, applied), status: s.status || '', opening: s.opening ? '개막작' : '', gvHost: s.gvHost || '', moderator: s.moderator || '', staff: s.staff || '', staffPhone: s.staffPhone || '', notes: s.notes || ''
+      attendedCount: attended, unattendedCount: unattendedCount(state, s.id), unattendedSeats: unattendedSeats(state, s.id), canceledCount: canceledCount(state, s.id), canceledSeats: canceledSeats(state, s.id), remainingCount: Math.max(0, cap - applied),
+      applicationRate: rate(applied, cap), attendanceRate: rate(attended, applied), status: s.status || '', opening: (s.isOpening || s.opening) ? '개막작' : '', gvHost: s.gvHost || '', moderator: s.moderator || '', staff: s.staff || '', staffPhone: s.staffPhone || '', notes: s.notes || ''
     };
   });
 }

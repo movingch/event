@@ -43,7 +43,7 @@ create table reservations (
   phone text not null,
   email text,
   seats integer not null check (seats > 0),
-  status text not null check (status in ('확정', '대기', '취소')) default '확정',
+  status text not null check (status in ('확정', '취소')) default '확정',
 
   -- 개막작 티켓 구분
   ticket_type text not null default '일반' check (ticket_type in ('사전신청', '일반', '일반상영')),
@@ -85,7 +85,7 @@ create table notification_logs (
   channel text not null check (channel in ('카카오알림톡', '문자', '네이버SENS', '이메일', '카톡공유', '복사')),
   recipient text,
   message text not null,
-  status text not null default '대기' check (status in ('대기', '성공', '실패')),
+  status text not null default '미발송' check (status in ('미발송', '성공', '실패')),
   provider text,
   provider_message_id text,
   error_message text,
@@ -103,7 +103,6 @@ select
   s.capacity,
   s.is_opening,
   coalesce(sum(r.seats) filter (where r.status = '확정'), 0) as confirmed_seats,
-  coalesce(sum(r.seats) filter (where r.status = '대기'), 0) as waitlist_seats,
   coalesce(sum(r.attended_seats) filter (where r.attended = true and r.status <> '취소'), 0) as actual_attendees,
   s.capacity - coalesce(sum(r.seats) filter (where r.status = '확정'), 0) as remaining_seats,
   coalesce(sum(r.seats) filter (where r.status = '확정' and r.ticket_type = '사전신청'), 0) as earlybird_confirmed_seats,
