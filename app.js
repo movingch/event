@@ -785,6 +785,7 @@ function normalizeState(data) {
     sponsorClicks: Number(data.sponsorClicks || 0),
     adminPin: String(data.adminPin || ""),
     generalAdmins: normalizeGeneralAdmins(data),
+    reservationLimit: Math.max(0, Math.floor(Number(data.reservationLimit || 0))),
     masterStaffPin: String(data.masterStaffPin || ""),
     masterStaffPresent: Boolean(data.masterStaffPresent),
     surveySettings: normalizeSurveySettings(data.surveySettings),
@@ -952,6 +953,11 @@ function reservationMatchesPerson(reservation, name, phone) {
 
 function reservationsForPerson(name, phone) {
   return state.reservations.filter((reservation) => !isCanceledReservation(reservation) && reservationMatchesPerson(reservation, name, phone));
+}
+
+function reservationLimitValue() {
+  const value = Math.floor(Number(state.reservationLimit || 0));
+  return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 function screeningTimesConflict(first, second) {
@@ -1281,7 +1287,8 @@ function continuousSeriesStatus(series) {
 
 function bookingRuleError(screening, name, phone) {
   const existing = reservationsForPerson(name, phone);
-  if (existing.length >= 5) return "5회까지 신청가능합니다.";
+  const limit = reservationLimitValue();
+  if (limit > 0 && existing.length >= limit) return `${limit}회까지 신청가능합니다.`;
   const conflictGroupIds = screeningConflictGroupIds(screening);
   const forcedGroupIds = forcedBookingGroupIds(screening);
   const conflict = existing.find((reservation) => {
@@ -2142,7 +2149,7 @@ function renderReservationManagePage() {
       <div class="section-title reservation-manage-title"><div><span class="eyebrow">MY RESERVATION</span><h1>내 예약 확인·취소</h1><p>개인정보 보호를 위해 휴대폰 문자 인증 후 예약을 보여드립니다.</p></div></div>
       ${reservationManageMessage ? `<div class="reservation-manage-message" role="status">${esc(reservationManageMessage)}</div>` : ""}
       ${content}
-      <aside class="reservation-manage-help"><strong>취소 안내</strong><p>취소된 예약은 5회 신청 제한과 동시간대 중복 제한에서 제외되며 좌석도 즉시 복원됩니다.</p><p>상영 시작 후 변경이나 문자 인증 문의는 영화제 본부로 부탁합니다.</p></aside>
+      <aside class="reservation-manage-help"><strong>취소 안내</strong><p>취소된 예약은 신청 횟수 집계와 동시간대 중복 제한에서 제외되며 좌석도 즉시 복원됩니다.</p><p>상영 시작 후 변경이나 문자 인증 문의는 영화제 본부로 부탁합니다.</p></aside>
     </div>
   </section>`;
 }
@@ -2956,7 +2963,7 @@ function adminMode() {
 
 function allowedAdminTabsForMode(mode = adminMode()) {
   const common = ["overview", "reservations", "stats", "surveyView", "staff", "opening", "screenings"];
-  return mode === "master" ? [...common, "donors", "survey", "backup"] : common;
+  return mode === "master" ? [...common, "settings", "donors", "survey", "backup"] : common;
 }
 
 function renderAdmin(tab) {
@@ -2984,6 +2991,7 @@ function renderAdmin(tab) {
         ${adminTabLink("staff", "STAFF 관리", active)}
         ${adminTabLink("opening", "개막작관리", active)}
         ${adminTabLink("screenings", "상영관, 영화 관리", active)}
+        ${mode === "master" ? adminTabLink("settings", "예약 설정", active) : ""}
         ${mode === "master" ? adminTabLink("donors", "후원자 관리", active) : ""}
         ${mode === "master" ? adminTabLink("survey", "만족도조사", active) : ""}
         ${mode === "master" ? adminTabLink("backup", "백업·연동", active) : ""}
@@ -3033,6 +3041,7 @@ function renderAdminPanel(active) {
     if (active === "stats") return adminStats();
     if (active === "surveyView") return adminSurveyView();
     if (active === "staff") return adminStaffManagement();
+    if (active === "settings") return adminReservationSettings();
     if (active === "donors") return adminDonors();
     if (active === "survey") return adminSurvey();
     if (active === "backup") return adminBackup();
@@ -3142,6 +3151,42 @@ function screeningTable(screenings, options = {}) {
   `;
 }
 
+
+function adminReservationSettings() {
+  if (!isMasterAdminAuthed()) return `<section class="card"><div class="empty">마스타관리자만 예약 설정을 변경할 수 있습니다.</div></section>`;
+  const limit = reservationLimitValue();
+  return `
+    <section class="card reservation-settings-card">
+      <div class="section-title">
+        <div>
+          <h2>영화 신청 횟수 설정</h2>
+          <p>동일한 이름 또는 전화번호로 신청할 수 있는 최대 영화 수를 설정합니다.</p>
+        </div>
+        <span class="badge ${limit > 0 ? "warn" : "ok"}">${limit > 0 ? `최대 ${limit}회` : "제한 없음"}</span>
+      </div>
+      <form id="reservationSettingsForm" class="form-grid">
+        <div>
+          <label class="label" for="reservationLimit">최대 신청 횟수</label>
+          <input class="input" id="reservationLimit" name="reservationLimit" type="number" min="0" max="999" step="1" value="${limit}" required />
+          <p class="help">0으로 저장하면 신청 횟수 제한을 사용하지 않습니다. 동시간대·예약 그룹 중복 제한은 그대로 유지됩니다.</p>
+        </div>
+        <div class="form-actions full">
+          <button class="btn btn-dark" type="submit">예약 설정 저장</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function submitReservationSettings(form) {
+  if (!isMasterAdminAuthed()) return toast("마스타관리자만 예약 설정을 변경할 수 있습니다.");
+  const raw = Number(new FormData(form).get("reservationLimit"));
+  if (!Number.isFinite(raw) || raw < 0 || raw > 999) return toast("신청 횟수는 0부터 999 사이로 입력해 주세요.");
+  state.reservationLimit = Math.floor(raw);
+  persist();
+  render();
+  toast(state.reservationLimit > 0 ? `한 사람당 최대 ${state.reservationLimit}회로 저장했습니다.` : "영화 신청 횟수 제한을 해제했습니다.");
+}
 
 function adminStaffManagement() {
   const rows = sortedScreenings();
@@ -3584,7 +3629,8 @@ function participantHistoryFor(reservation) {
 function participantStatsSection() {
   const rows = participantReservationGroups();
   const repeatCount = rows.filter((row) => row.applications > 1).length;
-  const maxCount = rows.filter((row) => row.applications >= 5).length;
+  const limit = reservationLimitValue();
+  const maxCount = limit > 0 ? rows.filter((row) => row.applications >= limit).length : 0;
   return `
     <section class="card participant-stats-card">
       <div class="section-title">
@@ -3593,7 +3639,7 @@ function participantStatsSection() {
       <section class="metric-grid participant-metrics fixed-row-metrics">
         <div class="metric-card"><div class="metric-label">전체 신청자</div><div class="metric-value">${rows.length}</div><div class="metric-note">이름·전화번호 기준</div></div>
         <div class="metric-card"><div class="metric-label">2회 이상 신청</div><div class="metric-value">${repeatCount}</div><div class="metric-note">반복 참여 신청자</div></div>
-        <div class="metric-card"><div class="metric-label">5회 도달</div><div class="metric-value">${maxCount}</div><div class="metric-note">추가 예약 제한 대상</div></div>
+        <div class="metric-card"><div class="metric-label">${limit > 0 ? `${limit}회 도달` : "신청 횟수 제한"}</div><div class="metric-value">${limit > 0 ? maxCount : "없음"}</div><div class="metric-note">${limit > 0 ? "추가 예약 제한 대상" : "마스타관리자 설정"}</div></div>
         <div class="metric-card"><div class="metric-label">총 참석 횟수</div><div class="metric-value">${rows.reduce((sum, row) => sum + row.attended, 0)}</div><div class="metric-note">참석 처리된 영화 수</div></div>
       </section>
       ${rows.length ? `<div class="table-wrap participant-stats-table-wrap"><table class="participant-stats-table"><thead><tr><th>이름</th><th>전화번호</th><th>신청</th><th>참석</th><th>미참석</th><th>신청 영화</th></tr></thead><tbody>${rows.slice(0, 300).map((row) => `<tr><td><strong>${esc(row.name)}</strong></td><td>${esc(row.phone)}</td><td><strong>${row.applications}회</strong></td><td>${row.attended}회</td><td>${row.unattended}회</td><td>${esc(row.movies.join(", ") || "-")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">아직 신청자 통계가 없습니다.</div>`}
@@ -7988,6 +8034,7 @@ document.addEventListener("submit", (event) => {
   if (form.id === "donationForm") submitDonation(form);
   if (form.id === "adminLoginForm") submitAdminLogin(form);
   if (form.id === "adminPinChangeForm") submitAdminPinChange(form);
+  if (form.id === "reservationSettingsForm") submitReservationSettings(form);
   if (form.id === "generalAdminAddForm") submitGeneralAdminAdd(form);
   if (form.matches(".general-admin-edit-form")) submitGeneralAdminEdit(form);
   if (form.id === "driveSyncForm" || form.id === "driveSyncQuickForm") submitDriveSyncForm(form);
