@@ -3953,128 +3953,149 @@ th, td {
   }
 }
 
-/* v179 모바일 신청자 명단: 데스크톱 표와 완전히 분리된 카드 레이아웃 */
+/* v190 모바일 신청자 명단: 영화·상영관 반복을 제거한 압축 목록 */
 .mobile-reservation-list { display: none; }
 
 @media screen and (max-width: 760px) {
   .reservation-table-wrap { display: none !important; }
   .mobile-reservation-list {
-    display: grid;
-    gap: 10px;
+    display: block;
     width: 100%;
     min-width: 0;
+    overflow: hidden;
+    border: 1px solid #d8d3ef;
+    border-radius: 13px;
+    background: #fdfcff;
   }
   .mobile-reservation-select-all {
     display: flex;
     align-items: center;
     gap: 8px;
-    min-height: 44px;
-    padding: 9px 12px;
-    border: 1px solid #d8d3ef;
-    border-radius: 11px;
+    min-height: 38px;
+    padding: 7px 10px;
+    border: 0;
+    border-bottom: 1px solid #d8d3ef;
+    border-radius: 0;
     background: #f7f5ff;
     color: #332d75;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 900;
   }
   .mobile-reservation-select-all input,
   .mobile-reservation-sms-check input {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     margin: 0;
     accent-color: var(--primary);
   }
+  .mobile-reservation-list-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(76px, .9fr) minmax(40px, .5fr) minmax(88px, 1.15fr) minmax(66px, 1.1fr) minmax(104px, 1.45fr);
+    align-items: center;
+    min-height: 34px;
+    padding: 0 8px;
+    border-bottom: 1px solid #d8d3ef;
+    background: #e8e4f8;
+    color: #332e72;
+    font-size: 11px;
+    font-weight: 950;
+    text-align: center;
+  }
   .mobile-reservation-card {
     display: grid;
-    gap: 10px;
+    grid-template-columns: minmax(0, 1.7fr) minmax(76px, .9fr) minmax(40px, .5fr) minmax(88px, 1.15fr) minmax(66px, 1.1fr) minmax(104px, 1.45fr);
+    align-items: center;
+    gap: 0;
     width: 100%;
     min-width: 0;
-    padding: 13px;
-    border: 1px solid #d8d3ef;
-    border-radius: 15px;
+    padding: 7px 8px;
+    border: 0;
+    border-bottom: 1px solid #ded9f1;
+    border-radius: 0;
     background: #fdfcff;
-    box-shadow: 0 6px 18px rgba(44, 40, 107, .06);
+    box-shadow: none;
   }
+  .mobile-reservation-card:last-child { border-bottom: 0; }
   .mobile-reservation-card.is-selected {
-    border-color: #7669ce;
-    box-shadow: 0 0 0 2px rgba(89, 76, 192, .12);
+    background: #f4f1ff;
+    box-shadow: inset 3px 0 #7669ce;
   }
   .mobile-reservation-card.attended-row { background: #fbfceb; }
-  .mobile-reservation-card-head {
-    position: relative;
+  .mobile-reservation-card > div:not(.mobile-reservation-actions) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px 12px;
-    align-items: start;
-    padding-bottom: 9px;
-    border-bottom: 1px solid #ebe7f7;
-  }
-  .mobile-reservation-card-head > div,
-  .mobile-reservation-movie,
-  .mobile-reservation-applicant {
-    display: grid;
-    gap: 3px;
+    gap: 2px;
     min-width: 0;
+    padding: 2px 5px;
+    text-align: center;
   }
-  .mobile-reservation-card :is(.mobile-reservation-card-head, .mobile-reservation-movie, .mobile-reservation-applicant) > span:first-child,
+  .mobile-reservation-card > div:not(.mobile-reservation-actions) > span:first-child,
   .mobile-reservation-attendance > span {
-    color: #77708f;
-    font-size: 10px;
-    font-weight: 900;
-    line-height: 1.2;
+    display: none;
   }
-  .mobile-reservation-card-head strong,
-  .mobile-reservation-movie > strong,
-  .mobile-reservation-applicant .applicant-name-line > strong {
+  .mobile-reservation-applicant .applicant-name-line > strong,
+  .mobile-reservation-number > strong,
+  .mobile-reservation-seat > strong,
+  .mobile-reservation-created > strong,
+  .mobile-reservation-note > strong {
     color: #24205d;
-    font-size: 16px;
-    line-height: 1.3;
+    font-size: 12px;
+    line-height: 1.25;
     word-break: keep-all;
     overflow-wrap: anywhere;
   }
-  .mobile-reservation-seat { text-align: right; }
-  .mobile-reservation-seat strong { font-size: 18px; white-space: nowrap; }
+  .mobile-reservation-applicant { text-align: left !important; }
+  .mobile-reservation-applicant .applicant-name-line > strong { font-size: 14px; }
+  .mobile-reservation-number > strong,
+  .mobile-reservation-seat > strong { white-space: nowrap; }
+  .mobile-reservation-created > strong { font-size: 11px; }
+  .mobile-reservation-note > strong {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
   .mobile-reservation-sms-check {
     grid-column: 1 / -1;
     display: flex;
     align-items: center;
     gap: 7px;
-    min-height: 34px;
+    min-height: 28px;
+    margin-top: 5px;
+    padding: 4px 5px 0;
+    border-top: 1px dashed #e2def1;
     color: #4e4770;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 850;
   }
-  .mobile-reservation-movie small,
   .mobile-reservation-applicant small {
     display: block;
     max-width: 100%;
     color: #686287;
-    font-size: 13px;
-    line-height: 1.35;
+    font-size: 11px;
+    line-height: 1.2;
     overflow-wrap: anywhere;
   }
   .mobile-reservation-applicant .applicant-name-line {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 3px;
   }
   .mobile-reservation-applicant .participant-history-badge {
     justify-self: start;
-    margin-top: 2px;
-    font-size: 11px;
+    margin-top: 1px;
+    padding: 2px 4px;
+    font-size: 9px;
+    white-space: nowrap;
   }
   .mobile-reservation-attendance {
-    display: grid;
-    gap: 6px;
-    padding-top: 9px;
-    border-top: 1px solid #ebe7f7;
+    display: block !important;
   }
   .mobile-reservation-attendance > div,
   .mobile-reservation-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
+    gap: 4px;
     width: 100%;
     min-width: 0;
   }
@@ -4082,19 +4103,53 @@ th, td {
   .mobile-reservation-actions .btn {
     width: 100%;
     min-width: 0;
-    min-height: 40px;
-    padding: 8px 5px;
-    border-radius: 9px;
-    font-size: 12px;
+    min-height: 31px;
+    padding: 5px 2px;
+    border-radius: 7px;
+    font-size: 10px;
     line-height: 1.2;
-    white-space: normal;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
   }
   .mobile-reservation-actions {
-    padding-top: 9px;
-    border-top: 1px solid #ebe7f7;
+    grid-column: 1 / -1;
+    margin-top: 6px;
+    padding: 7px 4px 1px;
+    border-top: 1px dashed #d8d3ef;
   }
-  .staff-screening-card .mobile-reservation-list { margin-top: 10px; }
+  .mobile-reservation-actions .btn { min-height: 34px; font-size: 11px; }
+  .staff-screening-card .mobile-reservation-list { margin-top: 8px; }
+}
+
+@media screen and (max-width: 520px) {
+  .mobile-reservation-list-head { display: none; }
+  .mobile-reservation-card {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 5px 4px;
+    padding: 8px 7px;
+  }
+  .mobile-reservation-card > div:not(.mobile-reservation-actions) {
+    align-self: stretch;
+    padding: 3px 4px;
+    border-left: 1px solid #eeeaf9;
+  }
+  .mobile-reservation-card > div:not(.mobile-reservation-actions):first-child { border-left: 0; }
+  .mobile-reservation-card > div:not(.mobile-reservation-actions) > span:first-child,
+  .mobile-reservation-attendance > span {
+    display: block;
+    color: #77708f;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1.15;
+  }
+  .mobile-reservation-applicant { grid-column: span 6; }
+  .mobile-reservation-number { grid-column: span 4; }
+  .mobile-reservation-seat { grid-column: span 2; }
+  .mobile-reservation-created { grid-column: span 4; border-left: 0 !important; }
+  .mobile-reservation-note { grid-column: span 4; }
+  .mobile-reservation-attendance { grid-column: span 4; }
+  .mobile-reservation-created > strong,
+  .mobile-reservation-note > strong { font-size: 10px; line-height: 1.25; }
+  .mobile-reservation-attendance .btn { min-height: 29px; font-size: 9.5px; }
 }
 
 /* v86: 후원 카드 단일 CTA, 모바일 관람신청/신청완료 버튼 확대 */

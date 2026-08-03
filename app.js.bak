@@ -3788,30 +3788,36 @@ function reservationTable(reservations, options = {}) {
     const history = participantHistoryFor(reservation);
     return `
       <article class="mobile-reservation-card ${attended ? "attended-row" : ""} ${selected ? "is-selected" : ""}" data-reservation-row="${esc(reservation.id)}" tabindex="0" title="누르면 상세 관리 버튼이 열립니다.">
-        <div class="mobile-reservation-card-head">
-          <div><span>상영관</span><strong>${esc(screening?.venue || "삭제된 상영관")}</strong></div>
-          <div class="mobile-reservation-seat"><span>인원</span><strong>${Number(reservation.seats || 0)}명</strong></div>
-          ${options.smsSelectMode ? `<label class="mobile-reservation-sms-check"><input type="checkbox" class="reservation-sms-check" data-reservation-check="${esc(reservation.id)}" ${selectedReservationSmsIds.has(reservation.id) ? "checked" : ""} aria-label="${esc(reservation.name)} 문자 발송 선택" /><span>문자 선택</span></label>` : ""}
-        </div>
-        <div class="mobile-reservation-movie">
-          <span>영화·시간</span>
-          <strong>${esc(screening?.title || "삭제된 회차")}</strong>
-          ${screening ? `<small>${esc(formatDateTime(screening.startTime))}</small>` : ""}
-        </div>
         <div class="mobile-reservation-applicant">
           <span>신청자</span>
           <div class="applicant-name-line"><strong>${esc(reservation.name)}</strong>${reservationAttendanceIndex(reservation)}</div>
           <small>${esc(reservation.phone || "-")}</small>
-          ${reservation.email ? `<small>${esc(reservation.email)}</small>` : ""}
           <span class="participant-history-badge">신청 ${history.applications}회 · 참석 ${history.attended}회</span>
         </div>
+        <div class="mobile-reservation-number">
+          <span>예약번호</span>
+          <strong>${esc(reservationDisplayNumber(reservation, screening))}</strong>
+        </div>
+        <div class="mobile-reservation-seat">
+          <span>인원</span>
+          <strong>${Number(reservation.seats || 0)}명</strong>
+        </div>
+        <div class="mobile-reservation-created">
+          <span>신청일</span>
+          <strong>${esc(formatDateTime(reservation.createdAt))}</strong>
+        </div>
+        <div class="mobile-reservation-note">
+          <span>메모</span>
+          <strong>${esc(reservation.note || "-")}</strong>
+        </div>
         <div class="mobile-reservation-attendance">
-          <span>참석처리</span>
+          <span>관리</span>
           <div>
             <button class="btn btn-outline attendance-manage ${attended ? "is-attended" : ""}" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="true">참석</button>
             <button class="btn btn-outline" type="button" data-action="set-attendance" data-id="${esc(reservation.id)}" data-attended="false">미참석</button>
           </div>
         </div>
+        ${options.smsSelectMode ? `<label class="mobile-reservation-sms-check"><input type="checkbox" class="reservation-sms-check" data-reservation-check="${esc(reservation.id)}" ${selectedReservationSmsIds.has(reservation.id) ? "checked" : ""} aria-label="${esc(reservation.name)} 문자 발송 선택" /><span>문자 선택</span></label>` : ""}
         ${selected ? `<div class="mobile-reservation-actions">
           <button class="btn btn-outline" type="button" data-action="staff-edit-reservation" data-id="${esc(reservation.id)}">수정</button>
           <button class="btn btn-danger" type="button" data-action="delete-reservation" data-id="${esc(reservation.id)}">삭제</button>
@@ -3823,6 +3829,9 @@ function reservationTable(reservations, options = {}) {
   return `
     <div class="mobile-reservation-list">
       ${options.smsSelectMode ? `<label class="mobile-reservation-select-all"><input type="checkbox" class="reservation-check-all" data-action="toggle-visible-reservation-checks" ${allVisibleSelected ? "checked" : ""} aria-label="현재 명단 전체 선택 또는 해제" /><span>현재 명단 전체선택</span></label>` : ""}
+      <div class="mobile-reservation-list-head" aria-hidden="true">
+        <span>신청자</span><span>예약번호</span><span>인원</span><span>신청일</span><span>메모</span><span>관리</span>
+      </div>
       ${mobileCards}
     </div>
     <div class="table-wrap reservation-table-wrap">
